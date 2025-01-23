@@ -1,0 +1,536 @@
+local gameID = 4924922222
+
+if game.PlaceId ~= gameID then
+    game.Players.LocalPlayer:Kick("Este script só pode ser executado no Brookhaven RP.")
+    return
+end
+
+local whitelist = {
+    ["hackmod_01299"] = true,
+    ["minato_l182"] = true,
+    ["Ryan121mc"] = true,
+    ["IHqmYJaakJM"] = true,
+    ["isaac_fof310"] = true
+}
+
+local player = game.Players.LocalPlayer
+
+if not whitelist[player.Name] then
+    game.Players.LocalPlayer:Kick("Você não está autorizado a executar este script.")
+    return
+end
+
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Patskorn/GUI/main/Copy-SynapOver.lua"))()
+local GUI = library:new("Manga Hub|Brookhaven 🏡RP|","[ RightControl ]")
+
+local function clickNormally(object)
+    local clickDetector = object:FindFirstChildWhichIsA("ClickDetector")
+    if clickDetector then
+        pcall(function()
+            fireclickdetector(clickDetector)
+        end)
+    end
+end
+
+local function dupeItem(itemPath, count)
+    if itemPath then
+        local humanoidRootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            local originalPosition = humanoidRootPart.CFrame
+            for i = 1, count do
+                humanoidRootPart.CFrame = itemPath.CFrame
+                clickNormally(itemPath)
+                task.wait(0.1)
+            end
+            humanoidRootPart.CFrame = originalPosition
+        end
+    end
+end
+
+local function lagarJogoV2()
+    local iphonePath = workspace:FindFirstChild("WorkspaceCom") and
+                       workspace.WorkspaceCom:FindFirstChild("001_CommercialStores") and
+                       workspace.WorkspaceCom["001_CommercialStores"]:FindFirstChild("CommercialStorage1") and
+                       workspace.WorkspaceCom["001_CommercialStores"].CommercialStorage1:FindFirstChild("Store") and
+                       workspace.WorkspaceCom["001_CommercialStores"].CommercialStorage1.Store:FindFirstChild("Tools") and
+                       workspace.WorkspaceCom["001_CommercialStores"].CommercialStorage1.Store.Tools:FindFirstChild("Iphone")
+    if iphonePath then
+        local humanoidRootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if humanoidRootPart then
+            while true do
+                humanoidRootPart.CFrame = iphonePath.CFrame
+                clickNormally(iphonePath)
+                task.wait(0.2)
+            end
+        end
+    end
+end
+
+local function lagarServer()
+    local ghostMeterPath = workspace:FindFirstChild("WorkspaceCom") and
+                           workspace.WorkspaceCom:FindFirstChild("001_GiveTools") and
+                           workspace.WorkspaceCom["001_GiveTools"]:FindFirstChild("GhostMeter")
+    if ghostMeterPath then
+        while true do
+            player.Character.HumanoidRootPart.CFrame = ghostMeterPath.CFrame
+            clickNormally(ghostMeterPath)
+            task.wait(0.2)
+        end
+    end
+end
+
+local antiLagEnabled = false
+
+local function getPlayerNames()
+    local names = {}
+    for _, p in pairs(game.Players:GetPlayers()) do
+        if p.Name ~= player.Name then
+            table.insert(names, p.Name)
+        end
+    end
+    return names
+end
+
+local selectedPlayer = nil
+local isViewing = false
+
+local function viewPlayer()
+    if selectedPlayer then
+        game.Workspace.CurrentCamera.CameraSubject = selectedPlayer.Character:WaitForChild("Humanoid")
+        game.Players.LocalPlayer.Character:WaitForChild("Humanoid").Died:Connect(function()
+            wait(0.3)
+            game.Players.LocalPlayer.CharacterAdded:Wait()
+            wait(0.3)
+            game.Workspace.CurrentCamera.CameraSubject = selectedPlayer.Character:WaitForChild("Humanoid")
+        end)
+    end
+end
+
+local TrollTab = GUI:Tap("Troll")
+
+TrollTab:Dropdown("Selecionar Jogador", getPlayerNames(), function(value)
+    selectedPlayer = game.Players:FindFirstChild(value)
+end)
+
+TrollTab:Toggle("Ver Jogador", nil, function(value)
+    if value then
+        isViewing = true
+        viewPlayer()
+    else
+        isViewing = false
+        game.Workspace.CurrentCamera.CameraSubject = player.Character:WaitForChild("Humanoid")
+    end
+end)
+
+TrollTab:Toggle("Anti-Lag (Opcional - Ativar antes de usar um dos 'Lagar Jogo')", nil, function(value)
+    antiLagEnabled = value
+end)
+
+TrollTab:Button("Lagar Jogo", function()
+    lagarServer()
+end)
+
+TrollTab:Button("Lagar Jogo V2", function()
+    lagarJogoV2()
+end)
+
+TrollTab:Button("Executar Infinite Yield", function()
+    loadstring(game:HttpGet(('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'),true))()
+end)
+
+local ItemTab = GUI:Tap("Item")
+
+ItemTab:Button("Dupe Livro", function()
+    local bookPath = workspace:FindFirstChild("WorkspaceCom") and 
+                     workspace.WorkspaceCom:FindFirstChild("001_DayCare") and
+                     workspace.WorkspaceCom["001_DayCare"]:FindFirstChild("Tools") and
+                     workspace.WorkspaceCom["001_DayCare"].Tools:FindFirstChild("Book")
+    dupeItem(bookPath, 750)
+end)
+
+ItemTab:Button("Dupe Extintor", function()
+    local fireXPath = workspace:FindFirstChild("WorkspaceCom") and 
+                      workspace.WorkspaceCom:FindFirstChild("001_GiveTools") and
+                      workspace.WorkspaceCom["001_GiveTools"]:FindFirstChild("FireX")
+    dupeItem(fireXPath, 750)
+end)
+
+ItemTab:Button("Dupe Bola de Basquete", function()
+    local basketballPath = workspace:FindFirstChild("WorkspaceCom") and 
+                           workspace.WorkspaceCom:FindFirstChild("001_GiveTools") and
+                           workspace.WorkspaceCom["001_GiveTools"]:FindFirstChild("Basketball")
+    dupeItem(basketballPath, 750)
+end)
+
+ItemTab:Button("Dupe Maca", function()
+    local stretcherPath = workspace:FindFirstChild("WorkspaceCom") and 
+                          workspace.WorkspaceCom:FindFirstChild("001_GiveTools") and
+                          workspace.WorkspaceCom["001_GiveTools"]:FindFirstChild("Stretcher")
+    dupeItem(stretcherPath, 750)
+end)
+
+local AudioTab = GUI:Tap("Audio FE (Beta)")
+
+local audioID = ""
+local selectedPlayerName = ""
+local looping = false
+
+AudioTab:TextBox("ID Do Audio (obrigatório)", function(value)
+    audioID = value
+end)
+
+AudioTab:Button("Pegar Arma (Obrigatório)", function()
+    local args = {
+        [1] = "PickingTools",
+        [2] = "Sniper"
+    }
+    game:GetService("ReplicatedStorage").RE:FindFirstChild("1Too1l"):InvokeServer(unpack(args))
+end)
+
+AudioTab:Button("Tocar Audio", function()
+    local sniper = game:GetService("Players").LocalPlayer.Character:FindFirstChild("Sniper")
+    if sniper and sniper:FindFirstChild("Handle") and audioID and tonumber(audioID) then
+        local args = {
+            [1] = sniper.Handle,
+            [2] = tonumber(audioID),
+            [3] = 1
+        }
+        game:GetService("ReplicatedStorage").RE:FindFirstChild("1Gu1nSound1s"):FireServer(unpack(args))
+        local sound = game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Sound")
+        if sound then
+            task.wait(3)
+            sound:Stop()
+        end
+    else
+        warn("Sniper não encontrado ou ID de áudio inválido!")
+    end
+end)
+
+AudioTab:Button("Tocar audio globalmente (todos ouvem, você também.)", function()
+    if audioID and tonumber(audioID) then
+        local args = {
+            [1] = game:GetService("Workspace"),
+            [2] = tonumber(audioID),
+            [3] = 1,
+        }
+        game:GetService("ReplicatedStorage").RE:FindFirstChild("1Gu1nSound1s"):FireServer(unpack(args))
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://"..audioID
+        sound.Parent = game.Players.LocalPlayer.Character.HumanoidRootPart
+        sound:Play()
+        task.wait(3)
+        sound:Stop()
+    else
+        warn("ID do áudio inválido!")
+    end
+end)
+
+AudioTab:TextBox("Nome do jogador", function(value)
+    selectedPlayerName = value
+end)
+
+AudioTab:Button("Tocar áudio no player selecionado (100% FE)", function()
+    if selectedPlayerName then
+        local targetPlayer = game.Players:FindFirstChild(selectedPlayerName)
+        if targetPlayer then
+            local soundId = audioID
+            local args = {
+                [1] = targetPlayer.Character:FindFirstChild("Head"),
+                [2] = tonumber(soundId),
+                [3] = 1
+            }
+            game:GetService("ReplicatedStorage").RE:FindFirstChild("1Gu1nSound1s"):FireServer(unpack(args))
+            local sound = Instance.new("Sound")
+            sound.SoundId = "rbxassetid://" .. soundId
+            sound.Parent = targetPlayer.Character.Head
+            sound:Play()
+            task.wait(3)
+            sound:Stop()
+        else
+            warn("Jogador não encontrado!")
+        end
+    else
+        warn("Selecione um jogador primeiro!")
+    end
+end)
+
+AudioTab:Toggle("Tocar Audio em Loop", nil, function(value)
+    looping = value
+    if looping then
+        local function loopAudioGlobal()
+            if looping and audioID and tonumber(audioID) then
+                local args = {
+                    [1] = game:GetService("Workspace"),
+                    [2] = tonumber(audioID),
+                    [3] = 1
+                }
+                game:GetService("ReplicatedStorage").RE:FindFirstChild("1Gu1nSound1s"):FireServer(unpack(args))
+                task.wait(3)
+                loopAudioGlobal()
+            end
+        end
+        loopAudioGlobal()
+    end
+end)
+
+local CreditsTab = GUI:Tap("Créditos")
+CreditsTab:Label("Desenvolvedor: hackmod_01299")
+CreditsTab:Label("Ajudante do Script: minato_l182")
+
+local CasaTab = GUI:Tap("Casa 🏠")
+
+CasaTab:TextBox("Número da casa", function(value)
+    houseNumber = tonumber(value)
+end)
+
+CasaTab:TextBox("Nome do jogador", function(value)
+    playerName = value
+end)
+
+CasaTab:Button("Dar Permissão", function()
+    if playerName and houseNumber then
+        local targetPlayer = game.Players:FindFirstChild(playerName)
+        if targetPlayer then
+            local args = {
+                [1] = "GivePermissionLoopToServer",
+                [2] = targetPlayer,
+                [3] = houseNumber
+            }
+            game:GetService("ReplicatedStorage").RE:FindFirstChild("1Playe1rTrigge1rEven1t"):FireServer(unpack(args))
+        else
+            warn("Jogador não encontrado!")
+        end
+    end
+end)
+
+CasaTab:Button("Remover Permissão", function()
+    if playerName and houseNumber then
+        local targetPlayer = game.Players:FindFirstChild(playerName)
+        if targetPlayer then
+            local args = {
+                [1] = "RemovePermissionLoopToServer",
+                [2] = targetPlayer,
+                [3] = houseNumber
+            }
+            game:GetService("ReplicatedStorage").RE:FindFirstChild("1Playe1rTrigge1rEven1t"):FireServer(unpack(args))
+        else
+            warn("Jogador não encontrado!")
+        end
+    end
+end)
+
+local BringKillTab = GUI:Tap("Bring/Kill Fling")
+
+local targetPlayerName = ""
+local teleporting = false
+local initialPosition = nil
+
+BringKillTab:TextBox("Nick do Player", function(value)
+    targetPlayerName = value
+end)
+
+local function bringPlayer()
+    local function bring()
+        local targetPlayer = nil
+        for _, p in pairs(game.Players:GetPlayers()) do
+            if string.find(string.lower(p.Name), string.lower(targetPlayerName)) or string.find(string.lower(p.DisplayName), string.lower(targetPlayerName)) then
+                targetPlayer = p
+                break
+            end
+        end
+
+        if not targetPlayer then
+            warn("Jogador não encontrado!")
+            return
+        end
+
+        initialPosition = player.Character.HumanoidRootPart.CFrame
+
+        local function teleportAroundPlayer()
+            if not teleporting then return end
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local humanoidRootPart = player.Character.HumanoidRootPart
+                local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+
+                while teleporting do
+                    local targetPos = targetPlayer.Character.HumanoidRootPart.Position
+
+                    if humanoid.Sit then
+                        stopTeleporting()
+                        break
+                    end
+
+                    if humanoid.MoveDirection.Magnitude > 0 then
+                        humanoidRootPart.CFrame = CFrame.new(targetPos + targetPlayer.Character.HumanoidRootPart.CFrame.lookVector * 8)
+                    elseif humanoid:GetState() == Enum.HumanoidStateType.Jumping then
+                        humanoidRootPart.CFrame = CFrame.new(targetPos + targetPlayer.Character.HumanoidRootPart.CFrame.lookVector * 8)
+                    else
+                        local positions = {
+                            targetPos + Vector3.new(2, 0, 0),
+                            targetPos + Vector3.new(-2, 0, 0),
+                            targetPos + Vector3.new(0, 0, 2),
+                            targetPos + Vector3.new(0, 0, -2)
+                        }
+
+                        for _, pos in ipairs(positions) do
+                            if not teleporting then break end
+                            humanoidRootPart.CFrame = CFrame.new(pos, targetPos)
+                            task.wait(0.04)
+                        end
+                    end
+                    task.wait(0.04)
+                end
+            end
+        end
+
+        teleporting = true
+        teleportAroundPlayer()
+    end
+
+    bring()
+end
+
+local function killPlayer()
+    local function kill()
+        local targetPlayer = nil
+        for _, p in pairs(game.Players:GetPlayers()) do
+            if string.find(string.lower(p.Name), string.lower(targetPlayerName)) or string.find(string.lower(p.DisplayName), string.lower(targetPlayerName)) then
+                targetPlayer = p
+                break
+            end
+        end
+
+        if not targetPlayer then
+            warn("Jogador não encontrado!")
+            return
+        end
+
+        initialPosition = player.Character.HumanoidRootPart.CFrame
+
+        local function teleportToVoid()
+            if not teleporting then return end
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local humanoidRootPart = player.Character.HumanoidRootPart
+                humanoidRootPart.CFrame = CFrame.new(0, -1000, 0)
+                task.wait(0.02)
+                player.Character.Humanoid:UnequipTools()
+                player.Character.HumanoidRootPart.CFrame = initialPosition
+            end
+        end
+
+        teleporting = true
+        teleportToVoid()
+    end
+
+    kill()
+end
+
+local function flingPlayer()
+    local function fling()
+        local targetPlayer = nil
+        for _, p in pairs(game.Players:GetPlayers()) do
+            if string.find(string.lower(p.Name), string.lower(targetPlayerName)) or string.find(string.lower(p.DisplayName), string.lower(targetPlayerName)) then
+                targetPlayer = p
+                break
+            end
+        end
+
+        if not targetPlayer then
+            warn("Jogador não encontrado!")
+            return
+        end
+
+        initialPosition = player.Character.HumanoidRootPart.CFrame
+
+        local function teleportToHigh()
+            if not teleporting then return end
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local humanoidRootPart = player.Character.HumanoidRootPart
+                while teleporting do
+                    humanoidRootPart.CFrame = CFrame.new(1000000, 1000000, 1000000)
+                    humanoidRootPart.Velocity = Vector3.new(50000, 0, 0)
+                    if targetPlayer.Character.Humanoid.Sit then
+                        player.Character.Humanoid:UnequipTools()
+                        stopTeleporting()
+                        break
+                    end
+                    task.wait(0.05)
+                end
+            end
+        end
+
+        teleporting = true
+        teleportToHigh()
+    end
+
+    fling()
+end
+
+local function stopTeleporting()
+    teleporting = false
+    if initialPosition then
+        player.Character.HumanoidRootPart.CFrame = initialPosition
+    end
+end
+
+local function onSeatTouched(otherPart)
+    local character = otherPart.Parent
+    if character and character:FindFirstChildOfClass("Humanoid") then
+        stopTeleporting()
+        player.Character.Humanoid:UnequipTools()
+    end
+end
+
+game:GetService("Players").PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(character)
+        for _, desc in ipairs(character:GetDescendants()) do
+            if desc:IsA("Seat") then
+                desc.Touched:Connect(onSeatTouched)
+            end
+        end)
+        character.DescendantAdded:Connect(function(desc)
+            if desc:IsA("Seat") then
+                desc.Touched:Connect(onSeatTouched)
+            end
+        end)
+    end)
+end)
+
+for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
+    if player.Character then
+        for _, desc in ipairs(player.Character:GetDescendants()) do
+            if desc:IsA("Seat") then
+                desc.Touched:Connect(onSeatTouched)
+            end
+        end
+        player.Character.DescendantAdded:Connect(function(desc)
+            if desc:IsA("Seat") then
+                desc.Touched:Connect(onSeatTouched)
+            end
+        end)
+    end
+end
+
+BringKillTab:Button("Bring Player", bringPlayer)
+BringKillTab:Button("Kill Player", killPlayer)
+BringKillTab:Button("Fling Player", flingPlayer)
+
+local AvatarTab = GUI:Tap("Avatar")
+
+AvatarTab:Button("Voltar ao tamanho normal", function()
+    local args = {
+        [1] = "CharacterSizeUp",
+        [2] = 1
+    }
+    game:GetService("ReplicatedStorage").RE:FindFirstChild("1Clothe1s"):FireServer(unpack(args))
+end)
+ 
+AvatarTab:Button("Ficar pequeno", function()
+    local args = {
+        [1] = "CharacterSizeDown",
+        [2] = 0.99
+    }
+    game:GetService("ReplicatedStorage").RE:FindFirstChild("1Clothe1s"):FireServer(unpack(args))
+end)
+ 
+Window:ReadConfig()
