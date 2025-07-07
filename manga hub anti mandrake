@@ -1,7 +1,8 @@
 local gameID = 4924922222
+local player = game.Players.LocalPlayer
 
 if game.PlaceId ~= gameID then
-    game.Players.LocalPlayer:Kick("Este script só pode ser executado no Brookhaven RP.")
+    player:Kick("Este script só pode ser executado no Brookhaven RP.")
     return
 end
 
@@ -15,10 +16,12 @@ local whitelist = {
     [8438439936] = true,
     [8504683620] = true,
     [8537468470] = true,
-    [8565646707] = true
+    [8565646707] = true,
+    [8649187825] = true,
+    [8811273365] = true,
+    [8861388080] = true,
+    [8861188307] = true
 }
-
-local player = game.Players.LocalPlayer
 
 if not whitelist[player.UserId] then
     player:Kick("Você não está autorizado a executar este script.")
@@ -26,7 +29,7 @@ if not whitelist[player.UserId] then
 end
 
 getgenv().gethui = function()
-return game:GetService("CoreGui")
+    return game:GetService("CoreGui")
 end
 
 local OrionLib = loadstring(game:HttpGet('https://pastebin.com/raw/WRUyYTdY'))()
@@ -176,6 +179,8 @@ local ItemTab = Window:MakeTab({
 local spamAtivo = false
 local bombaLoop
 
+local player = game:GetService("Players").LocalPlayer
+
 local function iniciarSpam()
     bombaLoop = task.spawn(function()
         while spamAtivo do
@@ -212,6 +217,36 @@ ItemTab:AddButton({
         }
 
         game:GetService("ReplicatedStorage"):WaitForChild("RE", 9e9):WaitForChild("1Too1l", 9e9):InvokeServer(unpack(args))
+    end
+})
+
+ItemTab:AddButton({
+    Name = "Derrubar Dunk tank (carnaval evento)",
+    Callback = function()
+        local player = game.Players.LocalPlayer
+        local character = player.Character or player.CharacterAdded:Wait()
+        local hrp = character:WaitForChild("HumanoidRootPart")
+        local originalCFrame = hrp.CFrame
+
+        hrp.CFrame = CFrame.new(113.48, 3.37, -257.72)
+
+        task.wait(0.3)
+
+        local success, err = pcall(function()
+            local remote = workspace:WaitForChild("Carnival_Week2", 9e9)
+                :WaitForChild("Carnival", 9e9)
+                :WaitForChild("Minigames", 9e9)
+                :WaitForChild("DunkTank", 9e9)
+                :WaitForChild("DunkRemote", 9e9)
+
+            if remote and remote:IsA("RemoteEvent") then
+                remote:FireServer()
+            end
+        end)
+
+        task.wait(0.5)
+
+        hrp.CFrame = originalCFrame
     end
 })
 
@@ -578,9 +613,10 @@ end
 
 local function clearAllTools()
     local args = {
-        [1] = "ClearAllTools"
+        "PlayerWantsToDeleteTool",
+        "Couch"
     }
-    game:GetService("ReplicatedStorage").RE:FindFirstChild("1Clea1rTool1s"):FireServer(unpack(args))
+    game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("1Clea1rTool1s"):FireServer(unpack(args))
 end
 
 local function teleportToPlayer(targetPlayer, mode)
@@ -791,12 +827,11 @@ Tab:AddButton({
         end
 
         local function clearAllTools()
-            local char = myPlayer.Character
-            for _, tool in pairs(char:GetChildren()) do
-                if tool:IsA("Tool") then
-                    tool.Parent = myPlayer.Backpack
-                end
-            end
+            local args = {
+                "PlayerWantsToDeleteTool",
+                "Couch"
+            }
+            game:GetService("ReplicatedStorage"):WaitForChild("RE"):WaitForChild("1Clea1rTool1s"):FireServer(unpack(args))
         end
 
         local players = {}
@@ -921,7 +956,7 @@ local CreditsTab = Window:MakeTab({
     PremiumOnly = false
 })
 
-CreditsTab:AddLabel("Desenvolvedor: hackmod_01299")
+CreditsTab:AddLabel("Desenvolvedor: daviluis_pega")
 CreditsTab:AddLabel("Ajudante do Script: minato_l182")
 
 OrionLib:Init()
