@@ -141,3 +141,34 @@ Tab:AddToggle({
         end
     end
 })
+
+local originalSpeed = game.Players.LocalPlayer.Character.Humanoid.WalkSpeed
+local velocidadeTextbox = nil
+local toggleState = false
+
+Tab:AddTextbox({
+    Name = "Velocidade",
+    Default = "16",
+    TextDisappear = false,
+    Callback = function(Value)
+        if toggleState then
+            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = tonumber(Value)
+        end
+    end
+})
+
+Tab:AddToggle({
+    Name = "Aplicar Velocidade",
+    Default = false,
+    Callback = function(Value)
+        toggleState = Value
+        local humanoid = game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            if Value then
+                humanoid.WalkSpeed = tonumber(Tab.Controls[1].TextBox.Text)
+            else
+                humanoid.WalkSpeed = originalSpeed
+            end
+        end
+    end
+})
