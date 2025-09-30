@@ -142,82 +142,19 @@ Tab:AddToggle({
     end
 })
 
-local originalSpeed = game.Players.LocalPlayer.Character.Humanoid.WalkSpeed
-local velocidadeTextbox = nil
-local toggleState = false
-
-Tab:AddTextbox({
-    Name = "Velocidade",
-    Default = "16",
-    TextDisappear = false,
-    Callback = function(Value)
-        if toggleState then
-            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = tonumber(Value)
-        end
-    end
-})
-
-Tab:AddToggle({
-    Name = "Aplicar Velocidade",
-    Default = false,
-    Callback = function(Value)
-        toggleState = Value
-        local humanoid = game.Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            if Value then
-                humanoid.WalkSpeed = tonumber(Tab.Controls[1].TextBox.Text)
-            else
-                humanoid.WalkSpeed = originalSpeed
-            end
-        end
-    end
-})
-
-OrionLib:Init()
-Funciona assim:
-
-Textbox: você coloca a velocidade desejada.
-
-Toggle: ativa ou desativa a velocidade personalizada. Quando desativa, volta para a velocidade original do personagem.
-
-Atualiza a velocidade automaticamente se você mudar o valor na Textbox enquanto a toggle está ativada.
-
-Se quiser, posso melhorar para atualizar a velocidade em tempo real sem precisar desativar e ativar a toggle. Quer que eu faça isso?
-
-
-
-
-
-
-
-Você disse:
-é r6
-
-
-O ChatGPT disse:
-Perfeito! Para R6, o script que eu te passei funciona praticamente igual, porque a propriedade Humanoid.WalkSpeed é a mesma em R6 ou R15.
-
-Mas podemos garantir que pegue o Humanoid certo mesmo que o personagem seja R6:
-
-lua
-Copiar código
-local OrionLib = loadstring(game:HttpGet('https://pastebin.com/raw/WRUyYTdY'))()
-
-local Window = OrionLib:MakeWindow({Name = "Script Velocidade", HidePremium = false, SaveConfig = true})
-
-local Tab = Window:MakeTab({Name = "OP", Icon = "rbxassetid://4483345998", PremiumOnly = false})
-
 local player = game.Players.LocalPlayer
-local originalSpeed = player.Character and player.Character:FindFirstChildOfClass("Humanoid") and player.Character:FindFirstChildOfClass("Humanoid").WalkSpeed or 16
+local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+local originalSpeed = humanoid and humanoid.WalkSpeed or 16
 local toggleState = false
+local velocidadeTextbox
 
-Tab:AddTextbox({
+velocidadeTextbox = Tab:AddTextbox({
     Name = "Velocidade",
     Default = "16",
     TextDisappear = false,
     Callback = function(Value)
-        if toggleState and player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
-            player.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = tonumber(Value)
+        if toggleState and humanoid then
+            humanoid.WalkSpeed = tonumber(Value)
         end
     end
 })
@@ -227,10 +164,10 @@ Tab:AddToggle({
     Default = false,
     Callback = function(Value)
         toggleState = Value
-        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
         if humanoid then
             if Value then
-                humanoid.WalkSpeed = tonumber(Tab.Controls[1].TextBox.Text)
+                humanoid.WalkSpeed = tonumber(velocidadeTextbox.Text)
             else
                 humanoid.WalkSpeed = originalSpeed
             end
