@@ -1,0 +1,143 @@
+if game.PlaceId ~= 103792351637166 then
+    game.Players.LocalPlayer:Kick("Jogo não suportado! Entre no jogo chamado: **[Novo❗] Jogo de Squid Impossível! Saltar Corda**")
+    return
+end
+
+getgenv().gethui = function()
+    return game:GetService("CoreGui")
+end
+
+local OrionLib = loadstring(game:HttpGet('https://pastebin.com/raw/WRUyYTdY'))()
+
+local Window = OrionLib:MakeWindow({
+    Name = "Manga Hub | pular corda | Português | V1.0",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "MangaHubConfigs",
+    IntroEnabled = true,
+    IntroText = "Bem-vindo ao Manga Hub!",
+})
+
+OrionLib:MakeNotification({
+    Name = "Bem-vindo",
+    Content = "Bem-vindo ao MANGA HUB!!",
+    Image = "rbxassetid://4483345998",
+    Time = 15
+})
+
+local Tab = Window:MakeTab({
+    Name = "OP",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+local Rope = workspace:WaitForChild("Rope")
+local Collider = Rope:WaitForChild("Collider")
+
+local originalCanCollide = Collider.CanCollide
+local originalCanTouch = Collider.CanTouch
+local toggled = false
+
+Tab:AddToggle({
+    Name = "Desativar a corda",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            Collider.CanCollide = false
+            Collider.CanTouch = false
+            toggled = true
+        else
+            if toggled then
+                Collider.CanCollide = originalCanCollide
+                Collider.CanTouch = originalCanTouch
+                toggled = false
+            end
+        end
+    end
+})
+
+local player = game.Players.LocalPlayer
+local canTeleport = true
+
+Tab:AddButton({
+    Name = "Teleportar para o baú",
+    Callback = function()
+        if canTeleport then
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                player.Character.HumanoidRootPart.CFrame = CFrame.new(-744.203369140625, 1.60450422763824, -559.625)
+                canTeleport = false
+                task.wait(4)
+                canTeleport = true
+            end
+        end
+    end
+})
+
+local moneyButtonUsed = false
+
+Tab:AddButton({
+    Name = "Dinheiro infinito",
+    Callback = function()
+        if not moneyButtonUsed then
+            local leaderstats = player:FindFirstChild("leaderstats")
+            if leaderstats then
+                local cash = leaderstats:FindFirstChild("Cash")
+                if cash then
+                    cash.Value = 1000000000000000000
+                    
+                    cash:GetPropertyChangedSignal("Value"):Connect(function()
+                        cash.Value = 1000000000000000000
+                    end)
+                    
+                    moneyButtonUsed = true
+                    
+                    OrionLib:MakeNotification({
+                        Name = "Dinheiro Infinito",
+                        Content = "Dinheiro infinito ativado!",
+                        Image = "rbxassetid://4483345998",
+                        Time = 5
+                    })
+                end
+            end
+        end
+    end
+})
+
+local SoundService = game:GetService("SoundService")
+local Background = SoundService:WaitForChild("Background")
+
+Tab:AddToggle({
+    Name = "Desativar música",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            Background.Playing = false
+        else
+            Background.Playing = true
+        end
+    end
+})
+
+local VIP = workspace:WaitForChild("VIP")
+local VipDoor = VIP:WaitForChild("VipDoor")
+local originalVipDoorCanCollide = VipDoor.CanCollide
+local originalVipDoorCanTouch = VipDoor.CanTouch
+local vipToggled = false
+
+Tab:AddToggle({
+    Name = "Desbloquear morph VIP",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            VipDoor.CanCollide = false
+            VipDoor.CanTouch = false
+            vipToggled = true
+        else
+            if vipToggled then
+                VipDoor.CanCollide = originalVipDoorCanCollide
+                VipDoor.CanTouch = originalVipDoorCanTouch
+                vipToggled = false
+            end
+        end
+    end
+})
