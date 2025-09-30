@@ -145,8 +145,8 @@ Tab:AddToggle({
 local player = game.Players.LocalPlayer
 local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
 local originalSpeed = humanoid and humanoid.WalkSpeed or 16
-local toggleState = false
 local velocidadeAtual = 16
+local speedConnection = nil
 
 Tab:AddTextbox({
     Name = "Velocidade",
@@ -154,9 +154,6 @@ Tab:AddTextbox({
     TextDisappear = false,
     Callback = function(Value)
         velocidadeAtual = tonumber(Value) or 16
-        if toggleState and humanoid then
-            humanoid.WalkSpeed = velocidadeAtual
-        end
     end
 })
 
@@ -164,13 +161,27 @@ Tab:AddToggle({
     Name = "Aplicar Velocidade",
     Default = false,
     Callback = function(Value)
-        toggleState = Value
-        humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            if Value then
-                humanoid.WalkSpeed = velocidadeAtual
-            else
-                humanoid.WalkSpeed = originalSpeed
+        if Value then
+            speedConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                local char = player.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum.WalkSpeed = velocidadeAtual
+                    end
+                end
+            end)
+        else
+            if speedConnection then
+                speedConnection:Disconnect()
+                speedConnection = nil
+            end
+            local char = player.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = originalSpeed
+                end
             end
         end
     end
