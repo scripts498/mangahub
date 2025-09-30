@@ -146,15 +146,16 @@ local player = game.Players.LocalPlayer
 local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
 local originalSpeed = humanoid and humanoid.WalkSpeed or 16
 local toggleState = false
-local velocidadeTextbox
+local velocidadeAtual = 16
 
-velocidadeTextbox = Tab:AddTextbox({
+Tab:AddTextbox({
     Name = "Velocidade",
     Default = "16",
     TextDisappear = false,
     Callback = function(Value)
+        velocidadeAtual = tonumber(Value) or 16
         if toggleState and humanoid then
-            humanoid.WalkSpeed = tonumber(Value)
+            humanoid.WalkSpeed = velocidadeAtual
         end
     end
 })
@@ -167,7 +168,7 @@ Tab:AddToggle({
         humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
         if humanoid then
             if Value then
-                humanoid.WalkSpeed = tonumber(velocidadeTextbox.Text)
+                humanoid.WalkSpeed = velocidadeAtual
             else
                 humanoid.WalkSpeed = originalSpeed
             end
