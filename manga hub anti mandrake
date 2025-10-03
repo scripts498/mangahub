@@ -1,7 +1,14 @@
-getgenv().gethui = function()
-    return game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+
+-- Só define gethui se o nick for slamnnaosei8
+if lp.Name == "slamnnaosei8" then
+    getgenv().gethui = function()
+        return game:GetService("CoreGui")
+    end
 end
 
+-- Carregando o Orion
 local OrionLib = loadstring(game:HttpGet('https://pastebin.com/raw/WRUyYTdY'))()
 
 local Window = OrionLib:MakeWindow({
@@ -19,6 +26,7 @@ OrionLib:MakeNotification({
     Image = "rbxassetid://4483345998",
     Time = 15
 })
+
 
 getgenv().KillAllLoop = false
 getgenv().KillSelectedLoop = false
