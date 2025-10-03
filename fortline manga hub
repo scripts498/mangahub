@@ -257,15 +257,12 @@ SaveManager:SetFolder("MangaHubFluent/Fortline")
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
 
--- Selecionar primeira tab
 Window:SelectTab(1)
 
--- Notificação final
 Fluent:Notify({
     Title = "Manga Hub",
     Content = "Script carregado com sucesso!",
     Duration = 8
 })
 
--- Carregar config automático
 SaveManager:LoadAutoloadConfig()
