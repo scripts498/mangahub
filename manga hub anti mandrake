@@ -83,6 +83,9 @@ do
         Callback = function()
             local vipWall = workspace:FindFirstChild("VipWall")
             if vipWall then
+                for _, child in pairs(vipWall:GetChildren()) do
+                    child:Destroy()
+                end
                 vipWall:Destroy()
             end
         end
