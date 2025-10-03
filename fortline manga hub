@@ -1,33 +1,34 @@
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+getgenv().gethui = function()
+    return game:GetService("CoreGui")
+end
 
-local Window = Fluent:CreateWindow({
-    Title = "Manga Hub | Fortline",
-    SubTitle = "Português",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+local OrionLib = loadstring(game:HttpGet('https://pastebin.com/raw/WRUyYTdY'))()
+
+local Window = OrionLib:MakeWindow({
+    Name = "Manga Hub | Fortline | Português",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "MangaHubConfigs",
+    IntroEnabled = true,
+    IntroText = "Bem-vindo ao Manga Hub!",
 })
 
-Fluent:Notify({
-    Title = "Bem-vindo",
+OrionLib:MakeNotification({
+    Name = "Bem-vindo",
     Content = "Bem-vindo ao MANGA HUB!!",
-    Duration = 15
+    Image = "rbxassetid://4483345998",
+    Time = 15
 })
 
 getgenv().KillAllLoop = false
 getgenv().KillSelectedLoop = false
 getgenv().KillDelay = 0.05
 
-local Tabs = {
-    Kill = Window:AddTab({ Title = "Kill", Icon = "skull" }),
-    Settings = Window:AddTab({ Title = "Configurações", Icon = "settings" })
-}
-
-local Options = Fluent.Options
+local KillTab = Window:MakeTab({
+    Name = "Kill",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
 
 local Players = game:GetService("Players")
 local RepStorage = game:GetService("ReplicatedStorage")
@@ -38,50 +39,43 @@ local killTask = nil
 local equipMonitor = nil
 local selectedPlayerName = nil
 
-local function GetPlayerList()
+local dropdown = KillTab:AddDropdown({
+    Name = "Selecionar Player",
+    Options = {},
+    Default = nil,
+    Callback = function(value)
+        selectedPlayerName = value
+    end
+})
+
+local function UpdatePlayerDropdown()
     local options = {}
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= lp then
             table.insert(options, plr.Name)
         end
     end
-    return options
+    dropdown:Refresh(options)
+    if selectedPlayerName and not table.find(options, selectedPlayerName) then
+        selectedPlayerName = nil
+    end
 end
 
-local PlayerDropdown = Tabs.Kill:AddDropdown("PlayerDropdown", {
-    Title = "Selecionar Player",
-    Values = GetPlayerList(),
-    Multi = false,
-    Default = nil,
-})
-
-PlayerDropdown:OnChanged(function(Value)
-    selectedPlayerName = Value
-end)
-
-Tabs.Kill:AddButton({
-    Title = "Atualizar Lista",
-    Description = "Atualiza a lista de players",
+KillTab:AddButton({
+    Name = "Atualizar Lista",
     Callback = function()
-        local newList = GetPlayerList()
-        PlayerDropdown:SetValues(newList)
-        Fluent:Notify({
-            Title = "Lista Atualizada",
-            Content = "Lista de players atualizada!",
-            Duration = 3
-        })
+        UpdatePlayerDropdown()
     end
 })
 
-local DelaySlider = Tabs.Kill:AddSlider("KillDelay", {
-    Title = "Delay (segundos)",
-    Description = "Intervalo entre ataques",
-    Default = 0.05,
+KillTab:AddSlider({
+    Name = "Delay (s)",
     Min = 0.05,
     Max = 2,
-    Rounding = 2,
-    Callback = function(Value)
-        getgenv().KillDelay = Value
+    Default = getgenv().KillDelay,
+    Increment = 0.01,
+    Callback = function(v)
+        getgenv().KillDelay = v
     end
 })
 
@@ -160,105 +154,34 @@ local function StartKillLoop(tool, targetName)
     end)
 end
 
-local KillAllToggle = Tabs.Kill:AddToggle("KillAll", {
-    Title = "Kill All Loop",
-    Description = "Elimina todos os jogadores",
-    Default = false
-})
-
-KillAllToggle:OnChanged(function()
-    local Value = Options.KillAll.Value
-    getgenv().KillAllLoop = Value
-    if Value then
-        local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
-        if tool then
-            StartKillLoop(tool, nil)
-            Fluent:Notify({
-                Title = "Kill All Ativado",
-                Content = "Eliminando todos os jogadores...",
-                Duration = 3
-            })
+KillTab:AddToggle({
+    Name = "Kill All Loop",
+    Default = false,
+    Callback = function(Value)
+        getgenv().KillAllLoop = Value
+        if Value then
+            local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
+            if tool then
+                StartKillLoop(tool, nil)
+            end
         else
-            Fluent:Notify({
-                Title = "Erro",
-                Content = "Sniper não encontrado!",
-                Duration = 3
-            })
-        end
-    else
-        StopKillLoop()
-        Fluent:Notify({
-            Title = "Kill All Desativado",
-            Content = "Loop desativado",
-            Duration = 3
-        })
-    end
-end)
-
-local KillSelectedToggle = Tabs.Kill:AddToggle("KillSelected", {
-    Title = "Loop Kill Player Selecionado",
-    Description = "Elimina o jogador selecionado",
-    Default = false
-})
-
-KillSelectedToggle:OnChanged(function()
-    local Value = Options.KillSelected.Value
-    getgenv().KillSelectedLoop = Value
-    if Value and selectedPlayerName then
-        local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
-        if tool then
-            StartKillLoop(tool, selectedPlayerName)
-            Fluent:Notify({
-                Title = "Kill Selecionado Ativado",
-                Content = "Eliminando " .. selectedPlayerName,
-                Duration = 3
-            })
-        else
-            Fluent:Notify({
-                Title = "Erro",
-                Content = "Sniper não encontrado!",
-                Duration = 3
-            })
-        end
-    else
-        StopKillLoop()
-        if Value and not selectedPlayerName then
-            Fluent:Notify({
-                Title = "Aviso",
-                Content = "Nenhum jogador selecionado!",
-                Duration = 3
-            })
-        else
-            Fluent:Notify({
-                Title = "Kill Selecionado Desativado",
-                Content = "Loop desativado",
-                Duration = 3
-            })
+            StopKillLoop()
         end
     end
-end)
-
-Tabs.Settings:AddParagraph({
-    Title = "Sobre o Manga Hub",
-    Content = "Script criado para Fortline\nVersão com Fluent Library\n\nUse com responsabilidade!"
 })
 
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({})
-InterfaceManager:SetFolder("MangaHubFluent")
-SaveManager:SetFolder("MangaHubFluent/Fortline")
-
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
-
-Window:SelectTab(1)
-
-Fluent:Notify({
-    Title = "Manga Hub",
-    Content = "Script carregado com sucesso!",
-    Duration = 8
+KillTab:AddToggle({
+    Name = "Loop Kill Player Selecionado",
+    Default = false,
+    Callback = function(Value)
+        getgenv().KillSelectedLoop = Value
+        if Value and selectedPlayerName then
+            local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
+            if tool then
+                StartKillLoop(tool, selectedPlayerName)
+            end
+        else
+            StopKillLoop()
+        end
+    end
 })
-
-SaveManager:LoadAutoloadConfig()
