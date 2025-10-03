@@ -1,195 +1,67 @@
-local Players = game:GetService("Players")
-local lp = Players.LocalPlayer
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
--- Só define gethui se o nick for slamnnaosei8
-if lp.Name == "slamnnaosei8" then
-    getgenv().gethui = function()
-        return game:GetService("CoreGui")
-    end
-end
-
--- Carregando o Orion
-local OrionLib = loadstring(game:HttpGet('https://pastebin.com/raw/WRUyYTdY'))()
-
-local Window = OrionLib:MakeWindow({
-    Name = "Manga Hub | Fortline | Português",
-    HidePremium = false,
-    SaveConfig = true,
-    ConfigFolder = "MangaHubConfigs",
-    IntroEnabled = true,
-    IntroText = "Bem-vindo ao Manga Hub!",
+local Window = Fluent:CreateWindow({
+    Title = "Manga Hub | 67 ponte de vidro",
+    SubTitle = "Português",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
-OrionLib:MakeNotification({
-    Name = "Bem-vindo",
-    Content = "Bem-vindo ao MANGA HUB!!",
-    Image = "rbxassetid://4483345998",
-    Time = 15
-})
+local originalColors = {}
+local runToggle = false
 
-
-getgenv().KillAllLoop = false
-getgenv().KillSelectedLoop = false
-getgenv().KillDelay = 0.05
-
-local KillTab = Window:MakeTab({
-    Name = "Kill",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-local Players = game:GetService("Players")
-local RepStorage = game:GetService("ReplicatedStorage")
-local WeaponsRemote = RepStorage:WaitForChild("WeaponsSystem").Network.WeaponHit
-local lp = Players.LocalPlayer
-local isEquipped = false
-local killTask = nil
-local equipMonitor = nil
-local selectedPlayerName = nil
-
-local dropdown = KillTab:AddDropdown({
-    Name = "Selecionar Player",
-    Options = {},
-    Default = nil,
-    Callback = function(value)
-        selectedPlayerName = value
-    end
-})
-
-local function UpdatePlayerDropdown()
-    local options = {}
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= lp then
-            table.insert(options, plr.Name)
-        end
-    end
-    dropdown:Refresh(options)
-    if selectedPlayerName and not table.find(options, selectedPlayerName) then
-        selectedPlayerName = nil
-    end
-end
-
-KillTab:AddButton({
-    Name = "Atualizar Lista",
-    Callback = function()
-        UpdatePlayerDropdown()
-    end
-})
-
-KillTab:AddSlider({
-    Name = "Delay (s)",
-    Min = 0.05,
-    Max = 2,
-    Default = getgenv().KillDelay,
-    Increment = 0.01,
-    Callback = function(v)
-        getgenv().KillDelay = v
-    end
-})
-
-local function StopKillLoop()
-    isEquipped = false
-    if killTask then
-        task.cancel(killTask)
-        killTask = nil
-    end
-    if equipMonitor then
-        task.cancel(equipMonitor)
-        equipMonitor = nil
-    end
-    if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-        lp.Character.Humanoid:UnequipTools()
-    end
-end
-
-local function StartKillLoop(tool, targetName)
-    if not tool or killTask then return end
-    isEquipped = true
-    if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-        lp.Character.Humanoid:EquipTool(tool)
-    end
-    equipMonitor = task.spawn(function()
-        while (getgenv().KillAllLoop or getgenv().KillSelectedLoop) and isEquipped do
-            task.wait(0.05)
-            if tool.Parent ~= lp.Character then
-                if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-                    lp.Character.Humanoid:EquipTool(tool)
-                end
-            end
-        end
-    end)
-    killTask = task.spawn(function()
-        while (getgenv().KillAllLoop or getgenv().KillSelectedLoop) and isEquipped do
-            task.wait(getgenv().KillDelay)
-            if not lp or not lp.Character or not lp.Character:FindFirstChild("HumanoidRootPart") then continue end
-            local targets = {}
-            if getgenv().KillAllLoop then
-                for _, plr in pairs(Players:GetPlayers()) do
-                    if plr ~= lp and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") then
-                        table.insert(targets, plr)
+local function updateGlassTiles()
+    local glassTiles = workspace:FindFirstChild("GlassTiles")
+    if glassTiles then
+        for i = 1, 42 do
+            local model = glassTiles:FindFirstChild(tostring(i))
+            if model and model:IsA("Model") then
+                for _, partName in ipairs({"Tile1", "Tile2"}) do
+                    local part = model:FindFirstChild(partName)
+                    if part and part:IsA("BasePart") then
+                        if not originalColors[part] then
+                            originalColors[part] = part.Color
+                        end
+                        if runToggle then
+                            local debounce = part:FindFirstChild("Debounce")
+                            if debounce and debounce:IsA("BoolValue") then
+                                part.Color = Color3.fromRGB(255, 0, 0)
+                            else
+                                part.Color = Color3.fromRGB(0, 255, 0)
+                            end
+                        else
+                            part.Color = originalColors[part]
+                        end
                     end
                 end
-            elseif getgenv().KillSelectedLoop and selectedPlayerName then
-                local plr = Players:FindFirstChild(selectedPlayerName)
-                if plr and plr ~= lp and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") then
-                    table.insert(targets, plr)
-                end
-            end
-            if #targets > 0 then
-                local target = targets[math.random(1, #targets)]
-                local hrp = target.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    local args = {
-                        [1] = tool,
-                        [2] = {
-                            ["p"] = hrp.Position,
-                            ["pid"] = 1,
-                            ["part"] = hrp,
-                            ["d"] = 17.5,
-                            ["maxDist"] = 17.5,
-                            ["h"] = target.Character.Humanoid,
-                            ["m"] = Enum.Material.Plastic,
-                            ["sid"] = 14,
-                            ["t"] = tick(),
-                            ["n"] = Vector3.new(0, 0, -1)
-                        }
-                    }
-                    pcall(function() WeaponsRemote:FireServer(unpack(args)) end)
-                end
             end
         end
-        killTask = nil
-    end)
+    end
 end
 
-KillTab:AddToggle({
-    Name = "Kill All Loop",
-    Default = false,
-    Callback = function(Value)
-        getgenv().KillAllLoop = Value
-        if Value then
-            local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
-            if tool then
-                StartKillLoop(tool, nil)
-            end
-        else
-            StopKillLoop()
-        end
-    end
-})
+local Tabs = {
+    SuperOP = Window:AddTab({Title = "Super OP", Icon = ""})
+}
 
-KillTab:AddToggle({
-    Name = "Loop Kill Player Selecionado",
-    Default = false,
-    Callback = function(Value)
-        getgenv().KillSelectedLoop = Value
-        if Value and selectedPlayerName then
-            local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
-            if tool then
-                StartKillLoop(tool, selectedPlayerName)
+local Toggle = Tabs.SuperOP:AddToggle("RevealGlass", {Title = "Revelar vidros certos e errados", Default = false})
+
+Toggle:OnChanged(function()
+    runToggle = Toggle.Value
+    if runToggle then
+        spawn(function()
+            while runToggle do
+                updateGlassTiles()
+                wait(0.1)
             end
-        else
-            StopKillLoop()
-        end
+        end)
+    else
+        updateGlassTiles()
     end
-})
+end)
+
+Toggle:SetValue(false)
