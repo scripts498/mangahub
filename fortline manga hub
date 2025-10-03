@@ -2,21 +2,47 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
+
+-- Detecta se é mobile
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+-- Ajusta tamanho da janela para Mobile/PC
+local windowSize
+if isMobile then
+    windowSize = UDim2.fromOffset(580, 460) -- pode ajustar se quiser maior no mobile
+else
+    windowSize = UDim2.fromOffset(580, 460)
+end
+
 local Window = Fluent:CreateWindow({
     Title = "Manga Hub | Fortline",
     SubTitle = "Português",
     TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
+    Size = windowSize,
     Acrylic = true,
     Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+    MinimizeKey = Enum.KeyCode.LeftControl,
+    MinimizeOnClose = false -- importante: evita que minimize automático ao clicar no X
 })
+
+-- Override para minimizar somente ao apertar LeftControl
+Window.Minimized = false
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.LeftControl then
+        Window.Minimized = not Window.Minimized
+    end
+end)
 
 Fluent:Notify({
     Title = "Bem-vindo",
     Content = "Bem-vindo ao MANGA HUB!!",
     Duration = 15
-})
+}) 
 
 getgenv().KillAllLoop = false
 getgenv().KillSelectedLoop = false
