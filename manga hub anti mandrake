@@ -14,27 +14,34 @@ local Window = Fluent:CreateWindow({
 
 local originalColors = {}
 local runToggle = false
+local checkedParts = {}
 
 local function updateGlassTiles()
     local glassTiles = workspace:FindFirstChild("GlassTiles")
-    if glassTiles then
-        for i = 1, 42 do
-            local model = glassTiles:FindFirstChild(tostring(i))
-            if model and model:IsA("Model") then
-                for _, partName in ipairs({"Tile1", "Tile2"}) do
-                    local part = model:FindFirstChild(partName)
-                    if part and part:IsA("BasePart") then
-                        if not originalColors[part] then
-                            originalColors[part] = part.Color
-                        end
-                        if runToggle then
-                            local debounce = part:FindFirstChild("Debounce")
-                            if debounce and debounce:IsA("BoolValue") then
+    if not glassTiles then return end
+
+    for i = 1, 42 do
+        local model = glassTiles:FindFirstChild(tostring(i))
+        if model and model:IsA("Model") then
+            for _, partName in ipairs({"Tile1", "Tile2"}) do
+                local part = model:FindFirstChild(partName)
+                if part and part:IsA("BasePart") then
+                    if not originalColors[part] then
+                        originalColors[part] = part.Color
+                    end
+                    if runToggle then
+                        local debounce = part:FindFirstChild("Debounce")
+                        if debounce and debounce:IsA("BoolValue") then
+                            if part.Color ~= Color3.fromRGB(255, 0, 0) then
                                 part.Color = Color3.fromRGB(255, 0, 0)
-                            else
-                                part.Color = Color3.fromRGB(0, 255, 0)
                             end
                         else
+                            if part.Color ~= Color3.fromRGB(0, 255, 0) then
+                                part.Color = Color3.fromRGB(0, 255, 0)
+                            end
+                        end
+                    else
+                        if part.Color ~= originalColors[part] then
                             part.Color = originalColors[part]
                         end
                     end
@@ -56,7 +63,7 @@ Toggle:OnChanged(function()
         spawn(function()
             while runToggle do
                 updateGlassTiles()
-                wait(0.7)
+                wait(0.3) -- maior intervalo reduz travamento
             end
         end)
     else
