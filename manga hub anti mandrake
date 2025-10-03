@@ -16,7 +16,7 @@ local Window = Fluent:CreateWindow({
 })
 local originalColors = {}
 local runToggle = false
-local touchInterestBackup = nil
+local removedTouchInterests = {}
 local function updateGlassTiles()
     local glassTiles = workspace:FindFirstChild("GlassTiles")
     if not glassTiles then return end
@@ -44,13 +44,50 @@ local function updateGlassTiles()
         end
     end
 end
+local function removeDebounceTouch()
+    removedTouchInterests = {}
+    local glassTiles = workspace:FindFirstChild("GlassTiles")
+    if not glassTiles then return end
+    for i = 1, 42 do
+        local model = glassTiles:FindFirstChild(tostring(i))
+        if model and model:IsA("Model") then
+            for _, partName in ipairs({"Tile1", "Tile2"}) do
+                local part = model:FindFirstChild(partName)
+                if part and part:IsA("BasePart") then
+                    local debounce = part:FindFirstChild("Debounce")
+                    if debounce and debounce:IsA("BoolValue") then
+                        local touchInterest = part:FindFirstChild("TouchInterest")
+                        if touchInterest then
+                            local clonedTouch = touchInterest:Clone()
+                            table.insert(removedTouchInterests, {part = part, touch = clonedTouch})
+                            touchInterest:Destroy()
+                        end
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
+end
+local function restoreDebounceTouch()
+    for _, data in ipairs(removedTouchInterests) do
+        if data.part and data.part:IsDescendantOf(workspace) and not data.part:FindFirstChild("TouchInterest") then
+            if data.touch then
+                local newTouch = data.touch:Clone()
+                newTouch.Parent = data.part
+            end
+            data.part.CanCollide = false
+        end
+    end
+    removedTouchInterests = {}
+end
 local Tabs = {
     Main = Window:AddTab({ Title = "Main", Icon = "" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 local Options = Fluent.Options
 do
-    local RevealToggle = Tabs.Main:AddToggle("RevealGlass", {Title = "Revelar vidros certos e errados", Default = false})
+    local RevealToggle = Tabs.Main:AddToggle("RevealGlass", {Title = "Revelar vidros certos e errados( SUPER OP )", Default = false})
     RevealToggle:OnChanged(function()
         runToggle = Options.RevealGlass.Value
         if runToggle then
@@ -62,6 +99,14 @@ do
             end)
         else
             updateGlassTiles()
+        end
+    end)
+    local AllTrueToggle = Tabs.Main:AddToggle("AllTrue", {Title = "Todos os vidros verdadeiros ( OP )", Default = false})
+    AllTrueToggle:OnChanged(function()
+        if Options.AllTrue.Value then
+            removeDebounceTouch()
+        else
+            restoreDebounceTouch()
         end
     end)
     Tabs.Main:AddButton({
@@ -79,26 +124,19 @@ do
             end
         end
     })
-    local VIPToggle = Tabs.Main:AddToggle("VIPAccess", {Title = "Acesso a area VIP", Default = false})
-    VIPToggle:OnChanged(function()
-        local vipPart = workspace:FindFirstChild("VIP")
-        if vipPart and vipPart:IsA("BasePart") then
-            if Options.VIPAccess.Value then
-                local touchInterest = vipPart:FindFirstChild("TouchInterest")
-                if touchInterest then
-                    touchInterestBackup = touchInterest
-                    touchInterest:Destroy()
-                end
-                vipPart.CanCollide = false
-            else
-                if touchInterestBackup and not vipPart:FindFirstChild("TouchInterest") then
-                    local newTouch = Instance.new("TouchTransmitter")
-                    newTouch.Parent = vipPart
-                end
-                vipPart.CanCollide = true
+    Tabs.Main:AddButton({
+        Title = "Acesso a area VIP",
+        Callback = function()
+            local vipPart = workspace:FindFirstChild("VIP")
+            if vipPart then
+                vipPart:Destroy()
+            end
+            local vipWall = workspace:FindFirstChild("VipWall")
+            if vipWall then
+                vipWall:Destroy()
             end
         end
-    end)
+    })
 end
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
