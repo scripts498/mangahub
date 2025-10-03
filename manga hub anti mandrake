@@ -2,24 +2,28 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
+local UserInputService = game:GetService("UserInputService")
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+local windowSize = isMobile and UDim2.fromOffset(400, 350) or UDim2.fromOffset(580, 460)
+local tabWidth = isMobile and 120 or 160
+
 local Window = Fluent:CreateWindow({
     Title = "Manga Hub | 67 ponte de vidro",
     SubTitle = "Português",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
-    Acrylic = true,
+    TabWidth = tabWidth,
+    Size = windowSize,
+    Acrylic = not isMobile,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl
 })
 
 local originalColors = {}
 local runToggle = false
-local checkedParts = {}
 
 local function updateGlassTiles()
     local glassTiles = workspace:FindFirstChild("GlassTiles")
     if not glassTiles then return end
-
     for i = 1, 42 do
         local model = glassTiles:FindFirstChild(tostring(i))
         if model and model:IsA("Model") then
@@ -32,18 +36,12 @@ local function updateGlassTiles()
                     if runToggle then
                         local debounce = part:FindFirstChild("Debounce")
                         if debounce and debounce:IsA("BoolValue") then
-                            if part.Color ~= Color3.fromRGB(255, 0, 0) then
-                                part.Color = Color3.fromRGB(255, 0, 0)
-                            end
+                            part.Color = Color3.fromRGB(255, 0, 0)
                         else
-                            if part.Color ~= Color3.fromRGB(0, 255, 0) then
-                                part.Color = Color3.fromRGB(0, 255, 0)
-                            end
+                            part.Color = Color3.fromRGB(0, 255, 0)
                         end
                     else
-                        if part.Color ~= originalColors[part] then
-                            part.Color = originalColors[part]
-                        end
+                        part.Color = originalColors[part]
                     end
                 end
             end
@@ -52,23 +50,65 @@ local function updateGlassTiles()
 end
 
 local Tabs = {
-    SuperOP = Window:AddTab({Title = "Super OP", Icon = ""})
+    Main = Window:AddTab({ Title = "Main", Icon = "" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
-local Toggle = Tabs.SuperOP:AddToggle("RevealGlass", {Title = "Revelar vidros certos e errados", Default = false})
+local Options = Fluent.Options
 
-Toggle:OnChanged(function()
-    runToggle = Toggle.Value
-    if runToggle then
-        spawn(function()
-            while runToggle do
-                updateGlassTiles()
-                wait(0.3) -- maior intervalo reduz travamento
+do
+    local RevealToggle = Tabs.Main:AddToggle("RevealGlass", {Title = "Revelar vidros certos e errados", Default = false})
+
+    RevealToggle:OnChanged(function()
+        runToggle = Options.RevealGlass.Value
+        if runToggle then
+            spawn(function()
+                while runToggle do
+                    updateGlassTiles()
+                    wait(0.3)
+                end
+            end)
+        else
+            updateGlassTiles()
+        end
+    end)
+
+    Tabs.Main:AddButton({
+        Title = "Fly GUI",
+        Callback = function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"))()
+        end
+    })
+
+    Tabs.Main:AddButton({
+        Title = "Teleportar para o baú",
+        Callback = function()
+            local lp = game:GetService("Players").LocalPlayer
+            if lp and lp.Character and lp.Character:FindFirstChild("HumanoidRootPart") then
+                lp.Character.HumanoidRootPart.CFrame = CFrame.new(553.8, 31.8, 1339.8)
             end
-        end)
-    else
-        updateGlassTiles()
-    end
-end)
+        end
+    })
+end
 
-Toggle:SetValue(false)
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+
+InterfaceManager:SetFolder("FluentScriptHub")
+SaveManager:SetFolder("FluentScriptHub/specific-game")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title = "Fluent",
+    Content = "The script has been loaded.",
+    Duration = 8
+})
+
+SaveManager:LoadAutoloadConfig()
