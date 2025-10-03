@@ -56,7 +56,7 @@ Toggle:OnChanged(function()
         spawn(function()
             while runToggle do
                 updateGlassTiles()
-                wait(0.1)
+                wait(0.7)
             end
         end)
     else
