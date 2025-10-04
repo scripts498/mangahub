@@ -221,6 +221,8 @@ KillAllToggle:OnChanged(function()
     end
 end)
 
+
+
 local KillSelectedToggle = Tabs.Kill:AddToggle("KillSelected", {
     Title = "Loop Kill Player Selecionado",
     Description = "Elimina o jogador selecionado",
@@ -263,6 +265,17 @@ KillSelectedToggle:OnChanged(function()
         end
     end
 end)
+
+Tabs.Kill:AddButton({
+    Title = "Hitbox Expander",
+    Description = "Aumenta o hitbox dos players",
+    Callback = function()
+        pcall(function()
+            loadstring(game:HttpGet("https://pastebin.com/raw/XxWj2B1j"))()
+        end)
+    end
+})
+
 
 Tabs.Settings:AddParagraph({
     Title = "Sobre o Manga Hub",
