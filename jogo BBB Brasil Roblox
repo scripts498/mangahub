@@ -77,7 +77,7 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
-local windowSize = isMobile and UDim2.fromOffset(400, 350) or UDim2.fromOffset(580, 460)
+local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(580, 460)
 local tabWidth = isMobile and 120 or 160
 
 local Window = Fluent:CreateWindow({
