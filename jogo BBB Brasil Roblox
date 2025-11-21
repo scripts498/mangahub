@@ -1,0 +1,116 @@
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+local Window = OrionLib:MakeWindow({Name = "Manga hub", HidePremium = false, SaveConfig = true, ConfigFolder = "VotingConfig"})
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local selectedPlayer = nil
+local votingEnabled = false
+local votingCoroutine = nil
+local playerList = {}
+
+local function getPlayerList()
+    local list = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            table.insert(list, player.Name)
+        end
+    end
+    return list
+end
+
+local function votePlayer(playerName)
+    local args = {
+        [1] = playerName,
+        [2] = 5
+    }
+    
+    pcall(function()
+        ReplicatedStorage.Remotes:FindFirstChild("\240\159\140\131\240\159\149\139\240\159\154\135\226\152\132"):FireServer(unpack(args))
+    end)
+end
+
+local Tab = Window:MakeTab({
+    Name = "Votação",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+playerList = getPlayerList()
+
+local dropdown = Tab:AddDropdown({
+    Name = "Selecionar Jogador",
+    Default = "",
+    Options = playerList,
+    Callback = function(value)
+        selectedPlayer = value
+    end    
+})
+
+Tab:AddButton({
+    Name = "Atualizar Lista",
+    Callback = function()
+        playerList = getPlayerList()
+        dropdown:Refresh(playerList, true)
+        OrionLib:MakeNotification({
+            Name = "Lista Atualizada",
+            Content = "A lista de jogadores foi atualizada!",
+            Image = "rbxassetid://4483345998",
+            Time = 3
+        })
+    end    
+})
+
+Tab:AddToggle({
+    Name = "Votar nesta pessoa",
+    Default = false,
+    Callback = function(value)
+        votingEnabled = value
+        
+        if value then
+            if not selectedPlayer or selectedPlayer == "" then
+                OrionLib:MakeNotification({
+                    Name = "Erro",
+                    Content = "Selecione um jogador primeiro!",
+                    Image = "rbxassetid://4483345998",
+                    Time = 5
+                })
+                return
+            end
+            
+            votingCoroutine = coroutine.create(function()
+                while votingEnabled do
+                    if selectedPlayer and selectedPlayer ~= "" then
+                        votePlayer(selectedPlayer)
+                    end
+                    task.wait(0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
+                end
+            end)
+            
+            coroutine.resume(votingCoroutine)
+            
+            OrionLib:MakeNotification({
+                Name = "Votação Iniciada",
+                Content = "Votando em: " .. selectedPlayer,
+                Image = "rbxassetid://4483345998",
+                Time = 3
+            })
+        else
+            votingEnabled = false
+            OrionLib:MakeNotification({
+                Name = "Votação Parada",
+                Content = "A votação foi interrompida!",
+                Image = "rbxassetid://4483345998",
+                Time = 3
+            })
+        end
+    end    
+})
+
+Tab:AddLabel("Você deve usar isso em pessoas no paredão.")
+Tab:AddLabel("")
+Tab:AddLabel("Quando ativado em uma pessoa no paredão,")
+Tab:AddLabel("tem 75% de chance da pessoa ir embora,")
+Tab:AddLabel("e 25% dela não ir.")
+
+OrionLib:Init()
