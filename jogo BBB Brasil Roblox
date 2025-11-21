@@ -1,5 +1,28 @@
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Sistema de Votação", HidePremium = false, SaveConfig = true, ConfigFolder = "mangahubbb"})
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local UserInputService = game:GetService("UserInputService")
+
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(580, 460)
+local tabWidth = isMobile and 120 or 160
+
+local Window = Fluent:CreateWindow({
+    Title = "Sistema de Votação",
+    SubTitle = "BBB Brasil",
+    TabWidth = tabWidth,
+    Size = windowSize,
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "Votação", Icon = "" })
+}
+
+local Options = Fluent.Options
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -30,87 +53,91 @@ local function votePlayer(playerName)
     end)
 end
 
-local Tab = Window:MakeTab({
-    Name = "Votação",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
 playerList = getPlayerList()
 
-local dropdown = Tab:AddDropdown({
-    Name = "Selecionar Jogador",
-    Default = "",
-    Options = playerList,
-    Callback = function(value)
-        selectedPlayer = value
-    end    
+local Dropdown = Tabs.Main:AddDropdown("PlayerDropdown", {
+    Title = "Selecionar Jogador",
+    Values = playerList,
+    Multi = false,
+    Default = 1,
 })
 
-Tab:AddButton({
-    Name = "Atualizar Lista",
+Dropdown:OnChanged(function(Value)
+    selectedPlayer = Value
+end)
+
+Tabs.Main:AddButton({
+    Title = "Atualizar Lista",
+    Description = "Atualiza a lista de jogadores",
     Callback = function()
         playerList = getPlayerList()
-        dropdown:Refresh(playerList, true)
-        OrionLib:MakeNotification({
-            Name = "Lista Atualizada",
+        Dropdown:SetValues(playerList)
+        Fluent:Notify({
+            Title = "Lista Atualizada",
             Content = "A lista de jogadores foi atualizada!",
-            Image = "rbxassetid://4483345998",
-            Time = 3
+            Duration = 3
         })
-    end    
+    end
 })
 
-Tab:AddToggle({
-    Name = "Votar nesta pessoa",
-    Default = false,
-    Callback = function(value)
-        votingEnabled = value
-        
-        if value then
-            if not selectedPlayer or selectedPlayer == "" then
-                OrionLib:MakeNotification({
-                    Name = "Erro",
-                    Content = "Selecione um jogador primeiro!",
-                    Image = "rbxassetid://4483345998",
-                    Time = 5
-                })
-                return
-            end
-            
-            votingCoroutine = coroutine.create(function()
-                while votingEnabled do
-                    if selectedPlayer and selectedPlayer ~= "" then
-                        votePlayer(selectedPlayer)
-                    end
-                    task.wait(0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
-                end
-            end)
-            
-            coroutine.resume(votingCoroutine)
-            
-            OrionLib:MakeNotification({
-                Name = "Votação Iniciada",
-                Content = "Votando em: " .. selectedPlayer,
-                Image = "rbxassetid://4483345998",
-                Time = 3
+local Toggle = Tabs.Main:AddToggle("VoteToggle", {Title = "Votar nesta pessoa", Default = false})
+
+Toggle:OnChanged(function()
+    votingEnabled = Options.VoteToggle.Value
+    
+    if votingEnabled then
+        if not selectedPlayer or selectedPlayer == "" then
+            Fluent:Notify({
+                Title = "Erro",
+                Content = "Selecione um jogador primeiro!",
+                Duration = 5
             })
-        else
-            votingEnabled = false
-            OrionLib:MakeNotification({
-                Name = "Votação Parada",
-                Content = "A votação foi interrompida!",
-                Image = "rbxassetid://4483345998",
-                Time = 3
-            })
+            Options.VoteToggle:SetValue(false)
+            return
         end
-    end    
+        
+        votingCoroutine = coroutine.create(function()
+            while votingEnabled do
+                if selectedPlayer and selectedPlayer ~= "" then
+                    votePlayer(selectedPlayer)
+                end
+                task.wait(0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
+            end
+        end)
+        
+        coroutine.resume(votingCoroutine)
+        
+        Fluent:Notify({
+            Title = "Votação Iniciada",
+            Content = "Votando em: " .. selectedPlayer,
+            Duration = 3
+        })
+    else
+        votingEnabled = false
+        Fluent:Notify({
+            Title = "Votação Parada",
+            Content = "A votação foi interrompida!",
+            Duration = 3
+        })
+    end
+end)
+
+Tabs.Main:AddParagraph({
+    Title = "Informações",
+    Content = "Você deve usar isso em pessoas no paredão.\n\nQuando ativado em uma pessoa no paredão, tem 75% de chance da pessoa ir embora, e 25% dela não ir."
 })
 
-Tab:AddLabel("Você deve usar isso em pessoas no paredão.")
-Tab:AddLabel("")
-Tab:AddLabel("Quando ativado em uma pessoa no paredão,")
-Tab:AddLabel("tem 75% de chance da pessoa ir embora,")
-Tab:AddLabel("e 25% dela não ir.")
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("VotingSystem")
+SaveManager:SetFolder("VotingSystem/config")
 
-OrionLib:Init()
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title = "Sistema de Votação",
+    Content = "Script carregado com sucesso!",
+    Duration = 5
+})
