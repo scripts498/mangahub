@@ -39,7 +39,7 @@ toggleButton.TextSize = 18
 toggleButton.Parent = screenGui
 
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0, 220, 0, 230)
+panel.Size = UDim2.new(0, 220, 0, 280)
 panel.Position = UDim2.new(1, -235, 0, 40)
 panel.AnchorPoint = Vector2.new(1, 0)
 panel.BackgroundColor3 = Color3.fromRGB(255,0,0)
@@ -75,9 +75,62 @@ local aimbotToggle = createToggle("aimbot",      UDim2.new(0, 10, 0, 10),  panel
 local espToggle    = createToggle("esp",         UDim2.new(0, 10, 0, 50),  panel)
 local fovToggle    = createToggle("circulo fov", UDim2.new(0, 10, 0, 90),  panel)
 
+-- Slider de velocidade do aimbot
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(0, 200, 0, 20)
+speedLabel.Position = UDim2.new(0, 10, 0, 130)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Font = Enum.Font.SourceSans
+speedLabel.TextSize = 16
+speedLabel.TextColor3 = Color3.new(1,1,1)
+speedLabel.Text = "Velocidade: 100%"
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedLabel.Parent = panel
+
+local speedSlider = Instance.new("Frame")
+speedSlider.Size = UDim2.new(0, 200, 0, 5)
+speedSlider.Position = UDim2.new(0, 10, 0, 155)
+speedSlider.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
+speedSlider.BorderSizePixel = 0
+speedSlider.Parent = panel
+
+local speedFill = Instance.new("Frame")
+speedFill.Size = UDim2.new(1, 0, 1, 0)
+speedFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+speedFill.BorderSizePixel = 0
+speedFill.Parent = speedSlider
+
+local speedValue = 1.0 -- 100% por padrão
+
+local draggingSpeed = false
+speedSlider.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingSpeed = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		draggingSpeed = false
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if draggingSpeed then
+		local mousePos = UserInputService:GetMouseLocation()
+		local sliderPos = speedSlider.AbsolutePosition
+		local sliderSize = speedSlider.AbsoluteSize
+		local relativeX = math.clamp(mousePos.X - sliderPos.X, 0, sliderSize.X)
+		local percentage = relativeX / sliderSize.X
+		speedValue = math.clamp(percentage * 2, 0.1, 2) -- 10% a 200%
+		speedFill.Size = UDim2.new(percentage, 0, 1, 0)
+		speedLabel.Text = string.format("Velocidade: %d%%", math.floor(speedValue * 100))
+	end
+end)
+
 local whitelistLabel = Instance.new("TextLabel")
 whitelistLabel.Size = UDim2.new(0, 200, 0, 20)
-whitelistLabel.Position = UDim2.new(0, 10, 0, 130)
+whitelistLabel.Position = UDim2.new(0, 10, 0, 180)
 whitelistLabel.BackgroundTransparency = 1
 whitelistLabel.Font = Enum.Font.SourceSans
 whitelistLabel.TextSize = 16
@@ -89,7 +142,7 @@ whitelistLabel.Parent = panel
 local whitelistBox = Instance.new("TextBox")
 whitelistBox.Name = "WhitelistBox"
 whitelistBox.Size = UDim2.new(0, 200, 0, 25)
-whitelistBox.Position = UDim2.new(0, 10, 0, 155)
+whitelistBox.Position = UDim2.new(0, 10, 0, 205)
 whitelistBox.BackgroundColor3 = Color3.new(0,0,0)
 whitelistBox.BackgroundTransparency = 0.2
 whitelistBox.Text = ""
@@ -100,12 +153,384 @@ whitelistBox.TextColor3 = Color3.new(1,1,1)
 whitelistBox.ClearTextOnFocus = false
 whitelistBox.Parent = panel
 
+-- Indicador de alvo travado
+local targetIndicator = Instance.new("TextLabel")
+targetIndicator.Size = UDim2.new(0, 200, 0, 25)
+targetIndicator.Position = UDim2.new(0, 10, 0, 240)
+targetIndicator.BackgroundColor3 = Color3.new(0,0,0)
+targetIndicator.BackgroundTransparency = 0.5
+targetIndicator.Font = Enum.Font.SourceSansBold
+targetIndicator.TextSize = 16
+targetIndicator.TextColor3 = Color3.fromRGB(0, 255, 0)
+targetIndicator.Text = "Alvo: Nenhum"
+targetIndicator.Parent = panel
+
 local function highlightToggle(toggle, color)
 	toggle.BackgroundTransparency = 0
 	toggle.BackgroundColor3 = color
 	toggle.TextColor3 = Color3.new(1,1,1)
 end
 
+local function resetToggle(toggle)
+	toggle.BackgroundTransparency = 0.5
+	toggle.BackgroundColor3 = Color3.fromRGB(255,255,255)
+	toggle.TextColor3 = Color3.new(0,0,0)
+end
+
+local aimbotEnabled = false
+local espEnabled    = false
+local fovEnabled    = false
+
+toggleButton.MouseButton1Click:Connect(function()
+	panel.Visible = not panel.Visible
+	titleLabel.Visible = panel.Visible
+	toggleButton.Text = panel.Visible and "-" or "+"
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	if input.KeyCode == Enum.KeyCode.X then
+		panel.Visible = not panel.Visible
+		titleLabel.Visible = panel.Visible
+		toggleButton.Text = panel.Visible and "-" or "+"
+	elseif input.KeyCode == Enum.KeyCode.R then
+		aimbotToggle.MouseButton1Click:Fire()
+	elseif input.KeyCode == Enum.KeyCode.E then
+		espToggle.MouseButton1Click:Fire()
+	elseif input.KeyCode == Enum.KeyCode.F then
+		fovToggle.MouseButton1Click:Fire()
+	end
+end)
+
+local dragging = false
+local dragInput, dragStart, startPos
+
+local function updatePosition(input)
+	local delta = input.Position - dragStart
+	panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+panel.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = panel.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+panel.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		updatePosition(input)
+	end
+end)
+
+local whitelist = {}
+
+local function updateWhitelist()
+	table.clear(whitelist)
+	local text = whitelistBox.Text or ""
+	for name in string.gmatch(text, "([^,]+)") do
+		local trimmed = name:gsub("^%s+", ""):gsub("%s+$", "")
+		if trimmed ~= "" then
+			whitelist[trimmed:lower()] = true
+		end
+	end
+end
+
+whitelistBox.FocusLost:Connect(function()
+	updateWhitelist()
+end)
+
+local function isWhitelisted(plr)
+	if not plr then return false end
+	return whitelist[plr.Name:lower()] == true
+end
+
+local fovCircle = Drawing.new("Circle")
+fovCircle.Visible = false
+fovCircle.Thickness = 2
+fovCircle.Color = Color3.fromRGB(255, 255, 255)
+fovCircle.Transparency = 1
+fovCircle.NumSides = 64
+fovCircle.Filled = false
+fovCircle.Radius = 150
+
+RunService.RenderStepped:Connect(function()
+	if fovCircle.Visible then
+		local camera = Workspace.CurrentCamera
+		if camera then
+			local viewportSize = camera.ViewportSize
+			fovCircle.Position = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+		end
+	end
+end)
+
+fovToggle.MouseButton1Click:Connect(function()
+	fovEnabled = not fovEnabled
+	fovCircle.Visible = fovEnabled
+	if fovEnabled then
+		highlightToggle(fovToggle, Color3.fromRGB(255, 255, 255))
+	else
+		resetToggle(fovToggle)
+	end
+end)
+
+local function isVisible(targetHead)
+	local camera = Workspace.CurrentCamera
+	if not camera then return false end
+
+	local origin = camera.CFrame.Position
+	local direction = (targetHead.Position - origin)
+	local distance = direction.Magnitude
+	if distance <= 0 then return false end
+
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	raycastParams.FilterDescendantsInstances = {player.Character or nil}
+
+	local result = Workspace:Raycast(origin, direction, raycastParams)
+	if result and result.Instance and result.Instance:IsDescendantOf(targetHead.Parent) then
+		return true
+	end
+
+	return false
+end
+
+local function getClosestVisiblePlayer()
+	local closest
+	local closestDist = math.huge
+	local camera = Workspace.CurrentCamera
+	if not camera then return nil end
+	local origin = camera.CFrame.Position
+
+	for _, plr in pairs(Players:GetPlayers()) do
+		if plr ~= player and not isWhitelisted(plr) and plr.Character and plr.Character:FindFirstChild("Head") then
+			local head = plr.Character.Head
+			if isVisible(head) then
+				local dist = (head.Position - origin).Magnitude
+				if dist < closestDist then
+					closestDist = dist
+					closest = plr
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+local aimbotConn
+local currentTarget = nil
+
+aimbotToggle.MouseButton1Click:Connect(function()
+	aimbotEnabled = not aimbotEnabled
+	if aimbotEnabled then
+		highlightToggle(aimbotToggle, Color3.fromRGB(0, 255, 0))
+		local camera = Workspace.CurrentCamera
+		
+		aimbotConn = RunService.RenderStepped:Connect(function(deltaTime)
+			if not aimbotEnabled then return end
+			if not camera then camera = Workspace.CurrentCamera end
+
+			local target = getClosestVisiblePlayer()
+			currentTarget = target
+			
+			if target and target.Character and target.Character:FindFirstChild("Head") then
+				targetIndicator.Text = "Alvo: " .. target.Name
+				targetIndicator.TextColor3 = Color3.fromRGB(0, 255, 0)
+				
+				local targetHead = target.Character.Head
+				local targetPos = targetHead.Position
+				
+				-- Predição de movimento
+				local humanoid = target.Character:FindFirstChild("Humanoid")
+				if humanoid and humanoid.MoveDirection.Magnitude > 0 then
+					local velocity = humanoid.MoveDirection * humanoid.WalkSpeed
+					local distance = (targetPos - camera.CFrame.Position).Magnitude
+					local timeToHit = distance / 500 -- Ajuste baseado na velocidade do projétil
+					targetPos = targetPos + (velocity * timeToHit)
+				end
+				
+				-- Suavização mais forte e responsiva
+				local currentLook = camera.CFrame.LookVector
+				local targetLook = (targetPos - camera.CFrame.Position).Unit
+				
+				-- Interpolação mais agressiva com base na velocidade configurada
+				local smoothness = math.max(0.05, 1 - (speedValue * 0.8)) -- Quanto maior speedValue, menor smoothness
+				local newLook = currentLook:Lerp(targetLook, math.min(1, (1 - smoothness) * 60 * deltaTime))
+				
+				-- Aplicar rotação
+				camera.CFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + newLook)
+			else
+				targetIndicator.Text = "Alvo: Nenhum"
+				targetIndicator.TextColor3 = Color3.fromRGB(255, 0, 0)
+			end
+		end)
+	else
+		resetToggle(aimbotToggle)
+		targetIndicator.Text = "Alvo: Nenhum"
+		targetIndicator.TextColor3 = Color3.fromRGB(255, 255, 255)
+		currentTarget = nil
+		if aimbotConn then
+			aimbotConn:Disconnect()
+			aimbotConn = nil
+		end
+	end
+end)
+
+local function clearEspForCharacter(char)
+	if not char then return end
+
+	local head = char:FindFirstChild("Head")
+	if head then
+		local existing = head:FindFirstChild("NameEsp")
+		if existing then
+			existing:Destroy()
+		end
+	end
+
+	for _, part in pairs(char:GetChildren()) do
+		if part:IsA("BasePart") then
+			local originalColor = part:GetAttribute("OriginalColor")
+			if originalColor then
+				part.Color = originalColor
+				part:SetAttribute("OriginalColor", nil)
+			end
+			part.LocalTransparencyModifier = 0
+			local selectionBox = part:FindFirstChild("EspHighlight")
+			if selectionBox then
+				selectionBox:Destroy()
+			end
+		end
+	end
+end
+
+local function createEspForCharacter(plr, char)
+	if not char then return end
+	local head = char:FindFirstChild("Head")
+	if not head then return end
+
+	clearEspForCharacter(char)
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "NameEsp"
+	billboard.Adornee = head
+	billboard.Size = UDim2.new(0, 200, 0, 50)
+	billboard.StudsOffset = Vector3.new(0, 3, 0)
+	billboard.AlwaysOnTop = true
+	billboard.Parent = head
+
+	local textLabel2 = Instance.new("TextLabel")
+	textLabel2.Size = UDim2.new(1,0,1,0)
+	textLabel2.BackgroundTransparency = 1
+	textLabel2.TextColor3 = Color3.fromRGB(0, 150, 255)
+	textLabel2.TextStrokeColor3 = Color3.new(0,0,0)
+	textLabel2.TextStrokeTransparency = 0
+	textLabel2.Font = Enum.Font.SourceSansBold
+	textLabel2.TextSize = 18
+	textLabel2.Text = plr.Name
+	textLabel2.TextScaled = true
+	textLabel2.Parent = billboard
+
+	for _, part in pairs(char:GetChildren()) do
+		if part:IsA("BasePart") then
+			if part:GetAttribute("OriginalColor") == nil then
+				part:SetAttribute("OriginalColor", part.Color)
+			end
+			part.Color = Color3.fromRGB(0, 150, 255)
+			part.LocalTransparencyModifier = 0
+
+			local selectionBox = Instance.new("SelectionBox")
+			selectionBox.Name = "EspHighlight"
+			selectionBox.Adornee = part
+			selectionBox.LineThickness = 0.05
+			selectionBox.Color3 = Color3.fromRGB(0, 150, 255)
+			selectionBox.Transparency = 0
+			selectionBox.Parent = part
+		end
+	end
+end
+
+local function enableEsp()
+	for _, plr in pairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character then
+			createEspForCharacter(plr, plr.Character)
+		end
+	end
+end
+
+local function disableEsp()
+	for _, plr in pairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character then
+			clearEspForCharacter(plr.Character)
+		end
+	end
+end
+
+local espConnPlayers
+
+espToggle.MouseButton1Click:Connect(function()
+	espEnabled = not espEnabled
+
+	if espEnabled then
+		highlightToggle(espToggle, Color3.fromRGB(0, 150, 255))
+		enableEsp()
+
+		if not espConnPlayers then
+			espConnPlayers = Players.PlayerAdded:Connect(function(plr)
+				if plr == player then return end
+				plr.CharacterAdded:Connect(function(char)
+					char:WaitForChild("Head", 10)
+					if espEnabled then
+						createEspForCharacter(plr, char)
+					end
+					local humanoid = char:FindFirstChild("Humanoid")
+					if humanoid then
+						humanoid.Died:Connect(function()
+							clearEspForCharacter(char)
+						end)
+					end
+				end)
+			end)
+		end
+
+		for _, plr in pairs(Players:GetPlayers()) do
+			if plr ~= player then
+				plr.CharacterAdded:Connect(function(char)
+					char:WaitForChild("Head", 10)
+					if espEnabled then
+						createEspForCharacter(plr, char)
+					end
+					local humanoid = char:FindFirstChild("Humanoid")
+					if humanoid then
+						humanoid.Died:Connect(function()
+							clearEspForCharacter(char)
+						end)
+					end
+				end)
+			end
+		end
+	else
+		resetToggle(espToggle)
+		disableEsp()
+		if espConnPlayers then
+			espConnPlayers:Disconnect()
+			espConnPlayers = nil
+		end
+	end
+end)
 local function resetToggle(toggle)
 	toggle.BackgroundTransparency = 0.5
 	toggle.BackgroundColor3 = Color3.fromRGB(255,255,255)
@@ -435,4 +860,4 @@ espToggle.MouseButton1Click:Connect(function()
 	end
 end)
 
-print("a")
+print("ss")
