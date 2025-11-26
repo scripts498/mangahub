@@ -260,10 +260,13 @@ aimbotToggle.MouseButton1Click:Connect(function()
 
 			local target = getClosestVisiblePlayer()
 			if target and target.Character and target.Character:FindFirstChild("Head") then
-				local headPos = target.Character.Head.Position
-				local currentCFrame = camera.CFrame
-				local lookCFrame = CFrame.new(currentCFrame.Position, headPos)
-				camera.CFrame = currentCFrame:Lerp(lookCFrame, 0.3)
+				local char = player.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					local headPos = target.Character.Head.Position
+					local desired = CFrame.new(hrp.Position, headPos)
+					camera.CFrame = camera.CFrame:Lerp(desired, 0.3)
+				end
 			end
 		end)
 	else
@@ -416,3 +419,5 @@ espToggle.MouseButton1Click:Connect(function()
 		end
 	end
 end)
+
+print("tenta a sorte, contra")
