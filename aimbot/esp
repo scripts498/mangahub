@@ -177,21 +177,24 @@ local function isWhitelisted(plr)
 	return whitelist[plr.Name:lower()] == true
 end
 
-local fovCircle = Instance.new("Frame")
-fovCircle.Name = "FOVCircle"
-fovCircle.AnchorPoint = Vector2.new(0.5, 0)
-fovCircle.Position = UDim2.new(0.5, 0, 0.05, 0)
-fovCircle.Size = UDim2.new(0.35, 0, 0.35, 0)
-fovCircle.BackgroundColor3 = Color3.new(0, 0, 0)
-fovCircle.BackgroundTransparency = 1
-fovCircle.BorderSizePixel = 2
-fovCircle.BorderColor3 = Color3.fromRGB(255, 255, 255)
+local fovCircle = Drawing.new("Circle")
 fovCircle.Visible = false
-fovCircle.Parent = screenGui
+fovCircle.Thickness = 2
+fovCircle.Color = Color3.fromRGB(255, 255, 255)
+fovCircle.Transparency = 1
+fovCircle.NumSides = 64
+fovCircle.Filled = false
+fovCircle.Radius = 150
 
-local uiCorner = Instance.new("UICorner")
-uiCorner.CornerRadius = UDim.new(1, 0)
-uiCorner.Parent = fovCircle
+RunService.RenderStepped:Connect(function()
+	if fovCircle.Visible then
+		local camera = Workspace.CurrentCamera
+		if camera then
+			local viewportSize = camera.ViewportSize
+			fovCircle.Position = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+		end
+	end
+end)
 
 fovToggle.MouseButton1Click:Connect(function()
 	fovEnabled = not fovEnabled
@@ -260,13 +263,9 @@ aimbotToggle.MouseButton1Click:Connect(function()
 
 			local target = getClosestVisiblePlayer()
 			if target and target.Character and target.Character:FindFirstChild("Head") then
-				local char = player.Character
-				local hrp = char and char:FindFirstChild("HumanoidRootPart")
-				if hrp then
-					local headPos = target.Character.Head.Position
-					local desired = CFrame.new(hrp.Position, headPos)
-					camera.CFrame = camera.CFrame:Lerp(desired, 0.3)
-				end
+				local targetHead = target.Character.Head
+				local headPos = targetHead.Position
+				camera.CFrame = CFrame.new(camera.CFrame.Position, headPos)
 			end
 		end)
 	else
@@ -420,4 +419,4 @@ espToggle.MouseButton1Click:Connect(function()
 	end
 end)
 
-print("a")
+print("aa")
