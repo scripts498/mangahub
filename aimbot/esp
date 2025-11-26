@@ -40,7 +40,7 @@ toggleButton.TextSize = 18
 toggleButton.Parent = screenGui
 
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0, 220, 0, 190)
+panel.Size = UDim2.new(0, 220, 0, 230)
 panel.Position = UDim2.new(1, -235, 0, 40)
 panel.AnchorPoint = Vector2.new(1, 0)
 panel.BackgroundColor3 = Color3.fromRGB(255,0,0)
@@ -74,13 +74,14 @@ local function createToggle(name, position, parent)
 	return button
 end
 
-local aimbotToggle = createToggle("aimbot", UDim2.new(0, 10, 0, 10), panel)
-local espToggle    = createToggle("esp",    UDim2.new(0, 10, 0, 50), panel)
+local aimbotToggle = createToggle("aimbot",      UDim2.new(0, 10, 0, 10),  panel)
+local espToggle    = createToggle("esp",         UDim2.new(0, 10, 0, 50),  panel)
+local fovToggle    = createToggle("circulo fov", UDim2.new(0, 10, 0, 90),  panel)
 
 -- TEXTBOX WHITELIST
 local whitelistLabel = Instance.new("TextLabel")
 whitelistLabel.Size = UDim2.new(0, 200, 0, 20)
-whitelistLabel.Position = UDim2.new(0, 10, 0, 90)
+whitelistLabel.Position = UDim2.new(0, 10, 0, 130)
 whitelistLabel.BackgroundTransparency = 1
 whitelistLabel.Font = Enum.Font.SourceSans
 whitelistLabel.TextSize = 16
@@ -92,7 +93,7 @@ whitelistLabel.Parent = panel
 local whitelistBox = Instance.new("TextBox")
 whitelistBox.Name = "WhitelistBox"
 whitelistBox.Size = UDim2.new(0, 200, 0, 25)
-whitelistBox.Position = UDim2.new(0, 10, 0, 115)
+whitelistBox.Position = UDim2.new(0, 10, 0, 155)
 whitelistBox.BackgroundColor3 = Color3.new(0,0,0)
 whitelistBox.BackgroundTransparency = 0.2
 whitelistBox.Text = ""
@@ -117,8 +118,9 @@ end
 
 local aimbotEnabled = false
 local espEnabled    = false
+local fovEnabled    = false
 
--- ABRIR/FECHAR PAINEL (SEM MEXER NO ESP)
+-- ABRIR/FECHAR PAINEL
 toggleButton.MouseButton1Click:Connect(function()
 	panel.Visible = not panel.Visible
 	titleLabel.Visible = panel.Visible
@@ -167,7 +169,6 @@ local whitelist = {}
 local function updateWhitelist()
 	table.clear(whitelist)
 	local text = whitelistBox.Text or ""
-	-- separa por vírgula
 	for name in string.gmatch(text, "([^,]+)") do
 		local trimmed = name:gsub("^%s+", ""):gsub("%s+$", "")
 		if trimmed ~= "" then
@@ -184,6 +185,36 @@ local function isWhitelisted(plr)
 	if not plr then return false end
 	return whitelist[plr.Name:lower()] == true
 end
+
+---------------------------------------------------------------------
+-- CÍRCULO FOV (UI)
+---------------------------------------------------------------------
+local fovCircle = Instance.new("Frame")
+fovCircle.Name = "FOVCircle"
+fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+fovCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
+-- Usa escala pra caber em PC e celular
+fovCircle.Size = UDim2.new(0.4, 0, 0.4, 0) -- 40% da tela
+fovCircle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+fovCircle.BackgroundTransparency = 0.7
+fovCircle.BorderSizePixel = 2
+fovCircle.BorderColor3 = Color3.fromRGB(0, 255, 0)
+fovCircle.Visible = false
+fovCircle.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(1, 0) -- círculo perfeito
+uiCorner.Parent = fovCircle
+
+fovToggle.MouseButton1Click:Connect(function()
+	fovEnabled = not fovEnabled
+	fovCircle.Visible = fovEnabled
+	if fovEnabled then
+		highlightToggle(fovToggle, Color3.fromRGB(0, 255, 0))
+	else
+		resetToggle(fovToggle)
+	end
+end)
 
 ---------------------------------------------------------------------
 -- VISIBILIDADE (RAYCAST) PARA AIMBOT
@@ -308,17 +339,17 @@ local function createEspForCharacter(plr, char)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = head
 
-	local textLabel = Instance.new("TextLabel")
-	textLabel.Size = UDim2.new(1,0,1,0)
-	textLabel.BackgroundTransparency = 1
-	textLabel.TextColor3 = Color3.fromRGB(0, 150, 255)
-	textLabel.TextStrokeColor3 = Color3.new(0,0,0)
-	textLabel.TextStrokeTransparency = 0
-	textLabel.Font = Enum.Font.SourceSansBold
-	textLabel.TextSize = 18
-	textLabel.Text = plr.Name
-	textLabel.TextScaled = true
-	textLabel.Parent = billboard
+	local textLabel2 = Instance.new("TextLabel")
+	textLabel2.Size = UDim2.new(1,0,1,0)
+	textLabel2.BackgroundTransparency = 1
+	textLabel2.TextColor3 = Color3.fromRGB(0, 150, 255)
+	textLabel2.TextStrokeColor3 = Color3.new(0,0,0)
+	textLabel2.TextStrokeTransparency = 0
+	textLabel2.Font = Enum.Font.SourceSansBold
+	textLabel2.TextSize = 18
+	textLabel2.Text = plr.Name
+	textLabel2.TextScaled = true
+	textLabel2.Parent = billboard
 
 	for _, part in pairs(char:GetChildren()) do
 		if part:IsA("BasePart") then
@@ -382,7 +413,6 @@ espToggle.MouseButton1Click:Connect(function()
 			end)
 		end
 
-		-- também ligar para quem já está no servidor
 		for _, plr in pairs(Players:GetPlayers()) do
 			if plr ~= player then
 				plr.CharacterAdded:Connect(function(char)
@@ -408,3 +438,5 @@ espToggle.MouseButton1Click:Connect(function()
 		end
 	end
 end)
+
+print("mangga hub anti skid")
