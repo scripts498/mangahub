@@ -12,23 +12,25 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(0, 200, 0, 40)
-titleLabel.Position = UDim2.new(1, -215, 0, 0)
-titleLabel.AnchorPoint = Vector2.new(1, 0)
+titleLabel.Size = UDim2.new(0, 220, 0, 40)
+titleLabel.Position = UDim2.new(0.5, -110, 0.3, -20)
+titleLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 titleLabel.BackgroundColor3 = Color3.new(0, 0, 0)
 titleLabel.BackgroundTransparency = 0.5
 titleLabel.Text = "manga hub"
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.TextSize = 30
 titleLabel.TextColor3 = Color3.new(1, 1, 1)
+titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+titleLabel.TextYAlignment = Enum.TextYAlignment.Center
 titleLabel.Visible = false
 titleLabel.Parent = screenGui
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Size = UDim2.new(0, 24, 0, 24)
-toggleButton.Position = UDim2.new(1, -30, 0, 8)
-toggleButton.AnchorPoint = Vector2.new(1, 0)
+toggleButton.Position = UDim2.new(0.5, 98, 0.3, -20)
+toggleButton.AnchorPoint = Vector2.new(0, 0.5)
 toggleButton.BackgroundColor3 = Color3.new(0, 0, 0)
 toggleButton.BackgroundTransparency = 0.2
 toggleButton.Text = "+"
@@ -40,8 +42,8 @@ toggleButton.Parent = screenGui
 
 local panel = Instance.new("Frame")
 panel.Size = UDim2.new(0, 220, 0, 190)
-panel.Position = UDim2.new(1, -235, 0, 40)
-panel.AnchorPoint = Vector2.new(1, 0)
+panel.Position = UDim2.new(0.5, -110, 0.3, 20)
+panel.AnchorPoint = Vector2.new(0.5, 0)
 panel.BackgroundColor3 = Color3.fromRGB(255,0,0)
 panel.BorderSizePixel = 0
 panel.Visible = false
@@ -143,14 +145,35 @@ local dragInput, dragStart, startPos
 
 local function updatePosition(input)
 	local delta = input.Position - dragStart
-	panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	titleLabel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	toggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X + 110, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y + 40)
 end
+
+titleLabel.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = titleLabel.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+titleLabel.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		dragInput = input
+	end
+end)
 
 panel.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		dragging = true
 		dragStart = input.Position
-		startPos = panel.Position
+		startPos = titleLabel.Position
 		input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
 				dragging = false
@@ -406,3 +429,5 @@ espToggle.MouseButton1Click:Connect(function()
 		end
 	end
 end)
+
+print("Aimbot manga hub, fd dms, criador: slamnnaosei8")
