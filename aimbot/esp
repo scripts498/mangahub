@@ -39,7 +39,7 @@ toggleButton.TextSize = 18
 toggleButton.Parent = screenGui
 
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0, 220, 0, 280)
+panel.Size = UDim2.new(0, 220, 0, 190)
 panel.Position = UDim2.new(1, -235, 0, 40)
 panel.AnchorPoint = Vector2.new(1, 0)
 panel.BackgroundColor3 = Color3.fromRGB(255,0,0)
@@ -75,61 +75,9 @@ local aimbotToggle = createToggle("aimbot",      UDim2.new(0, 10, 0, 10),  panel
 local espToggle    = createToggle("esp",         UDim2.new(0, 10, 0, 50),  panel)
 local fovToggle    = createToggle("circulo fov", UDim2.new(0, 10, 0, 90),  panel)
 
-local speedLabel = Instance.new("TextLabel")
-speedLabel.Size = UDim2.new(0, 200, 0, 20)
-speedLabel.Position = UDim2.new(0, 10, 0, 130)
-speedLabel.BackgroundTransparency = 1
-speedLabel.Font = Enum.Font.SourceSans
-speedLabel.TextSize = 16
-speedLabel.TextColor3 = Color3.new(1,1,1)
-speedLabel.Text = "Velocidade: 100%"
-speedLabel.TextXAlignment = Enum.TextXAlignment.Left
-speedLabel.Parent = panel
-
-local speedSlider = Instance.new("Frame")
-speedSlider.Size = UDim2.new(0, 200, 0, 5)
-speedSlider.Position = UDim2.new(0, 10, 0, 155)
-speedSlider.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
-speedSlider.BorderSizePixel = 0
-speedSlider.Parent = panel
-
-local speedFill = Instance.new("Frame")
-speedFill.Size = UDim2.new(1, 0, 1, 0)
-speedFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-speedFill.BorderSizePixel = 0
-speedFill.Parent = speedSlider
-
-local speedValue = 1.0
-
-local draggingSpeed = false
-speedSlider.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		draggingSpeed = true
-	end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		draggingSpeed = false
-	end
-end)
-
-RunService.RenderStepped:Connect(function()
-	if draggingSpeed then
-		local mousePos = UserInputService:GetMouseLocation()
-		local sliderPos = speedSlider.AbsolutePosition
-		local sliderSize = speedSlider.AbsoluteSize
-		local relativeX = math.clamp(mousePos.X - sliderPos.X, 0, sliderSize.X)
-		local percentage = relativeX / sliderSize.X
-		speedValue = math.clamp(percentage * 2, 0.1, 2)
-		speedFill.Size = UDim2.new(percentage, 0, 1, 0)
-		speedLabel.Text = string.format("Velocidade: %d%%", math.floor(speedValue * 100))
-	end
-end)
-
 local whitelistLabel = Instance.new("TextLabel")
 whitelistLabel.Size = UDim2.new(0, 200, 0, 20)
-whitelistLabel.Position = UDim2.new(0, 10, 0, 180)
+whitelistLabel.Position = UDim2.new(0, 10, 0, 130)
 whitelistLabel.BackgroundTransparency = 1
 whitelistLabel.Font = Enum.Font.SourceSans
 whitelistLabel.TextSize = 16
@@ -141,7 +89,7 @@ whitelistLabel.Parent = panel
 local whitelistBox = Instance.new("TextBox")
 whitelistBox.Name = "WhitelistBox"
 whitelistBox.Size = UDim2.new(0, 200, 0, 25)
-whitelistBox.Position = UDim2.new(0, 10, 0, 205)
+whitelistBox.Position = UDim2.new(0, 10, 0, 155)
 whitelistBox.BackgroundColor3 = Color3.new(0,0,0)
 whitelistBox.BackgroundTransparency = 0.2
 whitelistBox.Text = ""
@@ -151,17 +99,6 @@ whitelistBox.TextSize = 18
 whitelistBox.TextColor3 = Color3.new(1,1,1)
 whitelistBox.ClearTextOnFocus = false
 whitelistBox.Parent = panel
-
-local targetIndicator = Instance.new("TextLabel")
-targetIndicator.Size = UDim2.new(0, 200, 0, 25)
-targetIndicator.Position = UDim2.new(0, 10, 0, 240)
-targetIndicator.BackgroundColor3 = Color3.new(0,0,0)
-targetIndicator.BackgroundTransparency = 0.5
-targetIndicator.Font = Enum.Font.SourceSansBold
-targetIndicator.TextSize = 16
-targetIndicator.TextColor3 = Color3.fromRGB(0, 255, 0)
-targetIndicator.Text = "Alvo: Nenhum"
-targetIndicator.Parent = panel
 
 local function highlightToggle(toggle, color)
 	toggle.BackgroundTransparency = 0
@@ -346,9 +283,6 @@ aimbotToggle.MouseButton1Click:Connect(function()
 			currentTarget = target
 			
 			if target and target.Character and target.Character:FindFirstChild("Head") then
-				targetIndicator.Text = "Alvo: " .. target.Name
-				targetIndicator.TextColor3 = Color3.fromRGB(0, 255, 0)
-				
 				local targetHead = target.Character.Head
 				local targetPos = targetHead.Position
 				
@@ -356,28 +290,22 @@ aimbotToggle.MouseButton1Click:Connect(function()
 				if humanoid and humanoid.MoveDirection.Magnitude > 0 then
 					local velocity = humanoid.MoveDirection * humanoid.WalkSpeed
 					local distance = (targetPos - camera.CFrame.Position).Magnitude
-					local timeToHit = distance / 500
-					targetPos = targetPos + (velocity * timeToHit)
+					local timeToHit = distance / 400
+					targetPos = targetPos + (velocity * timeToHit * 0.5)
 				end
 				
-				local cameraPos = camera.CFrame.Position
-				local targetCFrame = CFrame.new(cameraPos, targetPos)
+				local currentCF = camera.CFrame
+				local targetCF = CFrame.lookAt(currentCF.Position, targetPos)
 				
-				local smoothness = math.max(0.05, 1 - (speedValue * 0.8))
-				local alpha = math.min(1, (1 - smoothness) * 60 * deltaTime)
+				local smoothFactor = 1 - math.pow(0.01, deltaTime * 10)
 				
-				local newCFrame = camera.CFrame:Lerp(targetCFrame, alpha)
+				local lerpedCF = currentCF:Lerp(targetCF, smoothFactor)
 				
-				camera.CFrame = CFrame.new(cameraPos) * (newCFrame - newCFrame.Position)
-			else
-				targetIndicator.Text = "Alvo: Nenhum"
-				targetIndicator.TextColor3 = Color3.fromRGB(255, 0, 0)
+				camera.CFrame = lerpedCF
 			end
 		end)
 	else
 		resetToggle(aimbotToggle)
-		targetIndicator.Text = "Alvo: Nenhum"
-		targetIndicator.TextColor3 = Color3.fromRGB(255, 255, 255)
 		currentTarget = nil
 		if aimbotConn then
 			aimbotConn:Disconnect()
@@ -478,5 +406,3 @@ espToggle.MouseButton1Click:Connect(function()
 		end
 	end
 end)
-
-print("anti skid, ofuscado")
