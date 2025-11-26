@@ -16,7 +16,7 @@ titleLabel.Size = UDim2.new(0, 220, 0, 40)
 titleLabel.Position = UDim2.new(0.5, -110, 0.3, 0)
 titleLabel.AnchorPoint = Vector2.new(0.5, 0)
 titleLabel.BackgroundColor3 = Color3.new(0, 0, 0)
-titleLabel.BackgroundTransparency = 0.5
+titleLabel.BackgroundTransparency = 0.3
 titleLabel.Text = "manga hub"
 titleLabel.Font = Enum.Font.SourceSansBold
 titleLabel.TextSize = 30
@@ -26,28 +26,58 @@ titleLabel.TextYAlignment = Enum.TextYAlignment.Center
 titleLabel.Visible = false
 titleLabel.Parent = screenGui
 
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleLabel
+
+local titleStroke = Instance.new("UIStroke")
+titleStroke.Color = Color3.fromRGB(255, 255, 255)
+titleStroke.Thickness = 2
+titleStroke.Transparency = 0.5
+titleStroke.Parent = titleLabel
+
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
-toggleButton.Size = UDim2.new(0, 30, 0, 30)
-toggleButton.Position = UDim2.new(1, -35, 0, 5)
+toggleButton.Size = UDim2.new(0, 35, 0, 35)
+toggleButton.Position = UDim2.new(1, -40, 0, 5)
 toggleButton.AnchorPoint = Vector2.new(0, 0)
-toggleButton.BackgroundColor3 = Color3.new(0, 0, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 toggleButton.BackgroundTransparency = 0.2
 toggleButton.Text = "+"
 toggleButton.BorderSizePixel = 0
 toggleButton.TextColor3 = Color3.new(1,1,1)
 toggleButton.Font = Enum.Font.SourceSansBold
-toggleButton.TextSize = 20
+toggleButton.TextSize = 22
 toggleButton.Parent = screenGui
 
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 10)
+toggleCorner.Parent = toggleButton
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = Color3.fromRGB(255, 255, 255)
+toggleStroke.Thickness = 2
+toggleStroke.Transparency = 0.5
+toggleStroke.Parent = toggleButton
+
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0, 220, 0, 190)
+panel.Size = UDim2.new(0, 220, 0, 225)
 panel.Position = UDim2.new(0.5, -110, 0.3, 40)
 panel.AnchorPoint = Vector2.new(0.5, 0)
 panel.BackgroundColor3 = Color3.fromRGB(255,0,0)
 panel.BorderSizePixel = 0
 panel.Visible = false
 panel.Parent = screenGui
+
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0, 12)
+panelCorner.Parent = panel
+
+local panelStroke = Instance.new("UIStroke")
+panelStroke.Color = Color3.fromRGB(255, 255, 255)
+panelStroke.Thickness = 2
+panelStroke.Transparency = 0.3
+panelStroke.Parent = panel
 
 local hue = 0
 RunService.Heartbeat:Connect(function()
@@ -68,14 +98,39 @@ local function createToggle(name, position, parent)
 	button.Font = Enum.Font.SourceSansBold
 	button.TextSize = 20
 	button.TextColor3 = Color3.new(0,0,0)
-	button.BackgroundTransparency = 0.5
+	button.BackgroundTransparency = 0.3
 	button.Parent = parent
+	
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = button
+	
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(200, 200, 200)
+	stroke.Thickness = 1
+	stroke.Transparency = 0.5
+	stroke.Parent = button
+	
 	return button
 end
 
 local aimbotToggle = createToggle("aimbot",      UDim2.new(0, 10, 0, 10),  panel)
 local espToggle    = createToggle("esp",         UDim2.new(0, 10, 0, 50),  panel)
 local fovToggle    = createToggle("circulo fov", UDim2.new(0, 10, 0, 90),  panel)
+
+local creatorLabel = Instance.new("TextLabel")
+creatorLabel.Size = UDim2.new(0, 200, 0, 30)
+creatorLabel.Position = UDim2.new(0, 10, 1, -35)
+creatorLabel.BackgroundTransparency = 1
+creatorLabel.Font = Enum.Font.SourceSansBold
+creatorLabel.TextSize = 13
+creatorLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+creatorLabel.Text = "Criador: slamnnaosei8\nyoutube: @alexsilvio6901"
+creatorLabel.TextXAlignment = Enum.TextXAlignment.Center
+creatorLabel.TextYAlignment = Enum.TextYAlignment.Center
+creatorLabel.TextStrokeTransparency = 0.8
+creatorLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+creatorLabel.Parent = panel
 
 local whitelistLabel = Instance.new("TextLabel")
 whitelistLabel.Size = UDim2.new(0, 200, 0, 20)
@@ -92,8 +147,8 @@ local whitelistBox = Instance.new("TextBox")
 whitelistBox.Name = "WhitelistBox"
 whitelistBox.Size = UDim2.new(0, 200, 0, 25)
 whitelistBox.Position = UDim2.new(0, 10, 0, 155)
-whitelistBox.BackgroundColor3 = Color3.new(0,0,0)
-whitelistBox.BackgroundTransparency = 0.2
+whitelistBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+whitelistBox.BackgroundTransparency = 0.3
 whitelistBox.Text = ""
 whitelistBox.PlaceholderText = "Ex: Pedro, Davi"
 whitelistBox.Font = Enum.Font.SourceSans
@@ -101,6 +156,16 @@ whitelistBox.TextSize = 18
 whitelistBox.TextColor3 = Color3.new(1,1,1)
 whitelistBox.ClearTextOnFocus = false
 whitelistBox.Parent = panel
+
+local boxCorner = Instance.new("UICorner")
+boxCorner.CornerRadius = UDim.new(0, 6)
+boxCorner.Parent = whitelistBox
+
+local boxStroke = Instance.new("UIStroke")
+boxStroke.Color = Color3.fromRGB(150, 150, 150)
+boxStroke.Thickness = 1
+boxStroke.Transparency = 0.5
+boxStroke.Parent = whitelistBox
 
 local function highlightToggle(toggle, color)
 	toggle.BackgroundTransparency = 0
@@ -432,4 +497,4 @@ espToggle.MouseButton1Click:Connect(function()
 	end
 end)
 
-print("Criador: slamnnaosei8 segue a conta lá")
+print("anti skid")
