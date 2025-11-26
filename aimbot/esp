@@ -431,3 +431,5 @@ espToggle.MouseButton1Click:Connect(function()
 		end
 	end
 end)
+
+print("Criador: slamnnaosei8 segue a conta lá")
