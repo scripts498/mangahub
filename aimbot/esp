@@ -75,7 +75,6 @@ local aimbotToggle = createToggle("aimbot",      UDim2.new(0, 10, 0, 10),  panel
 local espToggle    = createToggle("esp",         UDim2.new(0, 10, 0, 50),  panel)
 local fovToggle    = createToggle("circulo fov", UDim2.new(0, 10, 0, 90),  panel)
 
--- Slider de velocidade do aimbot
 local speedLabel = Instance.new("TextLabel")
 speedLabel.Size = UDim2.new(0, 200, 0, 20)
 speedLabel.Position = UDim2.new(0, 10, 0, 130)
@@ -100,7 +99,7 @@ speedFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 speedFill.BorderSizePixel = 0
 speedFill.Parent = speedSlider
 
-local speedValue = 1.0 -- 100% por padrão
+local speedValue = 1.0
 
 local draggingSpeed = false
 speedSlider.InputBegan:Connect(function(input)
@@ -122,7 +121,7 @@ RunService.RenderStepped:Connect(function()
 		local sliderSize = speedSlider.AbsoluteSize
 		local relativeX = math.clamp(mousePos.X - sliderPos.X, 0, sliderSize.X)
 		local percentage = relativeX / sliderSize.X
-		speedValue = math.clamp(percentage * 2, 0.1, 2) -- 10% a 200%
+		speedValue = math.clamp(percentage * 2, 0.1, 2)
 		speedFill.Size = UDim2.new(percentage, 0, 1, 0)
 		speedLabel.Text = string.format("Velocidade: %d%%", math.floor(speedValue * 100))
 	end
@@ -153,7 +152,6 @@ whitelistBox.TextColor3 = Color3.new(1,1,1)
 whitelistBox.ClearTextOnFocus = false
 whitelistBox.Parent = panel
 
--- Indicador de alvo travado
 local targetIndicator = Instance.new("TextLabel")
 targetIndicator.Size = UDim2.new(0, 200, 0, 25)
 targetIndicator.Position = UDim2.new(0, 10, 0, 240)
@@ -354,25 +352,23 @@ aimbotToggle.MouseButton1Click:Connect(function()
 				local targetHead = target.Character.Head
 				local targetPos = targetHead.Position
 				
-				-- Predição de movimento
 				local humanoid = target.Character:FindFirstChild("Humanoid")
 				if humanoid and humanoid.MoveDirection.Magnitude > 0 then
 					local velocity = humanoid.MoveDirection * humanoid.WalkSpeed
 					local distance = (targetPos - camera.CFrame.Position).Magnitude
-					local timeToHit = distance / 500 -- Ajuste baseado na velocidade do projétil
+					local timeToHit = distance / 500
 					targetPos = targetPos + (velocity * timeToHit)
 				end
 				
-				-- Suavização mais forte e responsiva
-				local currentLook = camera.CFrame.LookVector
-				local targetLook = (targetPos - camera.CFrame.Position).Unit
+				local cameraPos = camera.CFrame.Position
+				local targetCFrame = CFrame.new(cameraPos, targetPos)
 				
-				-- Interpolação mais agressiva com base na velocidade configurada
-				local smoothness = math.max(0.05, 1 - (speedValue * 0.8)) -- Quanto maior speedValue, menor smoothness
-				local newLook = currentLook:Lerp(targetLook, math.min(1, (1 - smoothness) * 60 * deltaTime))
+				local smoothness = math.max(0.05, 1 - (speedValue * 0.8))
+				local alpha = math.min(1, (1 - smoothness) * 60 * deltaTime)
 				
-				-- Aplicar rotação
-				camera.CFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + newLook)
+				local newCFrame = camera.CFrame:Lerp(targetCFrame, alpha)
+				
+				camera.CFrame = CFrame.new(cameraPos) * (newCFrame - newCFrame.Position)
 			else
 				targetIndicator.Text = "Alvo: Nenhum"
 				targetIndicator.TextColor3 = Color3.fromRGB(255, 0, 0)
@@ -392,75 +388,26 @@ end)
 
 local function clearEspForCharacter(char)
 	if not char then return end
-
-	local head = char:FindFirstChild("Head")
-	if head then
-		local existing = head:FindFirstChild("NameEsp")
-		if existing then
-			existing:Destroy()
-		end
-	end
-
-	for _, part in pairs(char:GetChildren()) do
-		if part:IsA("BasePart") then
-			local originalColor = part:GetAttribute("OriginalColor")
-			if originalColor then
-				part.Color = originalColor
-				part:SetAttribute("OriginalColor", nil)
-			end
-			part.LocalTransparencyModifier = 0
-			local selectionBox = part:FindFirstChild("EspHighlight")
-			if selectionBox then
-				selectionBox:Destroy()
-			end
-		end
+	local highlight = char:FindFirstChild("EspHighlight")
+	if highlight then
+		highlight:Destroy()
 	end
 end
 
 local function createEspForCharacter(plr, char)
 	if not char then return end
-	local head = char:FindFirstChild("Head")
-	if not head then return end
-
+	
 	clearEspForCharacter(char)
-
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "NameEsp"
-	billboard.Adornee = head
-	billboard.Size = UDim2.new(0, 200, 0, 50)
-	billboard.StudsOffset = Vector3.new(0, 3, 0)
-	billboard.AlwaysOnTop = true
-	billboard.Parent = head
-
-	local textLabel2 = Instance.new("TextLabel")
-	textLabel2.Size = UDim2.new(1,0,1,0)
-	textLabel2.BackgroundTransparency = 1
-	textLabel2.TextColor3 = Color3.fromRGB(0, 150, 255)
-	textLabel2.TextStrokeColor3 = Color3.new(0,0,0)
-	textLabel2.TextStrokeTransparency = 0
-	textLabel2.Font = Enum.Font.SourceSansBold
-	textLabel2.TextSize = 18
-	textLabel2.Text = plr.Name
-	textLabel2.TextScaled = true
-	textLabel2.Parent = billboard
-
-	for _, part in pairs(char:GetChildren()) do
-		if part:IsA("BasePart") then
-			if part:GetAttribute("OriginalColor") == nil then
-				part:SetAttribute("OriginalColor", part.Color)
-			end
-			part.Color = Color3.fromRGB(0, 150, 255)
-			part.LocalTransparencyModifier = 0
-
-			local selectionBox = Instance.new("SelectionBox")
-			selectionBox.Name = "EspHighlight"
-			selectionBox.Adornee = part
-			selectionBox.LineThickness = 0.05
-			selectionBox.Color3 = Color3.fromRGB(0, 150, 255)
-			selectionBox.Transparency = 0
-			selectionBox.Parent = part
-		end
-	end
+	
+	local highlight = Instance.new("Highlight")
+	highlight.Name = "EspHighlight"
+	highlight.Adornee = char
+	highlight.FillColor = Color3.fromRGB(0, 150, 255)
+	highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+	highlight.FillTransparency = 0.7
+	highlight.OutlineTransparency = 0
+	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	highlight.Parent = char
 end
 
 local function enableEsp()
@@ -531,3 +478,5 @@ espToggle.MouseButton1Click:Connect(function()
 		end
 	end
 end)
+
+print("anti skid, ofuscado")
