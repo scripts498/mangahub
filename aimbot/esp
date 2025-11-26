@@ -122,6 +122,14 @@ toggleButton.MouseButton1Click:Connect(function()
 	toggleButton.Text = panel.Visible and "-" or "+"
 end)
 
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if not gameProcessed and input.KeyCode == Enum.KeyCode.X then
+		panel.Visible = not panel.Visible
+		titleLabel.Visible = panel.Visible
+		toggleButton.Text = panel.Visible and "-" or "+"
+	end
+end)
+
 local dragging = false
 local dragInput, dragStart, startPos
 
@@ -419,4 +427,4 @@ espToggle.MouseButton1Click:Connect(function()
 	end
 end)
 
-print("aa")
+print("a")
