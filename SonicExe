@@ -1,0 +1,215 @@
+getgenv().gethui = function()
+    return game:GetService("CoreGui")
+end
+
+local UserInputService = game:GetService("UserInputService")
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+local windowSize
+if isMobile then
+    windowSize = UDim2.fromOffset(400, 300)
+else
+    windowSize = UDim2.fromOffset(600, 400)
+end
+
+local Window = Fluent:CreateWindow({
+    Title = "Manga Hub | Sonic.Exe | V1.0",
+    SubTitle = "Bem-vindo ao Manga Hub!",
+    TabWidth = 120,
+    Size = windowSize,
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+Fluent:Notify({
+    Title = "Bem-vindo",
+    Content = "Bem-vindo ao MANGA HUB!!",
+    Duration = 15
+})
+
+local Tabs = {
+    Teleporte = Window:AddTab({ Title = "Teleporte", Icon = "map-pin" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+local Options = Fluent.Options
+
+do
+    Tabs.Teleporte:AddButton({
+        Title = "Teleport Green Hills",
+        Description = "Teleporta para Green Hills",
+        Callback = function()
+            local player = game.Players.LocalPlayer
+            if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                player.Character.HumanoidRootPart.CFrame = CFrame.new(17, 21, -85)
+                Fluent:Notify({
+                    Title = "Teleporte",
+                    Content = "Teleportado para Green Hills!",
+                    Duration = 3
+                })
+            else
+                Fluent:Notify({
+                    Title = "Erro",
+                    Content = "Não foi possível teleportar.",
+                    Duration = 3
+                })
+            end
+        end
+    })
+
+    local superTransformActive = false
+    local superTransformThread = nil
+
+    local SuperTransform = Tabs.Teleporte:AddToggle("SuperTransform", {
+        Title = "Super Transformação (Sonic e outros que tem transformação)",
+        Description = "Ativa/Desativa a Super Forma do Sonic",
+        Default = false
+    })
+
+    SuperTransform:OnChanged(function()
+        superTransformActive = Options.SuperTransform.Value
+        
+        if superTransformActive then
+            Fluent:Notify({
+                Title = "Super Transformação",
+                Content = "Super Forma ativada!",
+                Duration = 3
+            })
+            
+            if superTransformThread then
+                task.cancel(superTransformThread)
+            end
+            
+            superTransformThread = task.spawn(function()
+                local player = game:GetService("Players").LocalPlayer
+                local isServerActive = true
+                
+                while superTransformActive and not Fluent.Unloaded do
+                    pcall(function()
+                        local gui = player.PlayerGui
+                        if gui and gui:FindFirstChild("Client") then
+                            local superForm = gui.Client:FindFirstChild("Abbilities") 
+                                and gui.Client.Abbilities:FindFirstChild("SuperForm")
+                            
+                            if superForm then
+                                if isServerActive and superForm:FindFirstChild("Server") then
+                                    superForm.Server:FireServer(player)
+                                elseif not isServerActive and superForm:FindFirstChild("UnServer") then
+                                    superForm.UnServer:FireServer(player)
+                                end
+                                isServerActive = not isServerActive
+                            end
+                        end
+                    end)
+                    
+                    task.wait(0.2)
+                end
+            end)
+        else
+            superTransformActive = false
+            
+            if superTransformThread then
+                task.cancel(superTransformThread)
+                superTransformThread = nil
+            end
+            
+            Fluent:Notify({
+                Title = "Super Transformação",
+                Content = "Super Forma desativada!",
+                Duration = 3
+            })
+        end
+    end)
+
+    local lagServerActive = false
+    local lagServerThread = nil
+
+    local LagServer = Tabs.Teleporte:AddToggle("LagServer", {
+        Title = "Lag Server (Sonic e outros que tem transformação)",
+        Description = "Causa lag no servidor",
+        Default = false
+    })
+
+    LagServer:OnChanged(function()
+        lagServerActive = Options.LagServer.Value
+        
+        if lagServerActive then
+            Fluent:Notify({
+                Title = "Lag Server",
+                Content = "Lag Server ativado!",
+                Duration = 3
+            })
+            
+            if lagServerThread then
+                task.cancel(lagServerThread)
+            end
+            
+            lagServerThread = task.spawn(function()
+                local player = game:GetService("Players").LocalPlayer
+                local isServerActive = true
+                
+                while lagServerActive and not Fluent.Unloaded do
+                    pcall(function()
+                        local gui = player.PlayerGui
+                        if gui and gui:FindFirstChild("Client") then
+                            local superForm = gui.Client:FindFirstChild("Abbilities") 
+                                and gui.Client.Abbilities:FindFirstChild("SuperForm")
+                            
+                            if superForm then
+                                if isServerActive and superForm:FindFirstChild("Server") then
+                                    superForm.Server:FireServer(player)
+                                elseif not isServerActive and superForm:FindFirstChild("UnServer") then
+                                    superForm.UnServer:FireServer(player)
+                                end
+                                isServerActive = not isServerActive
+                            end
+                        end
+                    end)
+                    
+                    task.wait(0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
+                end
+            end)
+        else
+            lagServerActive = false
+            
+            if lagServerThread then
+                task.cancel(lagServerThread)
+                lagServerThread = nil
+            end
+            
+            Fluent:Notify({
+                Title = "Lag Server",
+                Content = "Lag Server desativado!",
+                Duration = 3
+            })
+        end
+    end)
+end
+
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+
+InterfaceManager:SetFolder("MangaHub")
+SaveManager:SetFolder("MangaHub/SonicExe")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title = "Manga Hub - Sonic.Exe",
+    Content = "Script carregado!",
+    Duration = 8
+})
+
+SaveManager:LoadAutoloadConfig()
