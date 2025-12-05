@@ -7,6 +7,7 @@
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 local collecting = false
@@ -24,10 +25,17 @@ local function getHRP()
 end
 
 local function createGUI()
+    for _, v in pairs(CoreGui:GetChildren()) do
+        if v.Name == "EggHuntGUI" then
+            v:Destroy()
+        end
+    end
+    
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "EggHuntGUI"
     screenGui.ResetOnSpawn = false
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.IgnoreGuiInset = true
     
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
@@ -111,7 +119,6 @@ local function createGUI()
     btnCorner.Parent = toggleBtn
     
     toggleBtn.MouseEnter:Connect(function()
-        local currentColor = collecting and Color3.fromRGB(220, 60, 60) or Color3.fromRGB(60, 180, 120)
         local hoverColor = collecting and Color3.fromRGB(240, 80, 80) or Color3.fromRGB(70, 200, 140)
         TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor}):Play()
     end)
@@ -121,7 +128,13 @@ local function createGUI()
         TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = color}):Play()
     end)
     
-    screenGui.Parent = game:GetService("CoreGui")
+    local success, err = pcall(function()
+        screenGui.Parent = CoreGui
+    end)
+    
+    if not success then
+        screenGui.Parent = player:WaitForChild("PlayerGui")
+    end
     
     return screenGui
 end
@@ -232,6 +245,8 @@ local function stopCollecting()
     toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 120)
 end
 
+wait(0.5)
+
 gui = createGUI()
 local mainFrame = gui.MainFrame
 local toggleBtn = mainFrame.ToggleButton
@@ -254,3 +269,4 @@ print("🥚 Egg Hunt Collector Carregado!")
 print("📝 Criador: slamnnaosei8")
 print("📺 Canal YT: @alexsilvio6901")
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("n tenta roubar o script por favor, n seja skid")
