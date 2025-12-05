@@ -1,0 +1,256 @@
+--[[
+    Egg Hunt Auto Collector
+    Criador: slamnnaosei8
+    Canal YT: @alexsilvio6901
+]]
+
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local collecting = false
+local gui
+local currentTarget = nil
+local connection
+
+local function getCharacter()
+    return player.Character or player.CharacterAdded:Wait()
+end
+
+local function getHRP()
+    local char = getCharacter()
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function createGUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "EggHuntGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 340, 0, 220)
+    mainFrame.Position = UDim2.new(0.5, -170, 0.5, -110)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = screenGui
+    
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0, 12)
+    uiCorner.Parent = mainFrame
+    
+    local uiStroke = Instance.new("UIStroke")
+    uiStroke.Color = Color3.fromRGB(100, 100, 255)
+    uiStroke.Thickness = 2
+    uiStroke.Transparency = 0.5
+    uiStroke.Parent = mainFrame
+    
+    local uiGradient = Instance.new("UIGradient")
+    uiGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 80, 200)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 80, 200))
+    }
+    uiGradient.Rotation = 45
+    uiGradient.Parent = uiStroke
+    
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Size = UDim2.new(1, -40, 0, 40)
+    title.Position = UDim2.new(0, 20, 0, 15)
+    title.BackgroundTransparency = 1
+    title.Text = "🥚 Egg Hunt Collector"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextSize = 20
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = mainFrame
+    
+    local credits = Instance.new("TextLabel")
+    credits.Name = "Credits"
+    credits.Size = UDim2.new(1, -40, 0, 30)
+    credits.Position = UDim2.new(0, 20, 0, 55)
+    credits.BackgroundTransparency = 1
+    credits.Text = "By: slamnnaosei8 | YT: @alexsilvio6901"
+    credits.TextColor3 = Color3.fromRGB(150, 150, 200)
+    credits.TextSize = 11
+    credits.Font = Enum.Font.Gotham
+    credits.TextXAlignment = Enum.TextXAlignment.Left
+    credits.Parent = mainFrame
+    
+    local status = Instance.new("TextLabel")
+    status.Name = "Status"
+    status.Size = UDim2.new(1, -40, 0, 35)
+    status.Position = UDim2.new(0, 20, 0, 95)
+    status.BackgroundTransparency = 1
+    status.Text = "Status: Aguardando..."
+    status.TextColor3 = Color3.fromRGB(200, 200, 200)
+    status.TextSize = 14
+    status.Font = Enum.Font.Gotham
+    status.TextXAlignment = Enum.TextXAlignment.Left
+    status.TextWrapped = true
+    status.Parent = mainFrame
+    
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Name = "ToggleButton"
+    toggleBtn.Size = UDim2.new(1, -40, 0, 50)
+    toggleBtn.Position = UDim2.new(0, 20, 0, 150)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 120)
+    toggleBtn.Text = "▶ Começar a Pegar Lego"
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.TextSize = 16
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.BorderSizePixel = 0
+    toggleBtn.Parent = mainFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = toggleBtn
+    
+    toggleBtn.MouseEnter:Connect(function()
+        local currentColor = collecting and Color3.fromRGB(220, 60, 60) or Color3.fromRGB(60, 180, 120)
+        local hoverColor = collecting and Color3.fromRGB(240, 80, 80) or Color3.fromRGB(70, 200, 140)
+        TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor}):Play()
+    end)
+    
+    toggleBtn.MouseLeave:Connect(function()
+        local color = collecting and Color3.fromRGB(220, 60, 60) or Color3.fromRGB(60, 180, 120)
+        TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = color}):Play()
+    end)
+    
+    screenGui.Parent = game:GetService("CoreGui")
+    
+    return screenGui
+end
+
+local function updateStatus(text, color)
+    if gui then
+        local statusLabel = gui.MainFrame.Status
+        statusLabel.Text = "Status: " .. text
+        if color then
+            statusLabel.TextColor3 = color
+        end
+    end
+end
+
+local function findNextTarget()
+    local eggHuntFolder = game.Workspace:FindFirstChild("EggHunt")
+    if not eggHuntFolder then
+        updateStatus("Pasta EggHunt não encontrada!", Color3.fromRGB(255, 100, 100))
+        return nil
+    end
+    
+    for _, obj in pairs(eggHuntFolder:GetChildren()) do
+        if obj:IsA("BasePart") or obj:IsA("Model") then
+            return obj
+        end
+    end
+    
+    return nil
+end
+
+local function teleportToTarget(target)
+    if not target then return end
+    
+    local hrp = getHRP()
+    if not hrp then return end
+    
+    local targetPos
+    if target:IsA("Model") then
+        local primary = target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart")
+        if primary then
+            targetPos = primary.Position
+        end
+    else
+        targetPos = target.Position
+    end
+    
+    if targetPos then
+        hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 3, 0))
+    end
+end
+
+local function startCollecting()
+    collecting = true
+    updateStatus("Procurando ovos...", Color3.fromRGB(100, 255, 100))
+    
+    local toggleBtn = gui.MainFrame.ToggleButton
+    toggleBtn.Text = "⏸ Parar de Pegar Lego"
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+    
+    connection = RunService.Heartbeat:Connect(function()
+        if not collecting then
+            if connection then
+                connection:Disconnect()
+                connection = nil
+            end
+            return
+        end
+        
+        local hrp = getHRP()
+        if not hrp then return end
+        
+        if currentTarget and currentTarget.Parent then
+            teleportToTarget(currentTarget)
+        else
+            currentTarget = findNextTarget()
+            
+            if currentTarget then
+                teleportToTarget(currentTarget)
+                updateStatus("Coletando: " .. currentTarget.Name, Color3.fromRGB(255, 200, 100))
+            else
+                collecting = false
+                updateStatus("Coleta completa! Todos coletados!", Color3.fromRGB(100, 255, 100))
+                
+                toggleBtn.Text = "▶ Começar a Pegar Lego"
+                toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 120)
+                
+                if connection then
+                    connection:Disconnect()
+                    connection = nil
+                end
+            end
+        end
+    end)
+end
+
+local function stopCollecting()
+    collecting = false
+    currentTarget = nil
+    updateStatus("Parado pelo usuário", Color3.fromRGB(255, 150, 100))
+    
+    if connection then
+        connection:Disconnect()
+        connection = nil
+    end
+    
+    local toggleBtn = gui.MainFrame.ToggleButton
+    toggleBtn.Text = "▶ Começar a Pegar Lego"
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 120)
+end
+
+gui = createGUI()
+local mainFrame = gui.MainFrame
+local toggleBtn = mainFrame.ToggleButton
+
+toggleBtn.MouseButton1Click:Connect(function()
+    if collecting then
+        stopCollecting()
+    else
+        startCollecting()
+    end
+end)
+
+mainFrame.Position = UDim2.new(0.5, -170, -0.5, 0)
+TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    Position = UDim2.new(0.5, -170, 0.5, -110)
+}):Play()
+
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("🥚 Egg Hunt Collector Carregado!")
+print("📝 Criador: slamnnaosei8")
+print("📺 Canal YT: @alexsilvio6901")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
