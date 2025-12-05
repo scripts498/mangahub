@@ -288,7 +288,7 @@ TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.Ea
 Position = UDim2.new(0.5, -170, 0.5, -110)
 }):Play()
 
-print("Script totalmente carregado!")
+print("Script totalmente carregadoo!")
 else
 warn("Erro ao criar GUI!!!")
 end
