@@ -4,19 +4,26 @@
     Canal YT: @alexsilvio6901
 ]]
 
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("🥚 Iniciando Egg Hunt Collector...")
+print("📝 Criador: slamnnaosei8")
+print("📺 Canal YT: @alexsilvio6901")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
 local collecting = false
 local gui
 local currentTarget = nil
 local connection
 
 local function getCharacter()
-    return player.Character or player.CharacterAdded:Wait()
+    return player.Character
 end
 
 local function getHRP()
@@ -25,7 +32,9 @@ local function getHRP()
 end
 
 local function createGUI()
-    for _, v in pairs(CoreGui:GetChildren()) do
+    print("🔨 Criando GUI...")
+    
+    for _, v in pairs(playerGui:GetChildren()) do
         if v.Name == "EggHuntGUI" then
             v:Destroy()
         end
@@ -34,8 +43,7 @@ local function createGUI()
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "EggHuntGUI"
     screenGui.ResetOnSpawn = false
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.IgnoreGuiInset = true
+    screenGui.DisplayOrder = 999
     
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
@@ -45,6 +53,7 @@ local function createGUI()
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
     mainFrame.Draggable = true
+    mainFrame.ZIndex = 10
     mainFrame.Parent = screenGui
     
     local uiCorner = Instance.new("UICorner")
@@ -75,6 +84,7 @@ local function createGUI()
     title.TextSize = 20
     title.Font = Enum.Font.GothamBold
     title.TextXAlignment = Enum.TextXAlignment.Left
+    title.ZIndex = 11
     title.Parent = mainFrame
     
     local credits = Instance.new("TextLabel")
@@ -87,6 +97,7 @@ local function createGUI()
     credits.TextSize = 11
     credits.Font = Enum.Font.Gotham
     credits.TextXAlignment = Enum.TextXAlignment.Left
+    credits.ZIndex = 11
     credits.Parent = mainFrame
     
     local status = Instance.new("TextLabel")
@@ -100,6 +111,7 @@ local function createGUI()
     status.Font = Enum.Font.Gotham
     status.TextXAlignment = Enum.TextXAlignment.Left
     status.TextWrapped = true
+    status.ZIndex = 11
     status.Parent = mainFrame
     
     local toggleBtn = Instance.new("TextButton")
@@ -112,11 +124,21 @@ local function createGUI()
     toggleBtn.TextSize = 16
     toggleBtn.Font = Enum.Font.GothamBold
     toggleBtn.BorderSizePixel = 0
+    toggleBtn.AutoButtonColor = false
+    toggleBtn.ZIndex = 11
     toggleBtn.Parent = mainFrame
     
     local btnCorner = Instance.new("UICorner")
     btnCorner.CornerRadius = UDim.new(0, 8)
     btnCorner.Parent = toggleBtn
+    
+    toggleBtn.MouseButton1Click:Connect(function()
+        if collecting then
+            stopCollecting()
+        else
+            startCollecting()
+        end
+    end)
     
     toggleBtn.MouseEnter:Connect(function()
         local hoverColor = collecting and Color3.fromRGB(240, 80, 80) or Color3.fromRGB(70, 200, 140)
@@ -128,23 +150,22 @@ local function createGUI()
         TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = color}):Play()
     end)
     
-    local success, err = pcall(function()
-        screenGui.Parent = CoreGui
-    end)
+    screenGui.Parent = playerGui
     
-    if not success then
-        screenGui.Parent = player:WaitForChild("PlayerGui")
-    end
+    print("✅ GUI criada com sucesso!")
+    print("📍 GUI Parent: " .. tostring(screenGui.Parent))
     
     return screenGui
 end
 
 local function updateStatus(text, color)
-    if gui then
-        local statusLabel = gui.MainFrame.Status
-        statusLabel.Text = "Status: " .. text
-        if color then
-            statusLabel.TextColor3 = color
+    if gui and gui:FindFirstChild("MainFrame") then
+        local statusLabel = gui.MainFrame:FindFirstChild("Status")
+        if statusLabel then
+            statusLabel.Text = "Status: " .. text
+            if color then
+                statusLabel.TextColor3 = color
+            end
         end
     end
 end
@@ -186,13 +207,17 @@ local function teleportToTarget(target)
     end
 end
 
-local function startCollecting()
+function startCollecting()
     collecting = true
     updateStatus("Procurando ovos...", Color3.fromRGB(100, 255, 100))
     
-    local toggleBtn = gui.MainFrame.ToggleButton
-    toggleBtn.Text = "⏸ Parar de Pegar Lego"
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+    if gui and gui:FindFirstChild("MainFrame") then
+        local toggleBtn = gui.MainFrame:FindFirstChild("ToggleButton")
+        if toggleBtn then
+            toggleBtn.Text = "⏸ Parar de Pegar Lego"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+        end
+    end
     
     connection = RunService.Heartbeat:Connect(function()
         if not collecting then
@@ -218,8 +243,13 @@ local function startCollecting()
                 collecting = false
                 updateStatus("Coleta completa! Todos coletados!", Color3.fromRGB(100, 255, 100))
                 
-                toggleBtn.Text = "▶ Começar a Pegar Lego"
-                toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 120)
+                if gui and gui:FindFirstChild("MainFrame") then
+                    local toggleBtn = gui.MainFrame:FindFirstChild("ToggleButton")
+                    if toggleBtn then
+                        toggleBtn.Text = "▶ Começar a Pegar Lego"
+                        toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 120)
+                    end
+                end
                 
                 if connection then
                     connection:Disconnect()
@@ -230,7 +260,7 @@ local function startCollecting()
     end)
 end
 
-local function stopCollecting()
+function stopCollecting()
     collecting = false
     currentTarget = nil
     updateStatus("Parado pelo usuário", Color3.fromRGB(255, 150, 100))
@@ -240,33 +270,28 @@ local function stopCollecting()
         connection = nil
     end
     
-    local toggleBtn = gui.MainFrame.ToggleButton
-    toggleBtn.Text = "▶ Começar a Pegar Lego"
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 120)
+    if gui and gui:FindFirstChild("MainFrame") then
+        local toggleBtn = gui.MainFrame:FindFirstChild("ToggleButton")
+        if toggleBtn then
+            toggleBtn.Text = "▶ Começar a Pegar Lego"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 120)
+        end
+    end
 end
 
-wait(0.5)
+task.wait(1)
 
 gui = createGUI()
-local mainFrame = gui.MainFrame
-local toggleBtn = mainFrame.ToggleButton
 
-toggleBtn.MouseButton1Click:Connect(function()
-    if collecting then
-        stopCollecting()
-    else
-        startCollecting()
-    end
-end)
-
-mainFrame.Position = UDim2.new(0.5, -170, -0.5, 0)
-TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    Position = UDim2.new(0.5, -170, 0.5, -110)
-}):Play()
-
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("🥚 Egg Hunt Collector Carregado!")
-print("📝 Criador: slamnnaosei8")
-print("n tenta roubar o script por favor, n seja skid")
-print("📺 Canal YT: @alexsilvio6901")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+if gui and gui:FindFirstChild("MainFrame") then
+    local mainFrame = gui.MainFrame
+    
+    mainFrame.Position = UDim2.new(0.5, -170, -0.5, 0)
+    TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, -170, 0.5, -110)
+    }):Play()
+    
+    print("🎉 Script totalmente carregado!")
+else
+    warn("❌ Erro ao criar GUI!")
+end
