@@ -1,7 +1,140 @@
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
+
+local LoadingGui = Instance.new("ScreenGui")
+LoadingGui.Name = "MangaHubLoading"
+LoadingGui.ResetOnSpawn = false
+LoadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+LoadingGui.Parent = CoreGui
+
+local LoadingFrame = Instance.new("Frame")
+LoadingFrame.Size = UDim2.fromScale(1, 1)
+LoadingFrame.Position = UDim2.fromScale(0, 0)
+LoadingFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+LoadingFrame.BorderSizePixel = 0
+LoadingFrame.Parent = LoadingGui
+
+local Container = Instance.new("Frame")
+Container.Size = UDim2.fromOffset(400, 200)
+Container.Position = UDim2.fromScale(0.5, 0.5)
+Container.AnchorPoint = Vector2.new(0.5, 0.5)
+Container.BackgroundTransparency = 1
+Container.Parent = LoadingFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.fromScale(1, 0.2)
+Title.Position = UDim2.fromScale(0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "MANGA HUB"
+Title.TextColor3 = Color3.fromRGB(255, 140, 0)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Container
+
+local Subtitle = Instance.new("TextLabel")
+Subtitle.Size = UDim2.fromScale(1, 0.15)
+Subtitle.Position = UDim2.fromScale(0, 0.22)
+Subtitle.BackgroundTransparency = 1
+Subtitle.Text = "BBB Brasil V1.5"
+Subtitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+Subtitle.TextSize = 18
+Subtitle.Font = Enum.Font.Gotham
+Subtitle.Parent = Container
+
+local ProgressBarBg = Instance.new("Frame")
+ProgressBarBg.Size = UDim2.fromOffset(380, 8)
+ProgressBarBg.Position = UDim2.fromScale(0.5, 0.6)
+ProgressBarBg.AnchorPoint = Vector2.new(0.5, 0.5)
+ProgressBarBg.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+ProgressBarBg.BorderSizePixel = 0
+ProgressBarBg.Parent = Container
+
+local ProgressBarBgCorner = Instance.new("UICorner")
+ProgressBarBgCorner.CornerRadius = UDim.new(1, 0)
+ProgressBarBgCorner.Parent = ProgressBarBg
+
+local ProgressBar = Instance.new("Frame")
+ProgressBar.Size = UDim2.fromOffset(0, 8)
+ProgressBar.Position = UDim2.fromScale(0, 0)
+ProgressBar.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+ProgressBar.BorderSizePixel = 0
+ProgressBar.Parent = ProgressBarBg
+
+local ProgressBarCorner = Instance.new("UICorner")
+ProgressBarCorner.CornerRadius = UDim.new(1, 0)
+ProgressBarCorner.Parent = ProgressBar
+
+local ProgressText = Instance.new("TextLabel")
+ProgressText.Size = UDim2.fromScale(1, 0.15)
+ProgressText.Position = UDim2.fromScale(0, 0.75)
+ProgressText.BackgroundTransparency = 1
+ProgressText.Text = "0%"
+ProgressText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ProgressText.TextSize = 24
+ProgressText.Font = Enum.Font.GothamBold
+ProgressText.Parent = Container
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Size = UDim2.fromScale(1, 0.1)
+StatusText.Position = UDim2.fromScale(0, 0.88)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "Inicializando..."
+StatusText.TextColor3 = Color3.fromRGB(150, 150, 150)
+StatusText.TextSize = 14
+StatusText.Font = Enum.Font.Gotham
+StatusText.Parent = Container
+
+local function animateLoading()
+    local startTime = tick()
+    local duration = 30
+    local messages = {
+        {progress = 0, text = "Inicializando..."},
+        {progress = 15, text = "Carregando interface..."},
+        {progress = 35, text = "Conectando aos servidores..."},
+        {progress = 55, text = "Preparando sistema de votação..."},
+        {progress = 75, text = "Configurando scripts..."},
+        {progress = 90, text = "Finalizando..."},
+        {progress = 100, text = "Completo!"}
+    }
+    
+    local currentMessageIndex = 1
+    
+    while true do
+        local elapsed = tick() - startTime
+        local progress = math.min((elapsed / duration) * 100, 100)
+        
+        ProgressBar.Size = UDim2.fromOffset((progress / 100) * 380, 8)
+        ProgressText.Text = math.floor(progress) .. "%"
+        
+        if currentMessageIndex <= #messages and progress >= messages[currentMessageIndex].progress then
+            StatusText.Text = messages[currentMessageIndex].text
+            currentMessageIndex = currentMessageIndex + 1
+        end
+        
+        if progress >= 100 then
+            break
+        end
+        
+        task.wait()
+    end
+    
+    task.wait(0.5)
+    
+    local tweenInfo = TweenInfo.new(0.8, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+    local tween = TweenService:Create(LoadingFrame, tweenInfo, {Position = UDim2.fromScale(0, 1)})
+    tween:Play()
+    
+    tween.Completed:Connect(function()
+        LoadingGui:Destroy()
+    end)
+end
+
+task.spawn(animateLoading)
+
+task.wait(30)
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
