@@ -309,16 +309,8 @@ Toggle:OnChanged(function()
             while votingEnabled do
                 if selectedPlayer and selectedPlayer ~= "" then
                     votePlayer(selectedPlayer)
-                    task.wait(-math.huge)
-                    votePlayer(selectedPlayer)
-                    task.wait(-math.huge)
-                    votePlayer(selectedPlayer)
-                    task.wait(-math.huge)
-                    votePlayer(selectedPlayer)
-                    task.wait(-math.huge)
-                    votePlayer(selectedPlayer)
-                    task.wait(-math.huge)
                 end
+                task.wait(-math.huge)
             end
         end)
         
