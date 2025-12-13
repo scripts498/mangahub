@@ -387,20 +387,6 @@ Tabs.Player:AddToggle("PegarVelocidade", {
     end
 })
 
-Tabs.Teleport:AddButton({
-    Title = "Teleportar para o mapa",
-    Description = "Teleporta você para o mapa",
-    Callback = function()
-        if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(-920, 57, 265)
-            Fluent:Notify({
-                Title = "Teleportado",
-                Content = "Você foi teleportado para o mapa!",
-                Duration = 3
-            })
-        end
-    end
-})
 
 local selectedTpPlayer = nil
 local tpPlayerList = {}
@@ -479,3 +465,4 @@ Fluent:Notify({
 })
 
 print("seloko")
+
