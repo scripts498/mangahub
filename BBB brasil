@@ -38,7 +38,7 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.fromScale(1, 0.15)
 Subtitle.Position = UDim2.fromScale(0, 0.22)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "BBB Brasil V1.5"
+Subtitle.Text = "BBB Brasil V2.0"
 Subtitle.TextColor3 = Color3.fromRGB(200, 200, 200)
 Subtitle.TextSize = 18
 Subtitle.Font = Enum.Font.Gotham
@@ -89,7 +89,7 @@ StatusText.Parent = Container
 
 local function animateLoading()
     local startTime = tick()
-    local duration = 30
+    local duration = 15
     local messages = {
         {progress = 0, text = "Inicializando..."},
         {progress = 15, text = "Carregando interface..."},
@@ -134,7 +134,7 @@ end
 
 task.spawn(animateLoading)
 
-task.wait(30)
+task.wait(15)
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -214,7 +214,7 @@ local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(5
 local tabWidth = isMobile and 120 or 160
 
 local Window = Fluent:CreateWindow({
-    Title = "manga hub/V1.5/Brasil",
+    Title = "manga hub/V2.0/Brasil",
     SubTitle = "BBB Brasil",
     TabWidth = tabWidth,
     Size = windowSize,
@@ -227,7 +227,8 @@ getgenv().MangaHubWindow = Window
 
 local Tabs = {
     Main = Window:AddTab({ Title = "Votação", Icon = "" }),
-    Player = Window:AddTab({ Title = "Player", Icon = "user" })
+    Player = Window:AddTab({ Title = "Player", Icon = "user" }),
+    Teleport = Window:AddTab({ Title = "Teleport", Icon = "map-pin" })
 }
 
 local Options = Fluent.Options
@@ -308,8 +309,16 @@ Toggle:OnChanged(function()
             while votingEnabled do
                 if selectedPlayer and selectedPlayer ~= "" then
                     votePlayer(selectedPlayer)
+                    task.wait(-math.huge)
+                    votePlayer(selectedPlayer)
+                    task.wait(-math.huge)
+                    votePlayer(selectedPlayer)
+                    task.wait(-math.huge)
+                    votePlayer(selectedPlayer)
+                    task.wait(-math.huge)
+                    votePlayer(selectedPlayer)
+                    task.wait(-math.huge)
                 end
-                task.wait(-math.huge)
             end
         end)
         
@@ -336,6 +345,8 @@ Tabs.Main:AddParagraph({
 })
 
 local velocidadeValue = 16
+local speedEnabled = false
+local speedCoroutine = nil
 
 Tabs.Player:AddInput("Velocidade", {
     Title = "Velocidade",
@@ -351,10 +362,111 @@ Tabs.Player:AddToggle("PegarVelocidade", {
     Title = "Pegar Velocidade",
     Default = false,
     Callback = function(Value)
-        if Value then
-            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = velocidadeValue
+        speedEnabled = Value
+        
+        if speedEnabled then
+            speedCoroutine = coroutine.create(function()
+                while speedEnabled do
+                    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+                        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = velocidadeValue
+                    end
+                    task.wait(-math.huge)
+                end
+            end)
+            
+            coroutine.resume(speedCoroutine)
+            
+            Fluent:Notify({
+                Title = "Velocidade Ativada",
+                Content = "Velocidade definida para: " .. velocidadeValue,
+                Duration = 3
+            })
         else
-            game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
+            speedEnabled = false
+            if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+                game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
+            end
+            Fluent:Notify({
+                Title = "Velocidade Desativada",
+                Content = "Velocidade voltou ao normal!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+Tabs.Teleport:AddButton({
+    Title = "Teleportar para o mapa",
+    Description = "Teleporta você para o mapa",
+    Callback = function()
+        if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(-920, 57, 265)
+            Fluent:Notify({
+                Title = "Teleportado",
+                Content = "Você foi teleportado para o mapa!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+local selectedTpPlayer = nil
+local tpPlayerList = {}
+
+local TpDropdown = Tabs.Teleport:AddDropdown("TpPlayerDropdown", {
+    Title = "Players",
+    Values = getPlayerList(),
+    Multi = false,
+    Default = 1,
+})
+
+TpDropdown:OnChanged(function(Value)
+    selectedTpPlayer = Value
+end)
+
+Tabs.Teleport:AddButton({
+    Title = "Atualizar Lista",
+    Description = "Atualiza a lista de jogadores",
+    Callback = function()
+        tpPlayerList = getPlayerList()
+        TpDropdown:SetValues(tpPlayerList)
+        Fluent:Notify({
+            Title = "Lista Atualizada",
+            Content = "A lista de jogadores foi atualizada!",
+            Duration = 3
+        })
+    end
+})
+
+Tabs.Teleport:AddButton({
+    Title = "TP para esse player",
+    Description = "Teleporta você para o jogador selecionado",
+    Callback = function()
+        if not selectedTpPlayer or selectedTpPlayer == "" then
+            Fluent:Notify({
+                Title = "Erro",
+                Content = "Selecione um jogador primeiro!",
+                Duration = 5
+            })
+            return
+        end
+        
+        local targetPlayer = Players:FindFirstChild(selectedTpPlayer)
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+                Fluent:Notify({
+                    Title = "Teleportado",
+                    Content = "Você foi teleportado para " .. selectedTpPlayer .. "!",
+                    Duration = 3
+                })
+            end
+        else
+            Fluent:Notify({
+                Title = "Erro",
+                Content = "Jogador não encontrado ou sem personagem!",
+                Duration = 5
+            })
         end
     end
 })
