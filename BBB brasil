@@ -464,6 +464,4 @@ Fluent:Notify({
     Duration = 5
 })
 
-print("seloko")
-
-
+print("seloko, compensa dmsss")
