@@ -38,7 +38,7 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.fromScale(1, 0.15)
 Subtitle.Position = UDim2.fromScale(0, 0.22)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "BBB Brasil V3.3"
+Subtitle.Text = "BBB Brasil V3.5"
 Subtitle.TextColor3 = Color3.fromRGB(200, 200, 200)
 Subtitle.TextSize = 18
 Subtitle.Font = Enum.Font.Gotham
@@ -214,7 +214,7 @@ local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(5
 local tabWidth = isMobile and 120 or 160
 
 local Window = Fluent:CreateWindow({
-    Title = "manga hub/V3.3/Brasil",
+    Title = "manga hub/V3.5/Brasil",
     SubTitle = "BBB Brasil",
     TabWidth = tabWidth,
     Size = windowSize,
@@ -226,7 +226,7 @@ local Window = Fluent:CreateWindow({
 getgenv().MangaHubWindow = Window
 
 local Tabs = {
-    Main = Window:AddTab({ Title = "Votação", Icon = "" }),
+    Main = Window:AddTab({ Title = "Votação", Icon = "check-square" }),
     Player = Window:AddTab({ Title = "Player", Icon = "user" }),
     Teleport = Window:AddTab({ Title = "Teleport", Icon = "map-pin" }),
     Evento = Window:AddTab({ Title = "Evento", Icon = "star" })
@@ -452,14 +452,6 @@ Tabs.Teleport:AddButton({
 
 local autoJogoEnabled = false
 local autoJogoCoroutine = nil
-local detectionPart = nil
-
-local function limparDetectionPart()
-    if detectionPart then
-        detectionPart:Destroy()
-        detectionPart = nil
-    end
-end
 
 local function encontrarSpawnDoPlayer()
     local minigame = game.Workspace:FindFirstChild("MinigameCrazykitchen")
@@ -481,26 +473,6 @@ local function encontrarSpawnDoPlayer()
     return nil
 end
 
-local function criarDetectionPart(spawnPart)
-    limparDetectionPart()
-    
-    local part = Instance.new("Part")
-    part.Name = "DetectionPart"
-    part.Size = Vector3.new(1000000, 2, 1000000)
-    part.Transparency = 0.3
-    part.Anchored = true
-    part.CanCollide = false
-    part.Material = Enum.Material.Neon
-    part.Color = Color3.fromRGB(255, 140, 0)
-    
-    local cframe = spawnPart.CFrame * CFrame.new(0, 0, -3)
-    part.CFrame = cframe
-    part.Parent = game.Workspace
-    
-    detectionPart = part
-    return part
-end
-
 local frutas = {
     "banana", "orange", "apple", "grape", "watermelon", "strawberry", 
     "pineapple", "mango", "cherry", "lemon", "peach", "pear", "kiwi",
@@ -519,50 +491,63 @@ local function ehFruta(nome)
     return false
 end
 
-local function verificarColisoes()
-    if not detectionPart then return end
+local function estaDentroDaMinhaBase(part, basePart)
+    if not basePart then return false end
     
-    local region = Region3.new(
-        detectionPart.Position - (detectionPart.Size / 2),
-        detectionPart.Position + (detectionPart.Size / 2)
-    )
-    region = region:ExpandToGrid(4)
+    local frutaPos = part.Position
+    local basePos = basePart.Position
+    local baseSize = basePart.Size
     
-    local partsInRegion = game.Workspace:FindPartsInRegion3(region, detectionPart, 100)
+    local dentroX = math.abs(frutaPos.X - basePos.X) <= baseSize.X / 2
+    local dentroY = math.abs(frutaPos.Y - basePos.Y) <= baseSize.Y / 2
+    local dentroZ = math.abs(frutaPos.Z - basePos.Z) <= baseSize.Z / 2
     
-    for _, part in pairs(partsInRegion) do
-        if part.Name == "DetectionPart" then
-            continue
+    return dentroX and dentroY and dentroZ
+end
+
+local function baterNaFruta()
+    task.spawn(function()
+        local minigame = game.Workspace:FindFirstChild("MinigameCrazykitchen")
+        if minigame then
+            local remote = minigame:FindFirstChild("🍎2")
+            if remote and remote:IsA("RemoteEvent") then
+                remote:FireServer()
+            end
         end
-        
-        local model = part:FindFirstAncestorOfClass("Model")
-        local objetoParaVerificar = model or part
-        local nomeParaVerificar = objetoParaVerificar.Name
-        
-        if string.lower(nomeParaVerificar):find("bomb") then
-            continue
-        end
-        
-        if ehFruta(nomeParaVerificar) and not frutasJaBatidas[objetoParaVerificar] then
-            frutasJaBatidas[objetoParaVerificar] = true
+    end)
+end
+
+local function verificarFrutasNaBase()
+    local minigame = game.Workspace:FindFirstChild("MinigameCrazykitchen")
+    if not minigame then return end
+    
+    local basePart = encontrarSpawnDoPlayer()
+    if not basePart then return end
+    
+    for _, obj in pairs(minigame:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            local model = obj:FindFirstAncestorOfClass("Model")
+            local objetoParaVerificar = model or obj
+            local nomeParaVerificar = objetoParaVerificar.Name
             
-            task.spawn(function()
-                local minigame = game.Workspace:FindFirstChild("MinigameCrazykitchen")
-                if minigame then
-                    local remote = minigame:FindFirstChild("🍎2")
-                    if remote and remote:IsA("RemoteEvent") then
-                        remote:FireServer()
-                    end
+            if string.lower(nomeParaVerificar):find("bomb") then
+                continue
+            end
+            
+            if ehFruta(nomeParaVerificar) and not frutasJaBatidas[objetoParaVerificar] then
+                if estaDentroDaMinhaBase(obj, basePart) then
+                    frutasJaBatidas[objetoParaVerificar] = true
+                    baterNaFruta()
+                    
+                    objetoParaVerificar.AncestryChanged:Connect(function()
+                        if not objetoParaVerificar:IsDescendantOf(game) then
+                            frutasJaBatidas[objetoParaVerificar] = nil
+                        end
+                    end)
+                    
+                    return
                 end
-            end)
-            
-            objetoParaVerificar.AncestryChanged:Connect(function()
-                if not objetoParaVerificar:IsDescendantOf(game) then
-                    frutasJaBatidas[objetoParaVerificar] = nil
-                end
-            end)
-            
-            return
+            end
         end
     end
 end
@@ -604,52 +589,28 @@ Tabs.Evento:AddToggle("AutoJogoToggle", {
                 Duration = 3
             })
             
-            criarDetectionPart(spawnPart)
-            
             autoJogoCoroutine = coroutine.create(function()
                 while autoJogoEnabled do
                     local minigameAtual = game.Workspace:FindFirstChild("MinigameCrazykitchen")
                     
                     if not minigameAtual then
-                        limparDetectionPart()
                         Fluent:Notify({
                             Title = "Aviso",
                             Content = "O mapa não está spawnado.",
                             Duration = 3
                         })
                         task.wait(5)
-                        
-                        minigameAtual = game.Workspace:FindFirstChild("MinigameCrazykitchen")
-                        if minigameAtual and autoJogoEnabled then
-                            local spawn = encontrarSpawnDoPlayer()
-                            if spawn then
-                                Fluent:Notify({
-                                    Title = "Auto Jogo",
-                                    Content = "Automaticamente fazendo a prova...",
-                                    Duration = 3
-                                })
-                                criarDetectionPart(spawn)
-                            end
-                        end
                     else
-                        if detectionPart then
-                            verificarColisoes()
-                        else
-                            local spawn = encontrarSpawnDoPlayer()
-                            if spawn then
-                                criarDetectionPart(spawn)
-                            end
-                        end
+                        verificarFrutasNaBase()
                     end
                     
-                    task.wait(0.5)
+                    task.wait(2^-1074)
                 end
             end)
             
             coroutine.resume(autoJogoCoroutine)
         else
             autoJogoEnabled = false
-            limparDetectionPart()
             Fluent:Notify({
                 Title = "Auto Jogo Desativado",
                 Content = "O auto jogo foi desativado!",
@@ -661,7 +622,97 @@ Tabs.Evento:AddToggle("AutoJogoToggle", {
 
 Tabs.Evento:AddParagraph({
     Title = "Informações",
-    Content = "Esta função automaticamente joga o minigame de bater em frutas.\n\nO sistema detecta objetos que não sejam bombas e aciona o remote automaticamente."
+    Content = "Esta função automaticamente joga o minigame de bater em frutas.\n\nSó bate na fruta se ela estiver dentro da sua base (part com seu nome)."
+})
+
+local autoLavaEnabled = false
+local autoLavaCoroutine = nil
+local bodyPosition = nil
+local frozenPosition = nil
+
+local function congelarPlayer()
+    if not game.Players.LocalPlayer.Character then return end
+    local hrp = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    frozenPosition = hrp.CFrame.Position
+    
+    if not bodyPosition then
+        bodyPosition = Instance.new("BodyPosition")
+        bodyPosition.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bodyPosition.D = 1000
+        bodyPosition.P = 10000
+        bodyPosition.Parent = hrp
+    end
+    
+    bodyPosition.Position = frozenPosition
+end
+
+local function descongelarPlayer()
+    if bodyPosition then
+        bodyPosition:Destroy()
+        bodyPosition = nil
+    end
+    frozenPosition = nil
+end
+
+local function verificarEDestruirBolaDeFogo()
+    local lavaModel = game.Workspace:FindFirstChild("Lava")
+    if not lavaModel then return end
+    
+    for _, obj in pairs(lavaModel:GetDescendants()) do
+        if obj:IsA("BasePart") and obj.Name == "BolaDeFogo" then
+            obj:Destroy()
+        end
+    end
+end
+
+Tabs.Evento:AddToggle("AutoLavaToggle", {
+    Title = "(BETA) Auto Jogo de Lava",
+    Default = false,
+    Callback = function(Value)
+        autoLavaEnabled = Value
+        
+        if autoLavaEnabled then
+            Fluent:Notify({
+                Title = "Auto Lava Ativado",
+                Content = "Você está congelado e protegido!",
+                Duration = 3
+            })
+            
+            congelarPlayer()
+            
+            autoLavaCoroutine = coroutine.create(function()
+                while autoLavaEnabled do
+                    verificarEDestruirBolaDeFogo()
+                    
+                    if frozenPosition and game.Players.LocalPlayer.Character then
+                        local hrp = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp and bodyPosition then
+                            bodyPosition.Position = frozenPosition
+                        end
+                    end
+                    
+                    task.wait(2^-1074)
+                end
+            end)
+            
+            coroutine.resume(autoLavaCoroutine)
+        else
+            autoLavaEnabled = false
+            descongelarPlayer()
+            Fluent:Notify({
+                Title = "Auto Lava Desativado",
+                Content = "Você pode se mover novamente!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+Tabs.Evento:AddParagraph({
+    Title = "Informações Auto Lava",
+    Content = "Esta função:\n- Te congela no lugar\n- Deleta automaticamente BolaDeFogo do model Lava\n- Você fica flutuando se o chão sumir"
 })
 
 SaveManager:SetLibrary(Fluent)
@@ -680,4 +731,3 @@ Fluent:Notify({
 })
 
 print("seloko, compensa dmsss")
-
