@@ -38,7 +38,7 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.fromScale(1, 0.15)
 Subtitle.Position = UDim2.fromScale(0, 0.22)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "BBB Brasil V3.0"
+Subtitle.Text = "BBB Brasil V3.1"
 Subtitle.TextColor3 = Color3.fromRGB(200, 200, 200)
 Subtitle.TextSize = 18
 Subtitle.Font = Enum.Font.Gotham
@@ -214,7 +214,7 @@ local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(5
 local tabWidth = isMobile and 120 or 160
 
 local Window = Fluent:CreateWindow({
-    Title = "manga hub/V3.0/Brasil",
+    Title = "manga hub/V3.1/Brasil",
     SubTitle = "BBB Brasil",
     TabWidth = tabWidth,
     Size = windowSize,
@@ -450,7 +450,6 @@ Tabs.Teleport:AddButton({
     end
 })
 
--- Auto Jogo de Bater em Fruta
 local autoJogoEnabled = false
 local autoJogoCoroutine = nil
 local detectionPart = nil
@@ -487,7 +486,7 @@ local function criarDetectionPart(spawnPart)
     
     local part = Instance.new("Part")
     part.Name = "DetectionPart"
-    part.Size = Vector3.new(4, 4, 4)
+    part.Size = Vector3.new(1000000, 2, 1000000)
     part.Transparency = 0.3
     part.Anchored = true
     part.CanCollide = false
@@ -508,6 +507,8 @@ local frutas = {
     "Banana", "Orange", "Apple", "Grape", "Watermelon", "Strawberry",
     "Pineapple", "Mango", "Cherry", "Lemon", "Peach", "Pear", "Kiwi"
 }
+
+local frutasJaBatidas = {}
 
 local function ehFruta(nome)
     for _, fruta in pairs(frutas) do
@@ -535,20 +536,33 @@ local function verificarColisoes()
         end
         
         local model = part:FindFirstAncestorOfClass("Model")
-        local nomeParaVerificar = model and model.Name or part.Name
+        local objetoParaVerificar = model or part
+        local nomeParaVerificar = objetoParaVerificar.Name
         
         if string.lower(nomeParaVerificar):find("bomb") then
             continue
         end
         
-        if ehFruta(nomeParaVerificar) then
-            local minigame = game.Workspace:FindFirstChild("MinigameCrazykitchen")
-            if minigame then
-                local remote = minigame:FindFirstChild("🍎2")
-                if remote and remote:IsA("RemoteEvent") then
-                    remote:FireServer()
+        if ehFruta(nomeParaVerificar) and not frutasJaBatidas[objetoParaVerificar] then
+            frutasJaBatidas[objetoParaVerificar] = true
+            
+            task.spawn(function()
+                local minigame = game.Workspace:FindFirstChild("MinigameCrazykitchen")
+                if minigame then
+                    local remote = minigame:FindFirstChild("🍎2")
+                    if remote and remote:IsA("RemoteEvent") then
+                        remote:FireServer()
+                    end
                 end
-            end
+            end)
+            
+            objetoParaVerificar.AncestryChanged:Connect(function()
+                if not objetoParaVerificar:IsDescendantOf(game) then
+                    frutasJaBatidas[objetoParaVerificar] = nil
+                end
+            end)
+            
+            return
         end
     end
 end
@@ -628,7 +642,7 @@ Tabs.Evento:AddToggle("AutoJogoToggle", {
                         end
                     end
                     
-                    task.wait(0.1)
+                    task.wait(0.5)
                 end
             end)
             
@@ -665,4 +679,4 @@ Fluent:Notify({
     Duration = 5
 })
 
-print("seloko, compensa mt")
+print("seloko, compensa dmsss")
