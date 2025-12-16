@@ -214,7 +214,7 @@ local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(5
 local tabWidth = isMobile and 120 or 160
 
 local Window = Fluent:CreateWindow({
-    Title = "manga hub/V4.1/Brasil",
+    Title = "manga hub/V4.2/Brasil",
     SubTitle = "BBB Brasil",
     TabWidth = tabWidth,
     Size = windowSize,
@@ -765,5 +765,6 @@ Fluent:Notify({
 })
 
 print("seloko, compensa dmsss")
+
 
 
