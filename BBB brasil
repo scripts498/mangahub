@@ -250,14 +250,12 @@ local function getPlayerList()
 end
 
 local function votePlayer(playerName)
-    task.spawn(function()
-        local success, err = pcall(function()
-            local args = {
-                [1] = playerName,
-                [2] = 5
-            }
-            ReplicatedStorage.Remotes:FindFirstChild("\240\159\140\131\240\159\145\139\240\159\154\135\226\152\132"):FireServer(unpack(args))
-        end)
+    pcall(function()
+        local args = {
+            [1] = playerName,
+            [2] = 5
+        }
+        ReplicatedStorage.Remotes:FindFirstChild("\240\159\140\131\240\159\145\139\240\159\154\135\226\152\132"):FireServer(unpack(args))
     end)
 end
 
@@ -311,7 +309,7 @@ Toggle:OnChanged(function()
                 if selectedPlayer and selectedPlayer ~= "" then
                     votePlayer(selectedPlayer)
                 end
-                task.wait()
+                task.wait(0)
             end
         end)
         
@@ -363,7 +361,7 @@ Tabs.Player:AddToggle("PegarVelocidade", {
                     if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
                         game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = velocidadeValue
                     end
-                    task.wait()
+                    task.wait(0)
                 end
             end)
             
@@ -489,13 +487,13 @@ local function criarDetectionPart()
     
     local part = Instance.new("Part")
     part.Name = "FruitDetectionPart"
-    part.Size = Vector3.new(1000, 1, 1000)
+    part.Size = Vector3.new(50, 50, 50)
     part.Transparency = 0.5
     part.Anchored = true
     part.CanCollide = false
     part.Material = Enum.Material.Neon
     part.Color = Color3.fromRGB(0, 100, 255)
-    part.CFrame = hrp.CFrame * CFrame.new(0, 4, 0)
+    part.CFrame = hrp.CFrame
     part.Parent = game.Workspace
     
     detectionPart = part
@@ -529,15 +527,14 @@ local function ehFruta(nome)
 end
 
 local function baterNaFruta()
-    task.spawn(function()
-        local minigame = game.Workspace:FindFirstChild("MinigameCrazykitchen")
-        if minigame then
-            local remote = minigame:FindFirstChild("🍎2")
-            if remote and remote:IsA("RemoteEvent") then
-                remote:FireServer()
-            end
+    local minigame = game.Workspace:FindFirstChild("MinigameCrazykitchen")
+    if minigame then
+        local remote = minigame:FindFirstChild("🍎2")
+        if remote and remote:IsA("RemoteEvent") then
+            remote:FireServer()
+            print("Fire enviado no remote!")
         end
-    end)
+    end
 end
 
 local function atualizarPosicaoDetectionPart()
@@ -546,12 +543,14 @@ local function atualizarPosicaoDetectionPart()
     local hrp = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    detectionPart.CFrame = hrp.CFrame * CFrame.new(0, 4, 0)
+    detectionPart.CFrame = hrp.CFrame
 end
 
 local function conectarDeteccaoDeFruta(fruta)
     if not fruta:IsA("BasePart") then return end
     if frutasProcessadas[fruta] then return end
+    
+    print("Conectando fruta: " .. fruta.Name)
     
     local connection
     connection = fruta.Touched:Connect(function(hit)
@@ -561,6 +560,7 @@ local function conectarDeteccaoDeFruta(fruta)
         end
         
         if hit == detectionPart and not frutasProcessadas[fruta] then
+            print("Fruta tocou na part: " .. fruta.Name)
             frutasProcessadas[fruta] = true
             baterNaFruta()
             
@@ -581,7 +581,7 @@ local function conectarDeteccaoDeFruta(fruta)
 end
 
 Tabs.Evento:AddToggle("AutoJogoToggle", {
-    Title = "(BETA) Auto Jogo de Bater em Fruta",
+    Title = "Auto Jogo de Bater em Fruta",
     Default = false,
     Callback = function(Value)
         autoJogoEnabled = Value
@@ -617,18 +617,23 @@ Tabs.Evento:AddToggle("AutoJogoToggle", {
                 Duration = 3
             })
             
+            print("Spawn do player: " .. spawnPart.Name)
+            
             criarDetectionPart()
             
             spawnPart.ChildAdded:Connect(function(child)
                 if not autoJogoEnabled then return end
                 
+                print("Child adicionado: " .. child.Name)
+                
                 if ehFruta(child.Name) then
-                    task.wait(0.1)
+                    task.wait(0.05)
                     conectarDeteccaoDeFruta(child)
                 end
             end)
             
             for _, child in pairs(spawnPart:GetChildren()) do
+                print("Verificando child existente: " .. child.Name)
                 if ehFruta(child.Name) then
                     conectarDeteccaoDeFruta(child)
                 end
@@ -637,13 +642,14 @@ Tabs.Evento:AddToggle("AutoJogoToggle", {
             autoJogoCoroutine = coroutine.create(function()
                 while autoJogoEnabled do
                     atualizarPosicaoDetectionPart()
-                    task.wait(0.1)
+                    task.wait(0.05)
                 end
             end)
             
             coroutine.resume(autoJogoCoroutine)
         else
             autoJogoEnabled = false
+            frutasProcessadas = {}
             limparDetectionPart()
             Fluent:Notify({
                 Title = "Auto Jogo Desativado",
@@ -702,7 +708,7 @@ local function verificarEDestruirBolaDeFogo()
 end
 
 Tabs.Evento:AddToggle("AutoLavaToggle", {
-    Title = "(BETA) Auto Jogo de Lava",
+    Title = "Auto Jogo de Lava",
     Default = false,
     Callback = function(Value)
         autoLavaEnabled = Value
@@ -727,7 +733,7 @@ Tabs.Evento:AddToggle("AutoLavaToggle", {
                         end
                     end
                     
-                    task.wait(2^-1074)
+                    task.wait(0)
                 end
             end)
             
@@ -763,8 +769,3 @@ Fluent:Notify({
     Content = "Script carregado com sucesso!",
     Duration = 5
 })
-
-print("seloko, compensa dmsss")
-
-
-
