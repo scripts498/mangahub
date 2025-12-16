@@ -309,7 +309,7 @@ Toggle:OnChanged(function()
                 if selectedPlayer and selectedPlayer ~= "" then
                     votePlayer(selectedPlayer)
                 end
-                task.wait(0)
+                task.wait()
             end
         end)
         
@@ -769,3 +769,4 @@ Fluent:Notify({
     Content = "Script carregado com sucesso!",
     Duration = 5
 })
+
