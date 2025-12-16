@@ -311,7 +311,7 @@ Toggle:OnChanged(function()
                 if selectedPlayer and selectedPlayer ~= "" then
                     votePlayer(selectedPlayer)
                 end
-                task.wait(2^-1074)
+                task.wait()
             end
         end)
         
@@ -363,7 +363,7 @@ Tabs.Player:AddToggle("PegarVelocidade", {
                     if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
                         game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = velocidadeValue
                     end
-                    task.wait(2^-1074)
+                    task.wait()
                 end
             end)
             
@@ -765,3 +765,4 @@ Fluent:Notify({
 })
 
 print("seloko, compensa dmsss")
+
