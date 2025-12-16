@@ -38,7 +38,7 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.fromScale(1, 0.15)
 Subtitle.Position = UDim2.fromScale(0, 0.22)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "BBB Brasil V4.0"
+Subtitle.Text = "BBB Brasil V4.1"
 Subtitle.TextColor3 = Color3.fromRGB(200, 200, 200)
 Subtitle.TextSize = 18
 Subtitle.Font = Enum.Font.Gotham
@@ -214,7 +214,7 @@ local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(5
 local tabWidth = isMobile and 120 or 160
 
 local Window = Fluent:CreateWindow({
-    Title = "manga hub/V4.0/Brasil",
+    Title = "manga hub/V4.1/Brasil",
     SubTitle = "BBB Brasil",
     TabWidth = tabWidth,
     Size = windowSize,
@@ -256,7 +256,7 @@ local function votePlayer(playerName)
                 [1] = playerName,
                 [2] = 5
             }
-            ReplicatedStorage.Remotes:FindFirstChild("\240\159\140\131\240\159\149\139\240\159\154\135\226\152\132"):FireServer(unpack(args))
+            ReplicatedStorage.Remotes:FindFirstChild("\240\159\140\131\240\159\145\139\240\159\154\135\226\152\132"):FireServer(unpack(args))
         end)
     end)
 end
@@ -495,7 +495,7 @@ local function criarDetectionPart()
     part.CanCollide = false
     part.Material = Enum.Material.Neon
     part.Color = Color3.fromRGB(0, 100, 255)
-    part.CFrame = hrp.CFrame
+    part.CFrame = hrp.CFrame * CFrame.new(0, 4, 0)
     part.Parent = game.Workspace
     
     detectionPart = part
@@ -509,30 +509,23 @@ local frutas = {
     "Pineapple", "Mango", "Cherry", "Lemon", "Peach", "Pear", "Kiwi"
 }
 
+local frutasIgnoradas = {"bomb", "Bomb", "BOMB"}
+
 local frutasProcessadas = {}
 
 local function ehFruta(nome)
+    for _, bomba in pairs(frutasIgnoradas) do
+        if string.find(string.lower(nome), string.lower(bomba)) then
+            return false
+        end
+    end
+    
     for _, fruta in pairs(frutas) do
         if string.find(string.lower(nome), string.lower(fruta)) then
             return true
         end
     end
     return false
-end
-
-local function estaDentroBase(frutaPart)
-    local basePart = encontrarSpawnDoPlayer()
-    if not basePart then return false end
-    
-    local frutaPos = frutaPart.Position
-    local basePos = basePart.Position
-    local baseSize = basePart.Size
-    
-    local dentroX = math.abs(frutaPos.X - basePos.X) <= baseSize.X / 2
-    local dentroY = math.abs(frutaPos.Y - basePos.Y) <= baseSize.Y / 2
-    local dentroZ = math.abs(frutaPos.Z - basePos.Z) <= baseSize.Z / 2
-    
-    return dentroX and dentroY and dentroZ
 end
 
 local function baterNaFruta()
@@ -553,7 +546,38 @@ local function atualizarPosicaoDetectionPart()
     local hrp = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
-    detectionPart.CFrame = hrp.CFrame
+    detectionPart.CFrame = hrp.CFrame * CFrame.new(0, 4, 0)
+end
+
+local function conectarDeteccaoDeFruta(fruta)
+    if not fruta:IsA("BasePart") then return end
+    if frutasProcessadas[fruta] then return end
+    
+    local connection
+    connection = fruta.Touched:Connect(function(hit)
+        if not autoJogoEnabled then
+            if connection then connection:Disconnect() end
+            return
+        end
+        
+        if hit == detectionPart and not frutasProcessadas[fruta] then
+            frutasProcessadas[fruta] = true
+            baterNaFruta()
+            
+            if connection then
+                connection:Disconnect()
+            end
+        end
+    end)
+    
+    fruta.AncestryChanged:Connect(function()
+        if not fruta:IsDescendantOf(game) then
+            frutasProcessadas[fruta] = nil
+            if connection then
+                connection:Disconnect()
+            end
+        end
+    end)
 end
 
 Tabs.Evento:AddToggle("AutoJogoToggle", {
@@ -595,31 +619,19 @@ Tabs.Evento:AddToggle("AutoJogoToggle", {
             
             criarDetectionPart()
             
-            if detectionPart then
-                detectionPart.Touched:Connect(function(hit)
-                    if not autoJogoEnabled then return end
-                    
-                    local model = hit:FindFirstAncestorOfClass("Model")
-                    local objetoParaVerificar = model or hit
-                    local nomeParaVerificar = objetoParaVerificar.Name
-                    
-                    if string.lower(nomeParaVerificar):find("bomb") then
-                        return
-                    end
-                    
-                    if ehFruta(nomeParaVerificar) and not frutasProcessadas[objetoParaVerificar] then
-                        if estaDentroBase(hit) then
-                            frutasProcessadas[objetoParaVerificar] = true
-                            baterNaFruta()
-                            
-                            objetoParaVerificar.AncestryChanged:Connect(function()
-                                if not objetoParaVerificar:IsDescendantOf(game) then
-                                    frutasProcessadas[objetoParaVerificar] = nil
-                                end
-                            end)
-                        end
-                    end
-                end)
+            spawnPart.ChildAdded:Connect(function(child)
+                if not autoJogoEnabled then return end
+                
+                if ehFruta(child.Name) then
+                    task.wait(0.1)
+                    conectarDeteccaoDeFruta(child)
+                end
+            end)
+            
+            for _, child in pairs(spawnPart:GetChildren()) do
+                if ehFruta(child.Name) then
+                    conectarDeteccaoDeFruta(child)
+                end
             end
             
             autoJogoCoroutine = coroutine.create(function()
