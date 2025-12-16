@@ -38,7 +38,7 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.fromScale(1, 0.15)
 Subtitle.Position = UDim2.fromScale(0, 0.22)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "BBB Brasil V4.1"
+Subtitle.Text = "BBB Brasil V4.2"
 Subtitle.TextColor3 = Color3.fromRGB(200, 200, 200)
 Subtitle.TextSize = 18
 Subtitle.Font = Enum.Font.Gotham
@@ -765,4 +765,5 @@ Fluent:Notify({
 })
 
 print("seloko, compensa dmsss")
+
 
