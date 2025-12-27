@@ -1,0 +1,55 @@
+--[[ WARNING: Pode causar lag / kick / net error ]]
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("mangahub - Spray Paint", "DarkTheme")
+local Tab = Window:NewTab("Main")
+local Section = Tab:NewSection("Main")
+
+local Rep = game:GetService("ReplicatedStorage")
+local FartEvent = Rep.Remotes.Misc.Fart
+
+-- função utilitária para disparar bursts massivos
+local function burstFart(count, waves)
+	for w = 1, waves do
+		task.spawn(function()
+			for i = 1, count do
+				task.spawn(function()
+					FartEvent:FireServer()
+				end)
+			end
+		end)
+	end
+end
+
+Section:NewToggle("peidar infinitamente", "peidar infinitamente", function(state)
+	active = state
+	while active do
+		burstFart(10, 1)
+		task.wait()
+	end
+end)
+
+-- MODO TURBO (antes 100) — MAIS FORTE + MAIS DENSO
+Section:NewToggle("peidar  TURBO >:)", "modo turbo", function(state)
+	active = state
+	while active do
+		-- 300 por wave × 4 waves = 1200 por ciclo
+		burstFart(300, 4)
+		task.wait(0.02) -- quase sem respiro
+	end
+end)
+
+-- MODO INSANO (antes 500) — EXTREMAMENTE FORTE
+Section:NewToggle("peido INSANO >:)", "modo insano", function(state)
+	active = state
+	while active do
+		-- 800 por wave × 6 waves = 4800 por ciclo
+		 -- MUITO pesado, pode dar net error
+		burstFart(800, 6)
+		task.wait(0.01)
+	end
+end)
+
+Section:NewButton("Give Flashlight", "Server side flashlight", function()
+	local player = game:GetService("Players").LocalPlayer
+	Rep.EggHunt.GiveFlashlight:FireServer(player)
+end)
