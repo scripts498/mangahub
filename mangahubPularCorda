@@ -10,7 +10,7 @@ end
 local OrionLib = loadstring(game:HttpGet('https://pastebin.com/raw/WRUyYTdY'))()
 
 local Window = OrionLib:MakeWindow({
-    Name = "Manga Hub | pular corda | Português | V1.0",
+    Name = "Manga Hub | pular corda | Português | V2.0",
     HidePremium = false,
     SaveConfig = true,
     ConfigFolder = "MangaHubConfigs",
