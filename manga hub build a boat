@@ -1,0 +1,302 @@
+local UserInputService = game:GetService("UserInputService")
+local player = game.Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MangaHubMinimizeButton"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+local Button = Instance.new("TextButton")
+Button.Size = isMobile and UDim2.fromOffset(30, 30) or UDim2.fromOffset(50, 50)
+Button.Position = UDim2.new(0, 50, 0, 50)
+Button.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+Button.Text = "🥭"
+Button.TextScaled = true
+Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+Button.BorderSizePixel = 0
+Button.AutoButtonColor = true
+Button.AnchorPoint = Vector2.new(0.5, 0.5)
+Button.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(1,0)
+UICorner.Parent = Button
+
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    Button.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+Button.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Button.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Button.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+getgenv().gethui = function()
+    return game:GetService("CoreGui")
+end
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local windowSize
+if isMobile then
+    windowSize = UDim2.fromOffset(400, 300)
+else
+    windowSize = UDim2.fromOffset(600, 400)
+end
+
+local Window = Fluent:CreateWindow({
+    Title = "Manga Hub 2.0 | build a boat | Português",
+    SubTitle = "Bem-vindo ao Manga Hub!",
+    TabWidth = 120,
+    Size = windowSize,
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+Fluent:Notify({
+    Title = "Bem-vindo",
+    Content = "Bem-vindo ao MANGA HUB!!",
+    Duration = 15
+})
+
+local AutoFarmTab = Window:AddTab({
+    Title = "Auto Farm",
+    Icon = "coins"
+})
+
+local farmingGold = false
+local farmLoop = nil
+local hasCompletedCycle = false
+local shouldContinueAfterRespawn = false
+
+local teleportPoints = {
+    Vector3.new(-69, 14, 1372),
+    Vector3.new(-47, 9, 2139),
+    Vector3.new(-34, 14, 2908),
+    Vector3.new(-60, 27, 3674),
+    Vector3.new(-61, 27, 4453),
+    Vector3.new(-65, 22, 5217),
+    Vector3.new(-62, 23, 5982),
+    Vector3.new(-51, 28, 6763),
+    Vector3.new(-80, 23, 7524),
+    Vector3.new(-59, 48, 8296),
+    Vector3.new(-57, 45, 8678),
+    Vector3.new(-56, -360, 9489)
+}
+
+local function smoothTeleport(targetPos, isLastPoint)
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
+    
+    local hrp = character.HumanoidRootPart
+    
+    local safeTargetPos
+    if isLastPoint then
+        safeTargetPos = Vector3.new(targetPos.X, targetPos.Y + 10, targetPos.Z)
+    else
+        safeTargetPos = Vector3.new(targetPos.X, math.max(targetPos.Y + 80, 100), targetPos.Z)
+    end
+    
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+            part.Massless = true
+        end
+    end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.PlatformStand = true
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+    end
+    
+    for _, obj in pairs(hrp:GetChildren()) do
+        if obj:IsA("BodyVelocity") or obj:IsA("BodyGyro") or obj:IsA("BodyPosition") then
+            obj:Destroy()
+        end
+    end
+    
+    local startPos = hrp.Position
+    local distance = (safeTargetPos - startPos).Magnitude
+    local steps = math.ceil(distance / 8)
+    
+    for i = 1, steps do
+        if not farmingGold then break end
+        
+        local alpha = i / steps
+        local easedAlpha = alpha * alpha * (3 - 2 * alpha)
+        local newPos = startPos:Lerp(safeTargetPos, easedAlpha)
+        
+        hrp.CFrame = CFrame.new(newPos)
+        hrp.Velocity = Vector3.new(0, 0, 0)
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        
+        task.wait(0.005)
+    end
+    
+    hrp.CFrame = CFrame.new(safeTargetPos)
+    hrp.Velocity = Vector3.new(0, 0, 0)
+    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    
+    task.wait(0.5)
+    
+    if isLastPoint then
+        local bodyVel = Instance.new("BodyVelocity")
+        bodyVel.Velocity = Vector3.new(0, 0, 0)
+        bodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bodyVel.Parent = hrp
+        
+        hasCompletedCycle = true
+        shouldContinueAfterRespawn = true
+        
+        Fluent:Notify({
+            Title = "Ponto Final Alcançado",
+            Content = "Aguardando respawn para continuar...",
+            Duration = 5
+        })
+    end
+    
+    task.wait(0.1)
+end
+
+local function startGoldFarm()
+    farmingGold = true
+    hasCompletedCycle = false
+    shouldContinueAfterRespawn = true
+    
+    task.spawn(function()
+        for i, point in ipairs(teleportPoints) do
+            if not farmingGold then break end
+            
+            local isLast = (i == #teleportPoints)
+            smoothTeleport(point, isLast)
+            task.wait(0.2)
+        end
+        
+        Fluent:Notify({
+            Title = "Aguardando Respawn",
+            Content = "Ciclo completo! Renasça para continuar.",
+            Duration = 5
+        })
+    end)
+end
+
+local function stopGoldFarm()
+    farmingGold = false
+    if farmLoop then
+        task.cancel(farmLoop)
+        farmLoop = nil
+    end
+    
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local hrp = character.HumanoidRootPart
+        
+        for _, obj in pairs(hrp:GetChildren()) do
+            if obj:IsA("BodyVelocity") or obj:IsA("BodyGyro") or obj:IsA("BodyPosition") then
+                obj:Destroy()
+            end
+        end
+        
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CanCollide = true
+            end
+        end
+        
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+            humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+        end
+    end
+end
+
+local GoldToggle = AutoFarmTab:AddToggle("FarmGold", {
+    Title = "Farmar Ouro",
+    Description = "Teleporta pelos pontos e coleta ouro automaticamente",
+    Default = false
+})
+
+GoldToggle:OnChanged(function(value)
+    if value then
+        hasCompletedCycle = false
+        startGoldFarm()
+        Fluent:Notify({
+            Title = "Auto Farm Ativado",
+            Content = "Farmando ouro automaticamente!",
+            Duration = 3
+        })
+    else
+        stopGoldFarm()
+        shouldContinueAfterRespawn = false
+        Fluent:Notify({
+            Title = "Auto Farm Desativado",
+            Content = "Farm de ouro parado.",
+            Duration = 3
+        })
+    end
+end)
+
+player.CharacterAdded:Connect(function(newCharacter)
+    task.wait(1)
+    
+    if shouldContinueAfterRespawn then
+        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+            task.wait(1)
+        end
+        
+        farmingGold = true
+        hasCompletedCycle = false
+        
+        Fluent:Notify({
+            Title = "Continuando Farm",
+            Content = "Reiniciando o ciclo após renascer!",
+            Duration = 3
+        })
+        
+        task.spawn(function()
+            for i, point in ipairs(teleportPoints) do
+                if not farmingGold then break end
+                
+                local isLast = (i == #teleportPoints)
+                smoothTeleport(point, isLast)
+                task.wait(0.2)
+            end
+        end)
+    end
+end)
