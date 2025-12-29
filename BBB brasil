@@ -306,6 +306,7 @@ Toggle:OnChanged(function()
         votingThread = task.spawn(function()
             while votingEnabled do
                 votePlayer(selectedPlayer)
+                task.wait()
             end
         end)
 
@@ -690,5 +691,6 @@ Fluent:Notify({
 })
 
 print("seloko, compensa dmsss")
+
 
 
