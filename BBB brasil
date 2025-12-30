@@ -1,3 +1,399 @@
+
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
+
+local LoadingGui = Instance.new("ScreenGui")
+LoadingGui.Name = "MangaHubLoading"
+LoadingGui.ResetOnSpawn = false
+LoadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+LoadingGui.Parent = CoreGui
+
+local LoadingFrame = Instance.new("Frame")
+LoadingFrame.Size = UDim2.fromScale(1, 1)
+LoadingFrame.Position = UDim2.fromScale(0, 0)
+LoadingFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+LoadingFrame.BorderSizePixel = 0
+LoadingFrame.Parent = LoadingGui
+
+local Container = Instance.new("Frame")
+Container.Size = UDim2.fromOffset(400, 200)
+Container.Position = UDim2.fromScale(0.5, 0.5)
+Container.AnchorPoint = Vector2.new(0.5, 0.5)
+Container.BackgroundTransparency = 1
+Container.Parent = LoadingFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.fromScale(1, 0.2)
+Title.Position = UDim2.fromScale(0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "MANGA HUB"
+Title.TextColor3 = Color3.fromRGB(255, 140, 0)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Container
+
+local Subtitle = Instance.new("TextLabel")
+Subtitle.Size = UDim2.fromScale(1, 0.15)
+Subtitle.Position = UDim2.fromScale(0, 0.22)
+Subtitle.BackgroundTransparency = 1
+Subtitle.Text = "BBB Brasil V4.7"
+Subtitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+Subtitle.TextSize = 18
+Subtitle.Font = Enum.Font.Gotham
+Subtitle.Parent = Container
+
+local ProgressBarBg = Instance.new("Frame")
+ProgressBarBg.Size = UDim2.fromOffset(380, 8)
+ProgressBarBg.Position = UDim2.fromScale(0.5, 0.6)
+ProgressBarBg.AnchorPoint = Vector2.new(0.5, 0.5)
+ProgressBarBg.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+ProgressBarBg.BorderSizePixel = 0
+ProgressBarBg.Parent = Container
+
+local ProgressBarBgCorner = Instance.new("UICorner")
+ProgressBarBgCorner.CornerRadius = UDim.new(1, 0)
+ProgressBarBgCorner.Parent = ProgressBarBg
+
+local ProgressBar = Instance.new("Frame")
+ProgressBar.Size = UDim2.fromOffset(0, 8)
+ProgressBar.Position = UDim2.fromScale(0, 0)
+ProgressBar.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+ProgressBar.BorderSizePixel = 0
+ProgressBar.Parent = ProgressBarBg
+
+local ProgressBarCorner = Instance.new("UICorner")
+ProgressBarCorner.CornerRadius = UDim.new(1, 0)
+ProgressBarCorner.Parent = ProgressBar
+
+local ProgressText = Instance.new("TextLabel")
+ProgressText.Size = UDim2.fromScale(1, 0.15)
+ProgressText.Position = UDim2.fromScale(0, 0.75)
+ProgressText.BackgroundTransparency = 1
+ProgressText.Text = "0%"
+ProgressText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ProgressText.TextSize = 24
+ProgressText.Font = Enum.Font.GothamBold
+ProgressText.Parent = Container
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Size = UDim2.fromScale(1, 0.1)
+StatusText.Position = UDim2.fromScale(0, 0.88)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "Inicializando..."
+StatusText.TextColor3 = Color3.fromRGB(150, 150, 150)
+StatusText.TextSize = 14
+StatusText.Font = Enum.Font.Gotham
+StatusText.Parent = Container
+
+local function animateLoading()
+    local startTime = tick()
+    local duration = 15
+    local messages = {
+        {progress = 0, text = "Inicializando..."},
+        {progress = 15, text = "Carregando interface..."},
+        {progress = 35, text = "Conectando aos servidores..."},
+        {progress = 55, text = "Preparando sistema de votação..."},
+        {progress = 75, text = "Configurando scripts..."},
+        {progress = 90, text = "Finalizando..."},
+        {progress = 100, text = "Completo!"}
+    }
+
+    local index = 1
+
+    while true do
+        local elapsed = tick() - startTime
+        local progress = math.min((elapsed / duration) * 100, 100)
+
+        ProgressBar.Size = UDim2.fromOffset((progress / 100) * 380, 8)
+        ProgressText.Text = math.floor(progress) .. "%"
+
+        if index <= #messages and progress >= messages[index].progress then
+            StatusText.Text = messages[index].text
+            index += 1
+        end
+
+        if progress >= 100 then
+            break
+        end
+
+        task.wait()
+    end
+
+    task.wait(0.5)
+
+    local tweenInfo = TweenInfo.new(0.8, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+    local tween = TweenService:Create(LoadingFrame, tweenInfo, {Position = UDim2.fromScale(0, 1)})
+    tween:Play()
+
+    tween.Completed:Connect(function()
+        LoadingGui:Destroy()
+    end)
+end
+
+task.spawn(animateLoading)
+
+task.wait(15)
+
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MangaHubMinimizeButton"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+local Button = Instance.new("TextButton")
+Button.Size = isMobile and UDim2.fromOffset(30, 30) or UDim2.fromOffset(50, 50)
+Button.Position = UDim2.new(0, 50, 0, 50)
+Button.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+Button.Text = "🥭"
+Button.TextScaled = true
+Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+Button.BorderSizePixel = 0
+Button.AnchorPoint = Vector2.new(0.5, 0.5)
+Button.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(1,0)
+UICorner.Parent = Button
+
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    Button.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+Button.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Button.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Button.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+getgenv().MangaHubWindow = nil
+local minimized = false
+
+Button.MouseButton1Click:Connect(function()
+    if getgenv().MangaHubWindow then
+        if minimized then
+            getgenv().MangaHubWindow:Show()
+            getgenv().MangaHubWindow.Frame.Visible = true
+            minimized = false
+        else
+            getgenv().MangaHubWindow:Minimize()
+            getgenv().MangaHubWindow.Frame.Visible = false
+            minimized = true
+        end
+    end
+end)
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(580, 460)
+local tabWidth = isMobile and 120 or 160
+
+local Window = Fluent:CreateWindow({
+    Title = "manga hub/V4.7/Brasil",
+    SubTitle = "BBB Brasil",
+    TabWidth = tabWidth,
+    Size = windowSize,
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+getgenv().MangaHubWindow = Window
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "Votação", Icon = "check-square" }),
+    Player = Window:AddTab({ Title = "Player", Icon = "user" }),
+    Teleport = Window:AddTab({ Title = "Teleport", Icon = "map-pin" }),
+    Evento = Window:AddTab({ Title = "Evento", Icon = "star" })
+}
+
+local Options = Fluent.Options
+local LocalPlayer = Players.LocalPlayer
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local VoteRemote = Remotes:WaitForChild("🌃🕋🚇☄")
+
+local selectedPlayer = nil
+local votingEnabled = false
+local votingThread = nil
+
+local function getPlayerList()
+    local list = { LocalPlayer.Name }
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            list[#list+1] = p.Name
+        end
+    end
+    return list
+end
+
+local function votePlayer(playerName)
+    if not playerName then return end
+    VoteRemote:FireServer(playerName, 5)
+end
+
+local Dropdown = Tabs.Main:AddDropdown("PlayerDropdown", {
+    Title = "Selecionar Jogador",
+    Values = getPlayerList(),
+    Multi = false,
+    Default = 1
+})
+
+Dropdown:OnChanged(function(value)
+    selectedPlayer = value
+end)
+
+Tabs.Main:AddButton({
+    Title = "Atualizar Lista",
+    Callback = function()
+        Dropdown:SetValues(getPlayerList())
+        Fluent:Notify({ Title = "Lista Atualizada", Content = "A lista de jogadores foi atualizada!", Duration = 3 })
+    end
+})
+
+local Toggle = Tabs.Main:AddToggle("VoteToggle", {
+    Title = "Votar nesta pessoa ( melhorado )",
+    Default = false
+})
+
+Toggle:OnChanged(function()
+    votingEnabled = Options.VoteToggle.Value
+
+    if votingEnabled then
+        if not selectedPlayer or selectedPlayer == "" then
+            Fluent:Notify({ Title = "Erro", Content = "Selecione um jogador primeiro!", Duration = 4 })
+            Options.VoteToggle:SetValue(false)
+            return
+        end
+
+        votingThread = task.spawn(function()
+            while votingEnabled do
+                votePlayer(selectedPlayer)
+                task.wait()
+            end
+        end)
+
+        Fluent:Notify({ Title = "Votação Iniciada", Content = "Votando em: " .. selectedPlayer, Duration = 3 })
+    else
+        Fluent:Notify({ Title = "Votação Parada", Content = "A votação foi interrompida!", Duration = 3 })
+    end
+end)
+
+Tabs.Main:AddParagraph({
+    Title = "Informações",
+    Content = "Use apenas em pessoas no paredão.\n\nQuando ativado:\n• 95% de chance da pessoa sair\n• 5% de chance de não sair"
+})
+
+local velocidadeValue = 16
+local speedEnabled = false
+local speedCoroutine = nil
+
+Tabs.Player:AddInput("Velocidade", {
+    Title = "Velocidade",
+    Default = "16",
+    Numeric = true,
+    Callback = function(Value)
+        velocidadeValue = tonumber(Value) or 16
+    end
+})
+
+Tabs.Player:AddToggle("PegarVelocidade", {
+    Title = "Pegar Velocidade",
+    Default = false,
+    Callback = function(Value)
+        speedEnabled = Value
+
+        if speedEnabled then
+            speedCoroutine = coroutine.create(function()
+                while speedEnabled do
+                    local char = LocalPlayer.Character
+                    local hum = char and char:FindFirstChild("Humanoid")
+                    if hum then hum.WalkSpeed = velocidadeValue end
+                    task.wait()
+                end
+            end)
+            coroutine.resume(speedCoroutine)
+
+            Fluent:Notify({ Title = "Velocidade Ativada", Content = "Velocidade: " .. velocidadeValue, Duration = 3 })
+        else
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+            if hum then hum.WalkSpeed = 16 end
+
+            Fluent:Notify({ Title = "Velocidade Desativada", Content = "Velocidade normal restaurada", Duration = 3 })
+        end
+    end
+})
+
+local selectedTpPlayer = nil
+
+local TpDropdown = Tabs.Teleport:AddDropdown("TpPlayerDropdown", {
+    Title = "Players",
+    Values = getPlayerList(),
+    Multi = false,
+    Default = 1
+})
+
+TpDropdown:OnChanged(function(Value)
+    selectedTpPlayer = Value
+end)
+
+Tabs.Teleport:AddButton({
+    Title = "Atualizar Lista",
+    Callback = function()
+        TpDropdown:SetValues(getPlayerList())
+        Fluent:Notify({ Title = "Lista Atualizada", Content = "Lista atualizada com sucesso", Duration = 3 })
+    end
+})
+
+Tabs.Teleport:AddButton({
+    Title = "TP para esse player",
+    Callback = function()
+        if not selectedTpPlayer or selectedTpPlayer == "" then
+            Fluent:Notify({ Title = "Erro", Content = "Selecione um jogador primeiro!", Duration = 4 })
+            return
+        end
+
+        local target = Players:FindFirstChild(selectedTpPlayer)
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and myRoot then
+            myRoot.CFrame = target.Character.HumanoidRootPart.CFrame
+            Fluent:Notify({ Title = "Teleportado", Content = "Você foi até " .. selectedTpPlayer, Duration = 3 })
+        else
+            Fluent:Notify({ Title = "Erro", Content = "Jogador inválido ou sem personagem", Duration = 4 })
+        end
+    end
+})
+
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
@@ -206,3 +602,4 @@ Tabs.Evento:AddParagraph({
     Title = "Informações Auto Lava",
     Content = "Esta função:\n- Te congela no lugar\n- Deleta automaticamente BolaDeFogo do model Lava\n- Você fica flutuando se o chão sumir"
 })
+
