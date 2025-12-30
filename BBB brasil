@@ -140,7 +140,7 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.fromScale(1, 0.08)
 Subtitle.Position = UDim2.fromScale(0, 0.59)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "BBB Brasil V4.7"
+Subtitle.Text = "BBB Brasil V4.8"
 Subtitle.TextColor3 = Color3.fromRGB(180, 180, 180)
 Subtitle.TextSize = 16
 Subtitle.Font = Enum.Font.GothamMedium
@@ -365,7 +365,7 @@ local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(5
 local tabWidth = isMobile and 120 or 160
 
 local Window = Fluent:CreateWindow({
-    Title = "manga hub/V4.7/Brasil",
+    Title = "manga hub/V4.8/Brasil",
     SubTitle = "BBB Brasil",
     TabWidth = tabWidth,
     Size = windowSize,
