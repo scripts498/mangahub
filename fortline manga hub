@@ -7,13 +7,11 @@ local lp = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
 
--- Detecta se é mobile
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
--- Ajusta tamanho da janela para Mobile/PC
 local windowSize
 if isMobile then
-    windowSize = UDim2.fromOffset(580, 460) -- pode ajustar se quiser maior no mobile
+    windowSize = UDim2.fromOffset(580, 460)
 else
     windowSize = UDim2.fromOffset(580, 460)
 end
@@ -26,10 +24,9 @@ local Window = Fluent:CreateWindow({
     Acrylic = true,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl,
-    MinimizeOnClose = false -- importante: evita que minimize automático ao clicar no X
+    MinimizeOnClose = false
 })
 
--- Override para minimizar somente ao apertar LeftControl
 Window.Minimized = false
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
@@ -55,14 +52,13 @@ local Tabs = {
 
 local Options = Fluent.Options
 
-local Players = game:GetService("Players")
 local RepStorage = game:GetService("ReplicatedStorage")
 local WeaponsRemote = RepStorage:WaitForChild("WeaponsSystem").Network.WeaponHit
-local lp = Players.LocalPlayer
 local isEquipped = false
 local killTask = nil
 local equipMonitor = nil
 local selectedPlayerName = nil
+local whitelistedPlayers = {}
 
 local function GetPlayerList()
     local options = {}
@@ -99,11 +95,66 @@ Tabs.Kill:AddButton({
     end
 })
 
+local WhitelistDropdown = Tabs.Kill:AddDropdown("WhitelistDropdown", {
+    Title = "Whitelist - Kill All",
+    Description = "Players protegidos do Kill All Loop",
+    Values = GetPlayerList(),
+    Multi = true,
+    Default = {},
+})
+
+WhitelistDropdown:OnChanged(function(Value)
+    whitelistedPlayers = Value
+    local count = 0
+    for _ in pairs(whitelistedPlayers) do
+        count = count + 1
+    end
+    if count > 0 then
+        local names = {}
+        for name, _ in pairs(whitelistedPlayers) do
+            table.insert(names, name)
+        end
+        Fluent:Notify({
+            Title = "Whitelist Atualizada",
+            Content = count .. " player(s) protegido(s): " .. table.concat(names, ", "),
+            Duration = 4
+        })
+    end
+end)
+
+Tabs.Kill:AddButton({
+    Title = "Atualizar Whitelist",
+    Description = "Atualiza a lista de whitelist",
+    Callback = function()
+        local newList = GetPlayerList()
+        WhitelistDropdown:SetValues(newList)
+        Fluent:Notify({
+            Title = "Whitelist Atualizada",
+            Content = "Lista de whitelist atualizada!",
+            Duration = 3
+        })
+    end
+})
+
+Tabs.Kill:AddButton({
+    Title = "Limpar Whitelist",
+    Description = "Remove todos da whitelist",
+    Callback = function()
+        whitelistedPlayers = {}
+        WhitelistDropdown:SetValue({})
+        Fluent:Notify({
+            Title = "Whitelist Limpa",
+            Content = "Todos removidos da whitelist!",
+            Duration = 3
+        })
+    end
+})
+
 local DelaySlider = Tabs.Kill:AddSlider("KillDelay", {
     Title = "Delay (segundos)",
     Description = "Intervalo entre ataques",
-    Default = 0.05,
-    Min = 0.05,
+    Default = 0,
+    Min = 0,
     Max = 2,
     Rounding = 2,
     Callback = function(Value)
@@ -150,7 +201,9 @@ local function StartKillLoop(tool, targetName)
             if getgenv().KillAllLoop then
                 for _, plr in pairs(Players:GetPlayers()) do
                     if plr ~= lp and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") then
-                        table.insert(targets, plr)
+                        if not whitelistedPlayers[plr.Name] then
+                            table.insert(targets, plr)
+                        end
                     end
                 end
             elseif getgenv().KillSelectedLoop and selectedPlayerName then
@@ -221,8 +274,6 @@ KillAllToggle:OnChanged(function()
     end
 end)
 
-
-
 local KillSelectedToggle = Tabs.Kill:AddToggle("KillSelected", {
     Title = "Loop Kill Player Selecionado",
     Description = "Elimina o jogador selecionado",
@@ -266,6 +317,88 @@ KillSelectedToggle:OnChanged(function()
     end
 end)
 
+local KillOnceToggle = Tabs.Kill:AddToggle("KillOnce", {
+    Title = "Matar Jogador (1x)",
+    Description = "Elimina o jogador selecionado uma vez",
+    Default = false
+})
+
+KillOnceToggle:OnChanged(function()
+    local Value = Options.KillOnce.Value
+    
+    if Value then
+        if not selectedPlayerName then
+            Options.KillOnce:SetValue(false)
+            Fluent:Notify({
+                Title = "Aviso",
+                Content = "Nenhum jogador selecionado!",
+                Duration = 3
+            })
+            return
+        end
+        
+        local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
+        
+        if not tool then
+            Options.KillOnce:SetValue(false)
+            Fluent:Notify({
+                Title = "Erro",
+                Content = "Sniper não encontrado!",
+                Duration = 3
+            })
+            return
+        end
+        
+        if lp.Character and lp.Character:FindFirstChild("Humanoid") then
+            lp.Character.Humanoid:EquipTool(tool)
+        end
+        
+        task.wait(0.1)
+        
+        local target = Players:FindFirstChild(selectedPlayerName)
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and target.Character:FindFirstChild("Humanoid") then
+            local hrp = target.Character:FindFirstChild("HumanoidRootPart")
+            
+            local args = {
+                [1] = tool,
+                [2] = {
+                    ["p"] = hrp.Position,
+                    ["pid"] = 1,
+                    ["part"] = hrp,
+                    ["d"] = 17.5,
+                    ["maxDist"] = 17.5,
+                    ["h"] = target.Character.Humanoid,
+                    ["m"] = Enum.Material.Plastic,
+                    ["sid"] = 14,
+                    ["t"] = tick(),
+                    ["n"] = Vector3.new(0, 0, -1)
+                }
+            }
+            
+            pcall(function() WeaponsRemote:FireServer(unpack(args)) end)
+            
+            Fluent:Notify({
+                Title = "Ataque Executado",
+                Content = "Atacou " .. selectedPlayerName .. " uma vez!",
+                Duration = 3
+            })
+        else
+            Fluent:Notify({
+                Title = "Erro",
+                Content = "Jogador não encontrado ou inválido!",
+                Duration = 3
+            })
+        end
+        
+        task.wait(0.1)
+        if lp.Character and lp.Character:FindFirstChild("Humanoid") then
+            lp.Character.Humanoid:UnequipTools()
+        end
+        
+        Options.KillOnce:SetValue(false)
+    end
+end)
+
 Tabs.Kill:AddButton({
     Title = "Hitbox Expander",
     Description = "Aumenta o hitbox dos players",
@@ -275,7 +408,6 @@ Tabs.Kill:AddButton({
         end)
     end
 })
-
 
 Tabs.Settings:AddParagraph({
     Title = "Sobre o Manga Hub",
