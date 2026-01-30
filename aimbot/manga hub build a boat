@@ -1,10 +1,11 @@
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
+local Workspace = game:GetService("Workspace")
 
 if game.GameId ~= 210851291 then
 	pcall(function()
-		Players.LocalPlayer:Kick("este script só funciona no Build a boat.")
+		Players.LocalPlayer:Kick("este script só funciona no Build a Boat.")
 	end)
 	return
 end
@@ -31,67 +32,15 @@ local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(1, 0)
 UICorner.Parent = Button
 
-local dragging, dragInput, dragStart, startPos
-local function update(input)
-	local delta = input.Position - dragStart
-	Button.Position = UDim2.new(
-		startPos.X.Scale, startPos.X.Offset + delta.X,
-		startPos.Y.Scale, startPos.Y.Offset + delta.Y
-	)
-end
-
-Button.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = Button.Position
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
-	end
-end)
-
-Button.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		dragInput = input
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
-		update(input)
-	end
-end)
-
-getgenv().MangaHubWindow = nil
-local minimized = false
-
-Button.MouseButton1Click:Connect(function()
-	if getgenv().MangaHubWindow then
-		if minimized then
-			getgenv().MangaHubWindow:Show()
-			getgenv().MangaHubWindow.Frame.Visible = true
-			minimized = false
-		else
-			getgenv().MangaHubWindow:Minimize()
-			getgenv().MangaHubWindow.Frame.Visible = false
-			minimized = true
-		end
-	end
-end)
-
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-
-local windowSize = isMobile and UDim2.fromOffset(400, 350) or UDim2.fromOffset(580, 460)
-local tabWidth = isMobile and 120 or 160
+local Fluent = loadstring(game:HttpGet(
+	"https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
+))()
 
 local Window = Fluent:CreateWindow({
 	Title = "Manga Hub",
 	SubTitle = "Proteções",
-	TabWidth = tabWidth,
-	Size = windowSize,
+	TabWidth = isMobile and 120 or 160,
+	Size = isMobile and UDim2.fromOffset(400, 350) or UDim2.fromOffset(580, 460),
 	Acrylic = true,
 	Theme = "Dark",
 	MinimizeKey = Enum.KeyCode.LeftControl
@@ -105,19 +54,78 @@ local Tabs = {
 
 local Options = Fluent.Options
 
-local function getWater()
-	return workspace:FindFirstChild("Water", true)
+local WaterCache = {}
+local AntiWaterEnabled = false
+local DescendantConnection
+
+local function neutralizeWater(part)
+	if not part:IsA("BasePart") then return end
+	if part.Name ~= "Water" then return end
+
+	-- salva estado original
+	if not WaterCache[part] then
+		WaterCache[part] = {
+			CanTouch = part.CanTouch,
+			CanCollide = part.CanCollide,
+			Transparency = part.Transparency
+		}
+	end
+
+	part.CanTouch = false
+	part.CanCollide = false
+	part.Transparency = 1
+
+	for _, child in ipairs(part:GetChildren()) do
+		if child:IsA("TouchInterest") then
+			child:Destroy()
+		end
+	end
 end
 
-Tabs.Mar:AddToggle("NoSeaDeath", {
-	Title = "Não morrer pro mar",
+local function restoreWater()
+	for part, state in pairs(WaterCache) do
+		if part and part.Parent then
+			part.CanTouch = state.CanTouch
+			part.CanCollide = state.CanCollide
+			part.Transparency = state.Transparency
+		end
+	end
+	table.clear(WaterCache)
+end
+
+local function applyToAllWater()
+	for _, obj in ipairs(Workspace:GetDescendants()) do
+		if obj:IsA("BasePart") and obj.Name == "Water" then
+			neutralizeWater(obj)
+		end
+	end
+end
+
+local function onNewDescendant(obj)
+	if not AntiWaterEnabled then return end
+	if obj:IsA("BasePart") and obj.Name == "Water" then
+		task.wait()
+		neutralizeWater(obj)
+	end
+end
+
+Tabs.Mar:AddToggle("NoWaterDamage", {
+	Title = "Desativar Water (sem dano)",
 	Default = false
 })
 
-Options.NoSeaDeath:OnChanged(function(Value)
-	local water = getWater()
-	if water and water:IsA("BasePart") then
-		water.CanTouch = not Value
+Options.NoWaterDamage:OnChanged(function(Value)
+	AntiWaterEnabled = Value
+
+	if Value then
+		applyToAllWater()
+		DescendantConnection = Workspace.DescendantAdded:Connect(onNewDescendant)
+	else
+		restoreWater()
+		if DescendantConnection then
+			DescendantConnection:Disconnect()
+			DescendantConnection = nil
+		end
 	end
 end)
 
@@ -125,6 +133,6 @@ Window:SelectTab(1)
 
 Fluent:Notify({
 	Title = "Manga Hub",
-	Content = "Script carregado com sucesso!",
+	Content = "Water neutralizado com sucesso!",
 	Duration = 5
 })
