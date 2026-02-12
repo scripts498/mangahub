@@ -561,17 +561,25 @@ Toggle:OnChanged(function()
         end
 
         votingThread = task.spawn(function()
-            while votingEnabled do
-                votePlayer(selectedPlayer)
-                task.wait()
-            end
+            local connection
+            connection = RunService.Heartbeat:Connect(function()
+                if not votingEnabled then 
+                    connection:Disconnect()
+                    return 
+                end
+                for i = 1, 7 do
+                    votePlayer(selectedPlayer)
+                end
+            end)
         end)
 
-        Fluent:Notify({ Title = "Votação Iniciada", Content = "Votando em: " .. selectedPlayer, Duration = 3 })
+        Fluent:Notify({ Title = "Votação Iniciada", Content = "Votando RÁPIDO em: " .. selectedPlayer, Duration = 3 })
     else
+        votingEnabled = false
         Fluent:Notify({ Title = "Votação Parada", Content = "A votação foi interrompida!", Duration = 3 })
     end
 end)
+
 
 Tabs.Main:AddParagraph({
     Title = "Informações",
@@ -868,4 +876,5 @@ Tabs.Evento:AddParagraph({
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
+
 
