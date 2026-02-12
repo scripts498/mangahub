@@ -671,8 +671,11 @@ Tabs.Teleport:AddButton({
 local autoJogoEnabled = false
 local detectionPart = nil
 local processed = {}
-local DETECTION_SIZE = Vector3.new(14, 10, 1200)
-local DETECTION_OFFSET = Vector3.new(0, 3, 0)
+local lastFireTime = 0
+local FIRE_COOLDOWN = 0.1
+
+local DETECTION_SIZE = Vector3.new(14, 6, 1200)
+local DETECTION_OFFSET = Vector3.new(0, 1, 0)
 local CHECK_INTERVAL = 0.05
 
 local frutas = {
@@ -691,6 +694,10 @@ local function ehFruta(nome)
 end
 
 local function baterNaFruta()
+    local now = tick()
+    if now - lastFireTime < FIRE_COOLDOWN then return end
+    lastFireTime = now
+    
     local minigame = Workspace:FindFirstChild("MinigameCrazykitchen")
     if not minigame then return end
     local remote = minigame:FindFirstChild("🍎2")
@@ -723,16 +730,31 @@ local function criarDetectionPart()
     part.Size = DETECTION_SIZE
     part.Parent = Workspace
     detectionPart = part
+    
+    detectionPart.CFrame = hrp.CFrame * CFrame.new(DETECTION_OFFSET)
 end
 
 local overlapParams = OverlapParams.new()
 overlapParams.FilterType = Enum.RaycastFilterType.Blacklist
+overlapParams.MaxParts = 100
+
 local lastCheck = 0
 local connection
 
+local function limparProcessedAntigos()
+    for part, _ in pairs(processed) do
+        if not part or not part.Parent then
+            processed[part] = nil
+        end
+    end
+end
+
 local function startDetection()
+    if connection then return end
+    
     connection = RunService.Heartbeat:Connect(function(dt)
         if not autoJogoEnabled or not detectionPart then return end
+        
         lastCheck += dt
         if lastCheck < CHECK_INTERVAL then return end
         lastCheck = 0
@@ -741,15 +763,27 @@ local function startDetection()
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
-        detectionPart.CFrame = hrp.CFrame * CFrame.new(DETECTION_OFFSET)
-        overlapParams.FilterDescendantsInstances = { char }
+        local pos = hrp.Position + Vector3.new(0, DETECTION_OFFSET.Y, 0)
+        detectionPart.CFrame = CFrame.new(pos) * CFrame.Angles(0, math.atan2(hrp.CFrame.LookVector.X, hrp.CFrame.LookVector.Z), 0)
+        
+        overlapParams.FilterDescendantsInstances = { char, detectionPart }
         local parts = Workspace:GetPartsInPart(detectionPart, overlapParams)
 
+        local acertouAlgo = false
+        
         for _, part in ipairs(parts) do
-            if not processed[part] and ehFruta(part.Name) then
+            if not processed[part] and part.Parent and ehFruta(part.Name) then
                 processed[part] = true
-                baterNaFruta()
+                acertouAlgo = true
             end
+        end
+        
+        if acertouAlgo then
+            baterNaFruta()
+        end
+        
+        if math.random() < 0.05 then
+            limparProcessedAntigos()
         end
     end)
 end
@@ -760,11 +794,12 @@ local function stopDetection()
         connection = nil
     end
     processed = {}
+    lastFireTime = 0
     removerDetectionPart()
 end
 
 Tabs.Evento:AddToggle("AutoJogoToggle", {
-    Title = "Auto Jogo de Bater em Fruta (quebrado, mas vai ser atualizado)",
+    Title = "Auto Jogo de Bater em Fruta",
     Default = false,
     Callback = function(Value)
         autoJogoEnabled = Value
@@ -876,5 +911,6 @@ Tabs.Evento:AddParagraph({
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
+
 
 
