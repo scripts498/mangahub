@@ -319,7 +319,7 @@ local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.fromScale(1, 0.08)
 Subtitle.Position = UDim2.fromScale(0, 0.52)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "BBB BRASIL V4.8 • PREMIUM EDITION"
+Subtitle.Text = "BBB BRASIL V5.0 • PREMIUM EDITION"
 Subtitle.TextColor3 = Color3.fromRGB(180, 180, 200)
 Subtitle.TextSize = 18
 Subtitle.Font = Enum.Font.GothamBold
@@ -580,6 +580,8 @@ UserInputService.InputChanged:Connect(function(input)
         }):Play()
     end
 end)
+
+wait("1.2")
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -1069,6 +1071,7 @@ Tabs.Evento:AddParagraph({
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
+
 
 
 
