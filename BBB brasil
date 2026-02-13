@@ -848,29 +848,7 @@ Tabs.Teleport:AddButton({
 })
 
 local autoJogoEnabled = false
-local detectionPart = nil
-local processed = {}
-local DEBOUNCE_TIME = 0.5
-
-local DETECTION_SIZE = Vector3.new(14, 6, 1200)
-local DETECTION_OFFSET = Vector3.new(0, 1, 0)
-
-local frutas = {
-    banana=true, orange=true, apple=true, grape=true, watermelon=true,
-    strawberry=true, pineapple=true, mango=true, cherry=true, lemon=true,
-    peach=true, pear=true, kiwi=true,
-    laranja=true, maca=true, uva=true, melancia=true, morango=true,
-    abacaxi=true, manga=true, cereja=true, limao=true, pessego=true, pera=true
-}
-
-local function ehFruta(nome)
-    nome = string.lower(nome)
-    if nome == "bomb" or string.find(nome, "^bomb$") then return false end
-    for fruta, _ in pairs(frutas) do
-        if string.find(nome, fruta) then return true end
-    end
-    return false
-end
+local fireThread = nil
 
 local function baterNaFruta()
     local minigame = Workspace:FindFirstChild("MinigameCrazykitchen")
@@ -881,98 +859,27 @@ local function baterNaFruta()
     end
 end
 
-local function removerDetectionPart()
-    if detectionPart then
-        detectionPart:Destroy()
-        detectionPart = nil
-    end
-end
-
-local function criarDetectionPart()
-    removerDetectionPart()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    local part = Instance.new("Part")
-    part.Name = "FruitDetector"
-    part.Anchored = true
-    part.CanCollide = false
-    part.Transparency = 0.65
-    part.Material = Enum.Material.Neon
-    part.Color = Color3.fromRGB(0, 120, 255)
-    part.Size = DETECTION_SIZE
-    part.Parent = Workspace
-    detectionPart = part
-    
-    detectionPart.CFrame = hrp.CFrame * CFrame.new(DETECTION_OFFSET)
-end
-
-local overlapParams = OverlapParams.new()
-overlapParams.FilterType = Enum.RaycastFilterType.Blacklist
-
-local connection
-
-local function startDetection()
-    if connection then return end
-    
-    connection = RunService.Heartbeat:Connect(function()
-        if not autoJogoEnabled or not detectionPart then return end
-
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        detectionPart.CFrame = hrp.CFrame * CFrame.new(DETECTION_OFFSET)
-        
-        overlapParams.FilterDescendantsInstances = {char, detectionPart}
-        local parts = Workspace:GetPartsInPart(detectionPart, overlapParams)
-        
-        local agora = tick()
-        
-        for _, part in ipairs(parts) do
-            local nome = part.Name
-            local ultimoProcessado = processed[part]
-            
-            if (not ultimoProcessado or agora - ultimoProcessado > DEBOUNCE_TIME) and ehFruta(nome) then
-                processed[part] = agora
-                baterNaFruta()
-            end
-        end
-        
-        for part, tempo in pairs(processed) do
-            if agora - tempo > DEBOUNCE_TIME * 2 then
-                processed[part] = nil
-            end
-        end
-    end)
-end
-
-local function stopDetection()
-    if connection then
-        connection:Disconnect()
-        connection = nil
-    end
-    processed = {}
-    removerDetectionPart()
-end
-
 Tabs.Evento:AddToggle("AutoJogoToggle", {
-    Title = "Auto Jogo de Bater em Fruta",
+    Title = "Auto Jogo da cozinha",
     Default = false,
     Callback = function(Value)
         autoJogoEnabled = Value
+        
         if autoJogoEnabled then
-            criarDetectionPart()
-            startDetection()
+            fireThread = task.spawn(function()
+                while autoJogoEnabled do
+                    baterNaFruta()
+                    task.wait(0.06)
+                end
+            end)
+            
             Fluent:Notify({
                 Title = "Auto Jogo Ativado",
-                Content = "Detectando frutas automaticamente.",
+                Content = "Fire automático a cada 0.06s!",
                 Duration = 3
             })
         else
-            stopDetection()
+            autoJogoEnabled = false
             Fluent:Notify({
                 Title = "Auto Jogo Desativado",
                 Content = "Auto jogo desligado.",
@@ -980,11 +887,6 @@ Tabs.Evento:AddToggle("AutoJogoToggle", {
             })
         end
     end
-})
-
-Tabs.Evento:AddParagraph({
-    Title = "Informações",
-    Content = "Ele bate nas frutas automaticamente, ignorando as bombas."
 })
 
 local autoLavaEnabled = false
@@ -1071,6 +973,7 @@ Tabs.Evento:AddParagraph({
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
+
 
 
 
