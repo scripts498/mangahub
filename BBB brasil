@@ -581,7 +581,7 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-wait("1.2")
+task.wait(1)
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -1071,6 +1071,7 @@ Tabs.Evento:AddParagraph({
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
+
 
 
 
