@@ -746,7 +746,7 @@ Toggle:OnChanged(function()
                     connection:Disconnect()
                     return 
                 end
-                for i = 1, 7 do
+                for i = 1, 10 do
                     votePlayer(selectedPlayer)
                 end
             end)
@@ -1071,6 +1071,7 @@ Tabs.Evento:AddParagraph({
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
+
 
 
 
