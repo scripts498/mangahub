@@ -6,60 +6,93 @@ local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
--- ============================================
--- TELA DE CARREGAMENTO MELHORADA
--- ============================================
-
 local LoadingGui = Instance.new("ScreenGui")
-LoadingGui.Name = "MangaHubLoading"
+LoadingGui.Name = "MangaHubLoadingV2"
 LoadingGui.ResetOnSpawn = false
 LoadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-LoadingGui.IgnoreGuiInset = true -- CORRIGE O BUG DA BORDA
+LoadingGui.IgnoreGuiInset = true
 LoadingGui.Parent = CoreGui
 
 local LoadingFrame = Instance.new("Frame")
 LoadingFrame.Size = UDim2.fromScale(1, 1)
 LoadingFrame.Position = UDim2.fromScale(0, 0)
-LoadingFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
+LoadingFrame.BackgroundColor3 = Color3.fromRGB(5, 5, 8)
 LoadingFrame.BorderSizePixel = 0
 LoadingFrame.Parent = LoadingGui
 
--- Gradiente animado de fundo
-local Gradient = Instance.new("UIGradient")
-Gradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(10, 8, 15)),
-    ColorSequenceKeypoint.new(0.3, Color3.fromRGB(30, 15, 35)),
-    ColorSequenceKeypoint.new(0.6, Color3.fromRGB(15, 10, 25)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 8, 15))
-}
-Gradient.Rotation = 45
-Gradient.Parent = LoadingFrame
+local MeshGradient1 = Instance.new("Frame")
+MeshGradient1.Size = UDim2.fromScale(1.5, 1.5)
+MeshGradient1.Position = UDim2.fromScale(0.5, 0.5)
+MeshGradient1.AnchorPoint = Vector2.new(0.5, 0.5)
+MeshGradient1.BackgroundColor3 = Color3.fromRGB(255, 100, 0)
+MeshGradient1.BackgroundTransparency = 0.7
+MeshGradient1.BorderSizePixel = 0
+MeshGradient1.Parent = LoadingFrame
 
--- Animar o gradiente
+local MeshGradient1Corner = Instance.new("UICorner")
+MeshGradient1Corner.CornerRadius = UDim.new(1, 0)
+MeshGradient1Corner.Parent = MeshGradient1
+
+local MeshGradient2 = Instance.new("Frame")
+MeshGradient2.Size = UDim2.fromScale(1.2, 1.2)
+MeshGradient2.Position = UDim2.fromScale(0.3, 0.7)
+MeshGradient2.AnchorPoint = Vector2.new(0.5, 0.5)
+MeshGradient2.BackgroundColor3 = Color3.fromRGB(150, 0, 255)
+MeshGradient2.BackgroundTransparency = 0.8
+MeshGradient2.BorderSizePixel = 0
+MeshGradient2.Parent = LoadingFrame
+
+local MeshGradient2Corner = Instance.new("UICorner")
+MeshGradient2Corner.CornerRadius = UDim.new(1, 0)
+MeshGradient2Corner.Parent = MeshGradient2
+
+local MeshGradient3 = Instance.new("Frame")
+MeshGradient3.Size = UDim2.fromScale(0.8, 0.8)
+MeshGradient3.Position = UDim2.fromScale(0.8, 0.3)
+MeshGradient3.AnchorPoint = Vector2.new(0.5, 0.5)
+MeshGradient3.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+MeshGradient3.BackgroundTransparency = 0.85
+MeshGradient3.BorderSizePixel = 0
+MeshGradient3.Parent = LoadingFrame
+
+local MeshGradient3Corner = Instance.new("UICorner")
+MeshGradient3Corner.CornerRadius = UDim.new(1, 0)
+MeshGradient3Corner.Parent = MeshGradient3
+
 task.spawn(function()
     while LoadingFrame.Parent do
-        for i = 0, 360, 2 do
-            if not LoadingFrame.Parent then break end
-            Gradient.Rotation = i
-            task.wait(0.03)
-        end
+        local tween1 = TweenService:Create(MeshGradient1, TweenInfo.new(8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.fromScale(math.random(30, 70)/100, math.random(30, 70)/100),
+            Rotation = math.random(0, 360)
+        })
+        local tween2 = TweenService:Create(MeshGradient2, TweenInfo.new(10, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.fromScale(math.random(20, 80)/100, math.random(20, 80)/100),
+            Rotation = math.random(0, 360)
+        })
+        local tween3 = TweenService:Create(MeshGradient3, TweenInfo.new(12, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.fromScale(math.random(20, 80)/100, math.random(20, 80)/100),
+            Rotation = math.random(0, 360)
+        })
+        tween1:Play()
+        tween2:Play()
+        tween3:Play()
+        task.wait(4)
     end
 end)
 
--- Partículas flutuantes melhoradas
 local ParticleContainer = Instance.new("Frame")
 ParticleContainer.Size = UDim2.fromScale(1, 1)
 ParticleContainer.Position = UDim2.fromScale(0, 0)
 ParticleContainer.BackgroundTransparency = 1
 ParticleContainer.Parent = LoadingFrame
 
-for i = 1, 30 do
+local function createParticle()
     local particle = Instance.new("Frame")
-    local size = math.random(3, 8)
+    local size = math.random(2, 6)
     particle.Size = UDim2.fromOffset(size, size)
-    particle.Position = UDim2.fromScale(math.random(), math.random())
-    particle.BackgroundColor3 = Color3.fromRGB(255, 140 + math.random(-20, 20), math.random(0, 30))
-    particle.BackgroundTransparency = math.random(70, 85) / 100
+    particle.Position = UDim2.fromScale(math.random(), 1.1)
+    particle.BackgroundColor3 = Color3.fromHSV(math.random(0, 40)/360, 0.8, 1)
+    particle.BackgroundTransparency = math.random(40, 70) / 100
     particle.BorderSizePixel = 0
     particle.Parent = ParticleContainer
     
@@ -67,216 +100,317 @@ for i = 1, 30 do
     corner.CornerRadius = UDim.new(1, 0)
     corner.Parent = particle
     
-    -- Animação de partículas mais suave
+    local trail = Instance.new("Frame")
+    trail.Size = UDim2.fromOffset(size * 0.6, size * 3)
+    trail.Position = UDim2.fromScale(0.5, 0.5)
+    trail.AnchorPoint = Vector2.new(0.5, 0.5)
+    trail.BackgroundColor3 = particle.BackgroundColor3
+    trail.BackgroundTransparency = 0.9
+    trail.BorderSizePixel = 0
+    trail.Rotation = 180
+    trail.Parent = particle
+    
+    local trailCorner = Instance.new("UICorner")
+    trailCorner.CornerRadius = UDim.new(1, 0)
+    trailCorner.Parent = trail
+    
+    local duration = math.random(3, 6)
+    local tween = TweenService:Create(particle, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Position = UDim2.fromScale(particle.Position.X.Scale, -0.1),
+        BackgroundTransparency = 1
+    })
+    tween:Play()
+    
+    TweenService:Create(trail, TweenInfo.new(duration), {
+        BackgroundTransparency = 1
+    }):Play()
+    
+    tween.Completed:Connect(function()
+        particle:Destroy()
+    end)
+end
+
+task.spawn(function()
+    while LoadingFrame.Parent do
+        createParticle()
+        task.wait(0.05)
+    end
+end)
+
+local GlassContainer = Instance.new("Frame")
+GlassContainer.Size = UDim2.fromOffset(600, 400)
+GlassContainer.Position = UDim2.fromScale(0.5, 0.5)
+GlassContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+GlassContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+GlassContainer.BackgroundTransparency = 0.1
+GlassContainer.BorderSizePixel = 0
+GlassContainer.ClipsDescendants = true
+GlassContainer.Parent = LoadingFrame
+
+local GlassCorner = Instance.new("UICorner")
+GlassCorner.CornerRadius = UDim.new(0, 30)
+GlassCorner.Parent = GlassContainer
+
+local GlassStroke = Instance.new("UIStroke")
+GlassStroke.Color = Color3.fromRGB(255, 140, 0)
+GlassStroke.Thickness = 2
+GlassStroke.Transparency = 0.3
+GlassStroke.Parent = GlassContainer
+
+local GlassGradient = Instance.new("UIGradient")
+GlassGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 200, 220)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
+}
+GlassGradient.Rotation = 45
+GlassGradient.Parent = GlassContainer
+
+local NeonGlow = Instance.new("ImageLabel")
+NeonGlow.Size = UDim2.fromScale(1.4, 1.4)
+NeonGlow.Position = UDim2.fromScale(0.5, 0.5)
+NeonGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+NeonGlow.BackgroundTransparency = 1
+NeonGlow.Image = "rbxassetid://5028857084"
+NeonGlow.ImageColor3 = Color3.fromRGB(255, 140, 0)
+NeonGlow.ImageTransparency = 0.7
+NeonGlow.ZIndex = 0
+NeonGlow.Parent = GlassContainer
+
+task.spawn(function()
+    while NeonGlow.Parent do
+        TweenService:Create(NeonGlow, TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            ImageTransparency = 0.5,
+            Size = UDim2.fromScale(1.5, 1.5)
+        }):Play()
+        task.wait(3)
+        TweenService:Create(NeonGlow, TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            ImageTransparency = 0.8,
+            Size = UDim2.fromScale(1.3, 1.3)
+        }):Play()
+        task.wait(3)
+    end
+end)
+
+local HolographicRing = Instance.new("Frame")
+HolographicRing.Size = UDim2.fromOffset(180, 180)
+HolographicRing.Position = UDim2.fromScale(0.5, 0.22)
+HolographicRing.AnchorPoint = Vector2.new(0.5, 0.5)
+HolographicRing.BackgroundTransparency = 1
+HolographicRing.Parent = GlassContainer
+
+for i = 1, 3 do
+    local ring = Instance.new("Frame")
+    ring.Size = UDim2.fromScale(1, 1)
+    ring.Position = UDim2.fromScale(0.5, 0.5)
+    ring.AnchorPoint = Vector2.new(0.5, 0.5)
+    ring.BackgroundTransparency = 1
+    ring.BorderSizePixel = 0
+    ring.Parent = HolographicRing
+    
+    local ringStroke = Instance.new("UIStroke")
+    ringStroke.Color = Color3.fromRGB(255, 140, 0)
+    ringStroke.Thickness = 2
+    ringStroke.Transparency = 0.7 - (i * 0.2)
+    ringStroke.Parent = ring
+    
+    local ringCorner = Instance.new("UICorner")
+    ringCorner.CornerRadius = UDim.new(1, 0)
+    ringCorner.Parent = ring
+    
     task.spawn(function()
-        while particle.Parent do
-            local duration = math.random(4, 8)
-            local tween = TweenService:Create(particle, 
-                TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), 
-                {
-                    Position = UDim2.fromScale(math.random(), math.random()),
-                    BackgroundTransparency = math.random(60, 90) / 100
-                }
-            )
-            tween:Play()
-            tween.Completed:Wait()
+        while HolographicRing.Parent do
+            local delay = i * 0.3
+            task.wait(delay)
+            TweenService:Create(ring, TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                Size = UDim2.fromScale(1.5, 1.5),
+                Rotation = 180
+            }):Play()
+            TweenService:Create(ringStroke, TweenInfo.new(2), {
+                Transparency = 1
+            }):Play()
+            task.wait(2)
+            ring.Size = UDim2.fromScale(0.5, 0.5)
+            ringStroke.Transparency = 0.7 - (i * 0.2)
+            TweenService:Create(ring, TweenInfo.new(0.5), {
+                Size = UDim2.fromScale(1, 1),
+                Rotation = 0
+            }):Play()
         end
     end)
 end
 
--- Container principal com efeitos aprimorados
-local Container = Instance.new("Frame")
-Container.Size = UDim2.fromOffset(520, 320)
-Container.Position = UDim2.fromScale(0.5, 0.5)
-Container.AnchorPoint = Vector2.new(0.5, 0.5)
-Container.BackgroundColor3 = Color3.fromRGB(18, 18, 25)
-Container.BackgroundTransparency = 0.2
-Container.BorderSizePixel = 0
-Container.Parent = LoadingFrame
+local LogoContainer = Instance.new("Frame")
+LogoContainer.Size = UDim2.fromOffset(140, 140)
+LogoContainer.Position = UDim2.fromScale(0.5, 0.22)
+LogoContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+LogoContainer.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+LogoContainer.BorderSizePixel = 0
+LogoContainer.Parent = GlassContainer
 
-local ContainerCorner = Instance.new("UICorner")
-ContainerCorner.CornerRadius = UDim.new(0, 25)
-ContainerCorner.Parent = Container
+local LogoContainerCorner = Instance.new("UICorner")
+LogoContainerCorner.CornerRadius = UDim.new(0, 35)
+LogoContainerCorner.Parent = LogoContainer
 
--- Borda brilhante animada
-local ContainerStroke = Instance.new("UIStroke")
-ContainerStroke.Color = Color3.fromRGB(255, 140, 0)
-ContainerStroke.Thickness = 3
-ContainerStroke.Transparency = 0.3
-ContainerStroke.Parent = Container
+local LogoGlow = Instance.new("UIStroke")
+LogoGlow.Color = Color3.fromRGB(255, 200, 100)
+LogoGlow.Thickness = 4
+LogoGlow.Transparency = 0.3
+LogoGlow.Parent = LogoContainer
 
-task.spawn(function()
-    while Container.Parent do
-        TweenService:Create(ContainerStroke, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Transparency = 0.1
-        }):Play()
-        task.wait(2)
-        TweenService:Create(ContainerStroke, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Transparency = 0.6
-        }):Play()
-        task.wait(2)
-    end
-end)
-
--- Efeito de brilho ao fundo
-local Glow = Instance.new("ImageLabel")
-Glow.Size = UDim2.fromScale(1.3, 1.3)
-Glow.Position = UDim2.fromScale(0.5, 0.5)
-Glow.AnchorPoint = Vector2.new(0.5, 0.5)
-Glow.BackgroundTransparency = 1
-Glow.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
-Glow.ImageColor3 = Color3.fromRGB(255, 140, 0)
-Glow.ImageTransparency = 0.85
-Glow.ZIndex = 0
-Glow.Parent = Container
-
--- Logo com animação mais elaborada
 local Logo = Instance.new("TextLabel")
-Logo.Size = UDim2.fromOffset(130, 130)
-Logo.Position = UDim2.fromScale(0.5, 0.14)
-Logo.AnchorPoint = Vector2.new(0.5, 0)
-Logo.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+Logo.Size = UDim2.fromScale(1, 1)
+Logo.BackgroundTransparency = 1
 Logo.Text = "🥭"
 Logo.TextScaled = true
 Logo.TextColor3 = Color3.fromRGB(255, 255, 255)
-Logo.BorderSizePixel = 0
-Logo.Parent = Container
-
-local LogoCorner = Instance.new("UICorner")
-LogoCorner.CornerRadius = UDim.new(0, 30)
-LogoCorner.Parent = Logo
-
-local LogoStroke = Instance.new("UIStroke")
-LogoStroke.Color = Color3.fromRGB(200, 100, 0)
-LogoStroke.Thickness = 4
-LogoStroke.Parent = Logo
-
--- Efeito de brilho no logo
-local LogoGlow = Instance.new("UIStroke")
-LogoGlow.Color = Color3.fromRGB(255, 180, 50)
-LogoGlow.Thickness = 0
-LogoGlow.Transparency = 0
-LogoGlow.Parent = Logo
+Logo.Parent = LogoContainer
 
 task.spawn(function()
-    while Logo.Parent do
-        -- Rotação suave
-        TweenService:Create(Logo, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Rotation = 15
+    while LogoContainer.Parent do
+        TweenService:Create(LogoContainer, TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Rotation = 10
         }):Play()
-        -- Pulso de brilho
-        TweenService:Create(LogoGlow, TweenInfo.new(1, Enum.EasingStyle.Sine), {
+        TweenService:Create(LogoGlow, TweenInfo.new(1.5), {
             Thickness = 8,
-            Transparency = 0.5
-        }):Play()
-        task.wait(2)
-        
-        TweenService:Create(Logo, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Rotation = -15
-        }):Play()
-        TweenService:Create(LogoGlow, TweenInfo.new(1, Enum.EasingStyle.Sine), {
-            Thickness = 0,
             Transparency = 0
         }):Play()
-        task.wait(2)
+        task.wait(3)
+        TweenService:Create(LogoContainer, TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Rotation = -10
+        }):Play()
+        TweenService:Create(LogoGlow, TweenInfo.new(1.5), {
+            Thickness = 4,
+            Transparency = 0.3
+        }):Play()
+        task.wait(3)
     end
 end)
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.fromScale(1, 0.12)
-Title.Position = UDim2.fromScale(0, 0.48)
+Title.Position = UDim2.fromScale(0, 0.42)
 Title.BackgroundTransparency = 1
 Title.Text = "MANGA HUB"
 Title.TextColor3 = Color3.fromRGB(255, 160, 30)
-Title.TextSize = 36
-Title.Font = Enum.Font.GothamBold
-Title.Parent = Container
+Title.TextSize = 42
+Title.Font = Enum.Font.GothamBlack
+Title.Parent = GlassContainer
 
 local TitleStroke = Instance.new("UIStroke")
 TitleStroke.Color = Color3.fromRGB(0, 0, 0)
-TitleStroke.Thickness = 3
+TitleStroke.Thickness = 4
 TitleStroke.Parent = Title
 
--- Efeito de brilho no título
 task.spawn(function()
     while Title.Parent do
-        TweenService:Create(Title, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {
-            TextColor3 = Color3.fromRGB(255, 180, 50)
+        TweenService:Create(Title, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+            TextColor3 = Color3.fromRGB(255, 200, 80)
         }):Play()
-        task.wait(1.5)
-        TweenService:Create(Title, TweenInfo.new(1.5, Enum.EasingStyle.Sine), {
-            TextColor3 = Color3.fromRGB(255, 140, 10)
+        task.wait(2)
+        TweenService:Create(Title, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+            TextColor3 = Color3.fromRGB(255, 140, 0)
         }):Play()
-        task.wait(1.5)
+        task.wait(2)
     end
 end)
 
 local Subtitle = Instance.new("TextLabel")
 Subtitle.Size = UDim2.fromScale(1, 0.08)
-Subtitle.Position = UDim2.fromScale(0, 0.59)
+Subtitle.Position = UDim2.fromScale(0, 0.52)
 Subtitle.BackgroundTransparency = 1
-Subtitle.Text = "BBB Brasil V4.8 • Premium Edition"
-Subtitle.TextColor3 = Color3.fromRGB(200, 200, 200)
-Subtitle.TextSize = 16
-Subtitle.Font = Enum.Font.GothamMedium
-Subtitle.Parent = Container
+Subtitle.Text = "BBB BRASIL V4.8 • PREMIUM EDITION"
+Subtitle.TextColor3 = Color3.fromRGB(180, 180, 200)
+Subtitle.TextSize = 18
+Subtitle.Font = Enum.Font.GothamBold
+Subtitle.Parent = GlassContainer
 
--- Barra de progresso melhorada
-local ProgressBarBg = Instance.new("Frame")
-ProgressBarBg.Size = UDim2.fromOffset(450, 12)
-ProgressBarBg.Position = UDim2.fromScale(0.5, 0.73)
-ProgressBarBg.AnchorPoint = Vector2.new(0.5, 0.5)
-ProgressBarBg.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-ProgressBarBg.BorderSizePixel = 0
-ProgressBarBg.Parent = Container
+local SoundWaveContainer = Instance.new("Frame")
+SoundWaveContainer.Size = UDim2.fromOffset(300, 40)
+SoundWaveContainer.Position = UDim2.fromScale(0.5, 0.62)
+SoundWaveContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+SoundWaveContainer.BackgroundTransparency = 1
+SoundWaveContainer.Parent = GlassContainer
 
-local ProgressBarBgCorner = Instance.new("UICorner")
-ProgressBarBgCorner.CornerRadius = UDim.new(1, 0)
-ProgressBarBgCorner.Parent = ProgressBarBg
+local bars = {}
+for i = 1, 20 do
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.fromOffset(8, 10)
+    bar.Position = UDim2.fromOffset((i-1) * 15, 20)
+    bar.AnchorPoint = Vector2.new(0, 0.5)
+    bar.BackgroundColor3 = Color3.fromHSV(30/360 + (i * 2)/360, 0.9, 1)
+    bar.BorderSizePixel = 0
+    bar.Parent = SoundWaveContainer
+    
+    local barCorner = Instance.new("UICorner")
+    barCorner.CornerRadius = UDim.new(1, 0)
+    barCorner.Parent = bar
+    
+    table.insert(bars, bar)
+    
+    task.spawn(function()
+        while SoundWaveContainer.Parent do
+            local height = math.random(5, 35)
+            TweenService:Create(bar, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+                Size = UDim2.fromOffset(8, height)
+            }):Play()
+            task.wait(0.1 + (i * 0.02))
+        end
+    end)
+end
 
-local ProgressBarBgStroke = Instance.new("UIStroke")
-ProgressBarBgStroke.Color = Color3.fromRGB(60, 60, 70)
-ProgressBarBgStroke.Thickness = 2
-ProgressBarBgStroke.Parent = ProgressBarBg
+local ProgressContainer = Instance.new("Frame")
+ProgressContainer.Size = UDim2.fromOffset(500, 16)
+ProgressContainer.Position = UDim2.fromScale(0.5, 0.72)
+ProgressContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+ProgressContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+ProgressContainer.BorderSizePixel = 0
+ProgressContainer.Parent = GlassContainer
+
+local ProgressContainerCorner = Instance.new("UICorner")
+ProgressContainerCorner.CornerRadius = UDim.new(1, 0)
+ProgressContainerCorner.Parent = ProgressContainer
+
+local ProgressContainerStroke = Instance.new("UIStroke")
+ProgressContainerStroke.Color = Color3.fromRGB(80, 80, 100)
+ProgressContainerStroke.Thickness = 2
+ProgressContainerStroke.Parent = ProgressContainer
 
 local ProgressBar = Instance.new("Frame")
-ProgressBar.Size = UDim2.fromOffset(0, 12)
+ProgressBar.Size = UDim2.fromOffset(0, 16)
 ProgressBar.Position = UDim2.fromScale(0, 0)
 ProgressBar.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
 ProgressBar.BorderSizePixel = 0
-ProgressBar.Parent = ProgressBarBg
+ProgressBar.Parent = ProgressContainer
 
 local ProgressBarCorner = Instance.new("UICorner")
 ProgressBarCorner.CornerRadius = UDim.new(1, 0)
 ProgressBarCorner.Parent = ProgressBar
 
-local ProgressBarGradient = Instance.new("UIGradient")
-ProgressBarGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 200, 80)),
+local ProgressGradient = Instance.new("UIGradient")
+ProgressGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 220, 100)),
     ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 140, 0)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 100, 0))
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 0))
 }
-ProgressBarGradient.Rotation = 0
-ProgressBarGradient.Parent = ProgressBar
+ProgressGradient.Parent = ProgressBar
 
--- Animar gradiente da barra
 task.spawn(function()
     while ProgressBar.Parent do
-        for i = 0, 180, 5 do
+        for i = 0, 360, 10 do
             if not ProgressBar.Parent then break end
-            ProgressBarGradient.Rotation = i
+            ProgressGradient.Rotation = i
             task.wait(0.05)
         end
     end
 end)
 
--- Brilho na ponta da barra
 local ProgressGlow = Instance.new("Frame")
-ProgressGlow.Size = UDim2.fromOffset(60, 24)
+ProgressGlow.Size = UDim2.fromOffset(80, 30)
 ProgressGlow.Position = UDim2.fromScale(1, 0.5)
 ProgressGlow.AnchorPoint = Vector2.new(0.5, 0.5)
-ProgressGlow.BackgroundColor3 = Color3.fromRGB(255, 180, 40)
-ProgressGlow.BackgroundTransparency = 0.3
+ProgressGlow.BackgroundColor3 = Color3.fromRGB(255, 180, 50)
+ProgressGlow.BackgroundTransparency = 0.4
 ProgressGlow.BorderSizePixel = 0
 ProgressGlow.ZIndex = 0
 ProgressGlow.Parent = ProgressBar
@@ -285,59 +419,89 @@ local ProgressGlowCorner = Instance.new("UICorner")
 ProgressGlowCorner.CornerRadius = UDim.new(1, 0)
 ProgressGlowCorner.Parent = ProgressGlow
 
--- Pulso no brilho
 task.spawn(function()
     while ProgressGlow.Parent do
-        TweenService:Create(ProgressGlow, TweenInfo.new(0.5, Enum.EasingStyle.Sine), {
+        TweenService:Create(ProgressGlow, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {
             BackgroundTransparency = 0.1,
-            Size = UDim2.fromOffset(70, 28)
+            Size = UDim2.fromOffset(100, 40)
         }):Play()
-        task.wait(0.5)
-        TweenService:Create(ProgressGlow, TweenInfo.new(0.5, Enum.EasingStyle.Sine), {
+        task.wait(0.8)
+        TweenService:Create(ProgressGlow, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {
             BackgroundTransparency = 0.5,
-            Size = UDim2.fromOffset(60, 24)
+            Size = UDim2.fromOffset(80, 30)
         }):Play()
-        task.wait(0.5)
+        task.wait(0.8)
     end
 end)
 
 local ProgressText = Instance.new("TextLabel")
 ProgressText.Size = UDim2.fromScale(1, 0.1)
-ProgressText.Position = UDim2.fromScale(0, 0.82)
+ProgressText.Position = UDim2.fromScale(0, 0.8)
 ProgressText.BackgroundTransparency = 1
 ProgressText.Text = "0%"
 ProgressText.TextColor3 = Color3.fromRGB(255, 255, 255)
-ProgressText.TextSize = 22
-ProgressText.Font = Enum.Font.GothamBold
-ProgressText.Parent = Container
+ProgressText.TextSize = 28
+ProgressText.Font = Enum.Font.GothamBlack
+ProgressText.Parent = GlassContainer
 
-local ProgressTextStroke = Instance.new("UIStroke")
-ProgressTextStroke.Color = Color3.fromRGB(255, 140, 0)
-ProgressTextStroke.Thickness = 2
-ProgressTextStroke.Transparency = 0.5
-ProgressTextStroke.Parent = ProgressText
+local ProgressTextGlow = Instance.new("UIStroke")
+ProgressTextGlow.Color = Color3.fromRGB(255, 140, 0)
+ProgressTextGlow.Thickness = 3
+ProgressTextGlow.Transparency = 0.3
+ProgressTextGlow.Parent = ProgressText
 
 local StatusText = Instance.new("TextLabel")
 StatusText.Size = UDim2.fromScale(1, 0.08)
-StatusText.Position = UDim2.fromScale(0, 0.91)
+StatusText.Position = UDim2.fromScale(0, 0.88)
 StatusText.BackgroundTransparency = 1
-StatusText.Text = "Inicializando..."
-StatusText.TextColor3 = Color3.fromRGB(180, 180, 180)
-StatusText.TextSize = 15
-StatusText.Font = Enum.Font.Gotham
-StatusText.Parent = Container
+StatusText.Text = "Inicializando sistema..."
+StatusText.TextColor3 = Color3.fromRGB(200, 200, 220)
+StatusText.TextSize = 16
+StatusText.Font = Enum.Font.GothamSemibold
+StatusText.Parent = GlassContainer
+
+local TechDecoration = Instance.new("Frame")
+TechDecoration.Size = UDim2.fromOffset(100, 2)
+TechDecoration.Position = UDim2.fromScale(0.05, 0.95)
+TechDecoration.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+TechDecoration.BorderSizePixel = 0
+TechDecoration.Parent = GlassContainer
+
+local TechDecoration2 = Instance.new("Frame")
+TechDecoration2.Size = UDim2.fromOffset(2, 30)
+TechDecoration2.Position = UDim2.fromScale(0.05, 0.87)
+TechDecoration2.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+TechDecoration2.BorderSizePixel = 0
+TechDecoration2.Parent = GlassContainer
+
+local TechDecoration3 = Instance.new("Frame")
+TechDecoration3.Size = UDim2.fromOffset(100, 2)
+TechDecoration3.Position = UDim2.fromScale(0.95, 0.05)
+TechDecoration3.AnchorPoint = Vector2.new(1, 0)
+TechDecoration3.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+TechDecoration3.BorderSizePixel = 0
+TechDecoration3.Parent = GlassContainer
+
+local TechDecoration4 = Instance.new("Frame")
+TechDecoration4.Size = UDim2.fromOffset(2, 30)
+TechDecoration4.Position = UDim2.fromScale(0.95, 0.05)
+TechDecoration4.AnchorPoint = Vector2.new(1, 0)
+TechDecoration4.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+TechDecoration4.BorderSizePixel = 0
+TechDecoration4.Parent = GlassContainer
 
 local function animateLoading()
     local startTime = tick()
-    local duration = 15
+    local duration = 12
     local messages = {
-        {progress = 0, text = "🔄 Inicializando sistema..."},
-        {progress = 15, text = "🎨 Carregando interface premium..."},
-        {progress = 35, text = "🌐 Conectando aos servidores..."},
-        {progress = 55, text = "🗳️ Preparando sistema de votação..."},
-        {progress = 75, text = "⚙️ Configurando scripts avançados..."},
-        {progress = 90, text = "✨ Finalizando carregamento..."},
-        {progress = 100, text = "✅ Carregamento completo!"}
+        {progress = 0, text = "⚡ Inicializando núcleo do sistema..."},
+        {progress = 12, text = "🔮 Carregando interface..."},
+        {progress = 28, text = "🌐 Estabelecendo conexão segura..."},
+        {progress = 45, text = "📡 Sincronizando com servidores..."},
+        {progress = 62, text = "🗳️ Ativando módulo de votação..."},
+        {progress = 78, text = "⚙️ Compilando scripts avançados..."},
+        {progress = 90, text = "✨ Aplicando efeitos visuais..."},
+        {progress = 100, text = "✅ Sistema pronto!"}
     }
 
     local index = 1
@@ -346,23 +510,20 @@ local function animateLoading()
         local elapsed = tick() - startTime
         local progress = math.min((elapsed / duration) * 100, 100)
 
-        local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        TweenService:Create(ProgressBar, tweenInfo, {
-            Size = UDim2.fromOffset((progress / 100) * 450, 12)
+        TweenService:Create(ProgressBar, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {
+            Size = UDim2.fromOffset((progress / 100) * 500, 16)
         }):Play()
         
-        ProgressText.Text = math.floor(progress) .. "%"
+        ProgressText.Text = string.format("%d%%", math.floor(progress))
 
         if index <= #messages and progress >= messages[index].progress then
-            StatusText.Text = messages[index].text
-            
-            local fadeOut = TweenService:Create(StatusText, TweenInfo.new(0.15), {TextTransparency = 1})
+            local fadeOut = TweenService:Create(StatusText, TweenInfo.new(0.2), {TextTransparency = 1})
             fadeOut:Play()
             fadeOut.Completed:Wait()
             
             StatusText.Text = messages[index].text
             
-            local fadeIn = TweenService:Create(StatusText, TweenInfo.new(0.15), {TextTransparency = 0})
+            local fadeIn = TweenService:Create(StatusText, TweenInfo.new(0.2), {TextTransparency = 0})
             fadeIn:Play()
             
             index += 1
@@ -375,34 +536,50 @@ local function animateLoading()
         task.wait()
     end
 
-    task.wait(0.8)
+    task.wait(1)
 
-    -- Animação de saída mais suave
-    local tweenInfo = TweenInfo.new(0.7, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-    local tween = TweenService:Create(Container, tweenInfo, {
-        Size = UDim2.fromOffset(0, 0),
-        Rotation = 360
-    })
-    tween:Play()
+    for _, bar in ipairs(bars) do
+        TweenService:Create(bar, TweenInfo.new(0.5), {
+            BackgroundTransparency = 1
+        }):Play()
+    end
     
-    TweenService:Create(LoadingFrame, TweenInfo.new(0.7), {
+    TweenService:Create(GlassContainer, TweenInfo.new(0.8, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        Size = UDim2.fromOffset(0, 0),
+        Rotation = 720
+    }):Play()
+    
+    TweenService:Create(LoadingFrame, TweenInfo.new(1), {
         BackgroundTransparency = 1
     }):Play()
     
     for _, particle in ipairs(ParticleContainer:GetChildren()) do
-        TweenService:Create(particle, TweenInfo.new(0.7), {
+        TweenService:Create(particle, TweenInfo.new(0.5), {
             BackgroundTransparency = 1
         }):Play()
     end
-
-    tween.Completed:Connect(function()
-        LoadingGui:Destroy()
-    end)
+    
+    task.wait(1)
+    LoadingGui:Destroy()
 end
 
 task.spawn(animateLoading)
 
-task.wait(15)
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        local mousePos = UserInputService:GetMouseLocation()
+        local centerX = workspace.CurrentCamera.ViewportSize.X / 2
+        local centerY = workspace.CurrentCamera.ViewportSize.Y / 2
+        
+        local offsetX = (mousePos.X - centerX) / centerX
+        local offsetY = (mousePos.Y - centerY) / centerY
+        
+        TweenService:Create(GlassContainer, TweenInfo.new(0.3), {
+            Rotation = offsetX * 5,
+            Position = UDim2.fromScale(0.5 + offsetX * 0.02, 0.5 + offsetY * 0.02)
+        }):Play()
+    end
+end)
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -892,6 +1069,7 @@ Tabs.Evento:AddParagraph({
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
+
 
 
 
