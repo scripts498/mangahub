@@ -1,4 +1,4 @@
-print("[MangaHub V4.5] Loading...")
+print("[MangaHub V4.8] Loading...")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -12,7 +12,9 @@ local camera = Workspace.CurrentCamera
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-
+-- ============================================
+-- DRAWING API SETUP
+-- ============================================
 local Drawing = Drawing or {}
 if not Drawing.new then
     error("Drawing API not supported. Use Synapse X, KRNL, Fluxus, or similar.")
@@ -20,7 +22,7 @@ end
 
 local drawings = {}
 
-
+-- FOV Donut (Ring)
 local fovCircle = Drawing.new("Circle")
 fovCircle.Visible = false
 fovCircle.Thickness = 2.5
@@ -40,29 +42,33 @@ local function getOrCreateEsp(plr)
 
     local d = {}
 
+    -- Box ESP
     d.box = Drawing.new("Square")
     d.box.Visible = false
-    d.box.Thickness = 1.2
+    d.box.Thickness = 1.5
     d.box.Filled = false
     d.box.Color = Color3.fromRGB(255, 50, 50)
-    d.box.Transparency = 0.8
+    d.box.Transparency = 0.9
     table.insert(drawings, d.box)
 
+    -- Box Fill
     d.boxFill = Drawing.new("Square")
     d.boxFill.Visible = false
     d.boxFill.Thickness = 0
     d.boxFill.Filled = true
     d.boxFill.Color = Color3.fromRGB(255, 50, 50)
-    d.boxFill.Transparency = 0.15
+    d.boxFill.Transparency = 0.12
     table.insert(drawings, d.boxFill)
 
+    -- Line ESP
     d.line = Drawing.new("Line")
     d.line.Visible = false
-    d.line.Thickness = 1.5
-    d.line.Color = Color3.fromRGB(0, 255, 200)
-    d.line.Transparency = 0.7
+    d.line.Thickness = 1.8
+    d.line.Color = Color3.fromRGB(255, 50, 50)
+    d.line.Transparency = 0.8
     table.insert(drawings, d.line)
 
+    -- Name + Distance
     d.name = Drawing.new("Text")
     d.name.Visible = false
     d.name.Size = 13
@@ -73,12 +79,21 @@ local function getOrCreateEsp(plr)
     d.name.Font = 2
     table.insert(drawings, d.name)
 
+    -- Health Bar
     d.healthBar = Drawing.new("Line")
     d.healthBar.Visible = false
-    d.healthBar.Thickness = 2
+    d.healthBar.Thickness = 2.5
     d.healthBar.Color = Color3.fromRGB(0, 255, 100)
     d.healthBar.Transparency = 0.9
     table.insert(drawings, d.healthBar)
+
+    -- Health Bar Background
+    d.healthBarBg = Drawing.new("Line")
+    d.healthBarBg.Visible = false
+    d.healthBarBg.Thickness = 2.5
+    d.healthBarBg.Color = Color3.fromRGB(60, 60, 60)
+    d.healthBarBg.Transparency = 0.6
+    table.insert(drawings, d.healthBarBg)
 
     espDrawings[plr] = d
     return d
@@ -96,7 +111,9 @@ local function removeEsp(plr)
     end
 end
 
-
+-- ============================================
+-- ANTI-CHEAT BYPASS
+-- ============================================
 
 local function startAnticheatLoop(char)
     if not char then return end
@@ -132,6 +149,9 @@ task.spawn(function()
     end
 end)
 
+-- ============================================
+-- GUI SETUP
+-- ============================================
 
 local function randomName()
     local str = ""
@@ -345,8 +365,11 @@ local wlCorner = Instance.new("UICorner")
 wlCorner.CornerRadius = UDim.new(0, 6 * guiScale)
 wlCorner.Parent = whitelistBox
 
-print("[MangaHub V4.5] GUI OK")
+print("[MangaHub V4.8] GUI OK")
 
+-- ============================================
+-- STATES & SETTINGS
+-- ============================================
 
 local states = {
     aimAssist = false,
@@ -386,7 +409,9 @@ local function updateWhitelist()
 end
 whitelistBox.FocusLost:Connect(updateWhitelist)
 
-
+-- ============================================
+-- CHAT MONITOR
+-- ============================================
 
 local chatConnections = {}
 local function setupChatMonitor()
@@ -427,10 +452,11 @@ Players.PlayerRemoving:Connect(function(plr)
     removeEsp(plr)
 end)
 
-
+-- ============================================
+-- VISIBILITY CHECK (Raycast)
+-- ============================================
 
 local function isVisible(target)
-    if not states.wallCheck or states.locked then return true end
     if not target or not target:FindFirstChild("Head") then return false end
 
     local origin = camera.CFrame.Position
@@ -439,13 +465,13 @@ local function isVisible(target)
 
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    rayParams.FilterDescendantsInstances = {player.Character}
+    rayParams.FilterDescendantsInstances = {player.Character, target}
     rayParams.IgnoreWater = true
 
     local result = Workspace:Raycast(origin, direction, rayParams)
     if not result then return true end
 
-    return result.Instance and result.Instance:IsDescendantOf(target)
+    return false
 end
 
 local function getClosestPlayer()
@@ -467,7 +493,7 @@ local function getClosestPlayer()
                     if onScreen then
                         local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
                         if screenDist <= settings.fovRadius and screenDist < closestDist then
-                            if isVisible(char) then
+                            if not states.wallCheck or isVisible(char) then
                                 closestDist = screenDist
                                 closest = {character = char, head = head, screenPos = screenPos}
                             end
@@ -480,9 +506,17 @@ local function getClosestPlayer()
     return closest
 end
 
+-- ============================================
+-- DRAWING ESP SYSTEM (V4.8 - FIX LINHA)
+-- ============================================
+-- Problema: torso pode estar fora da tela mesmo quando a cabeça está visível
+-- Solução: Usar a cabeça como ponto de referência para a linha também
+-- A linha vai do centro da tela até a cabeça do alvo (mesmo ponto da box)
 
--- Problema: "0.5m abaixo de mim" sai da tela quando olha pra cima
--- Solução: Linha vai do CENTRO DA TELA (crosshair) até o torso do alvo
+local COLOR_VISIBLE = Color3.fromRGB(0, 255, 100)
+local COLOR_BLOCKED = Color3.fromRGB(255, 50, 50)
+local COLOR_VISIBLE_FILL = Color3.fromRGB(0, 255, 100)
+local COLOR_BLOCKED_FILL = Color3.fromRGB(255, 50, 50)
 
 local function updateDrawingEsp()
     if states.locked and not isAdmin then
@@ -492,12 +526,14 @@ local function updateDrawingEsp()
             d.line.Visible = false
             d.name.Visible = false
             d.healthBar.Visible = false
+            d.healthBarBg.Visible = false
         end
         return
     end
 
     local viewport = camera.ViewportSize
     local screenCenter = Vector2.new(viewport.X / 2, viewport.Y / 2)
+    local camPos = camera.CFrame.Position
 
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and not isWhitelisted(plr) and plr.Character then
@@ -505,17 +541,48 @@ local function updateDrawingEsp()
             local hrp = char:FindFirstChild("HumanoidRootPart")
             local head = char:FindFirstChild("Head")
             local humanoid = char:FindFirstChild("Humanoid")
-            local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
 
             if hrp and head and humanoid and humanoid.Health > 0 then
                 local d = getOrCreateEsp(plr)
 
-                -- Box ESP
-                if states.espBox then
-                    local headPos, headOnScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
-                    local footPos, footOnScreen = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                -- ========================================
+                -- CHECK: Projetar cabeça e pé na tela
+                -- ========================================
+                local headPos, headOnScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                local footPos, footOnScreen = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
 
-                    if headOnScreen and footOnScreen and headPos.Z > 0 and footPos.Z > 0 then
+                -- O alvo está na frente da câmera se Z > 0 para ambos
+                local isInFront = headPos.Z > 0 and footPos.Z > 0
+                -- E pelo menos um está "onScreen" (dentro dos bounds da viewport)
+                local isOnScreen = headOnScreen or footOnScreen
+
+                -- Se está atrás da câmera (Z <= 0), esconde TUDO
+                if not isInFront then
+                    d.box.Visible = false
+                    d.boxFill.Visible = false
+                    d.line.Visible = false
+                    d.name.Visible = false
+                    d.healthBar.Visible = false
+                    d.healthBarBg.Visible = false
+                    continue
+                end
+
+                -- Se está na frente mas fora da tela, ainda mostra a linha
+                -- (ela vai apontar para a borda)
+
+                -- Verifica visibilidade (sem parede)
+                local isVisibleTarget = isVisible(char)
+
+                -- Determina cor baseado em visibilidade
+                local boxColor = isVisibleTarget and COLOR_VISIBLE or COLOR_BLOCKED
+                local fillColor = isVisibleTarget and COLOR_VISIBLE_FILL or COLOR_BLOCKED_FILL
+                local lineColor = isVisibleTarget and COLOR_VISIBLE or COLOR_BLOCKED
+
+                -- ========================================
+                -- BOX ESP (só se on-screen)
+                -- ========================================
+                if states.espBox then
+                    if isOnScreen then
                         local boxHeight = math.abs(headPos.Y - footPos.Y)
                         local boxWidth = boxHeight * 0.55
                         local boxPos = Vector2.new(
@@ -525,40 +592,56 @@ local function updateDrawingEsp()
 
                         d.box.Size = Vector2.new(math.floor(boxWidth), math.floor(boxHeight))
                         d.box.Position = boxPos
+                        d.box.Color = boxColor
                         d.box.Visible = true
 
                         d.boxFill.Size = d.box.Size
                         d.boxFill.Position = d.box.Position
+                        d.boxFill.Color = fillColor
                         d.boxFill.Visible = true
 
-                        local healthPercent = humanoid.Health / humanoid.MaxHealth
+                        -- Health Bar
+                        local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
                         local barHeight = boxHeight * healthPercent
-                        local barPos = Vector2.new(boxPos.X - 6, boxPos.Y + (boxHeight - barHeight))
+                        local barX = boxPos.X - 8
+                        local barTop = boxPos.Y + (boxHeight - barHeight)
+                        local barBottom = boxPos.Y + boxHeight
 
-                        d.healthBar.From = Vector2.new(barPos.X, boxPos.Y + boxHeight)
-                        d.healthBar.To = Vector2.new(barPos.X, boxPos.Y)
-                        d.healthBar.Color = Color3.fromRGB(255 * (1 - healthPercent), 255 * healthPercent, 0)
+                        d.healthBarBg.From = Vector2.new(barX, boxPos.Y)
+                        d.healthBarBg.To = Vector2.new(barX, boxPos.Y + boxHeight)
+                        d.healthBarBg.Visible = true
+
+                        d.healthBar.From = Vector2.new(barX, barBottom)
+                        d.healthBar.To = Vector2.new(barX, barTop)
+                        d.healthBar.Color = Color3.fromRGB(255 * (1 - healthPercent), 255 * healthPercent, 50)
                         d.healthBar.Visible = true
                     else
                         d.box.Visible = false
                         d.boxFill.Visible = false
                         d.healthBar.Visible = false
+                        d.healthBarBg.Visible = false
                     end
                 else
                     d.box.Visible = false
                     d.boxFill.Visible = false
                     d.healthBar.Visible = false
+                    d.healthBarBg.Visible = false
                 end
 
-               
-                
-                if states.espLine and torso then
-                    local targetPos, targetOnScreen = camera:WorldToViewportPoint(torso.Position)
+                -- ========================================
+                -- LINE ESP (V4.8 FIX)
+                -- ========================================
+                -- A linha vai do centro da tela até a CABEÇA do alvo
+                -- Isso garante que use o mesmo ponto de referência que a box
+                -- Se a cabeça está na frente da câmera, a linha aparece
+                if states.espLine then
+                    if isInFront then
+                        -- Usar a cabeça como ponto final da linha
+                        local lineEnd = Vector2.new(headPos.X, headPos.Y)
 
-                    -- Só desenha se o alvo está visível na tela
-                    if targetOnScreen and targetPos.Z > 0 then
                         d.line.From = screenCenter
-                        d.line.To = Vector2.new(targetPos.X, targetPos.Y)
+                        d.line.To = lineEnd
+                        d.line.Color = lineColor
                         d.line.Visible = true
                     else
                         d.line.Visible = false
@@ -567,12 +650,14 @@ local function updateDrawingEsp()
                     d.line.Visible = false
                 end
 
-                -- Name + Distance
+                -- ========================================
+                -- NAME
+                -- ========================================
                 if states.espBox or states.espLine then
-                    local namePos, nameOnScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.2, 0))
+                    local namePos, nameOnScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
                     if nameOnScreen and namePos.Z > 0 then
                         d.name.Position = Vector2.new(namePos.X, namePos.Y)
-                        d.name.Text = plr.Name .. " [" .. math.floor((hrp.Position - camera.CFrame.Position).Magnitude) .. "m]"
+                        d.name.Text = plr.Name .. " [" .. math.floor((hrp.Position - camPos).Magnitude) .. "m]"
                         d.name.Visible = true
                     else
                         d.name.Visible = false
@@ -618,6 +703,9 @@ local function aimbot()
     end
 end
 
+-- ============================================
+-- SPEED & NOCLIP VIA CFRAME
+-- ============================================
 
 local speedCFActive = false
 local noclipCFActive = false
@@ -674,7 +762,9 @@ end)
 
 local fpsActive = false
 
-
+-- ============================================
+-- MAIN LOOP
+-- ============================================
 
 safeConnect("mainLoop", function()
     pcall(function()
@@ -752,7 +842,9 @@ safeConnect("mainLoop", function()
     end
 end)
 
-
+-- ============================================
+-- INPUT HANDLING
+-- ============================================
 
 local function toggleButtonVisual(btn, state, color)
     if state then
@@ -841,7 +933,9 @@ toggleButton.MouseButton1Click:Connect(function()
     toggleButton.Text = panelVisible and "✕" or "☰"
 end)
 
-
+-- ============================================
+-- SLIDER & DRAG
+-- ============================================
 
 local function updateSlider(input)
     local pos = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
@@ -924,6 +1018,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
+-- ============================================
+-- CHARACTER SETUP & BYPASS INIT
+-- ============================================
 
 player.CharacterAdded:Connect(function(char)
     task.wait(1)
@@ -935,7 +1032,9 @@ if player.Character then
     startAnticheatLoop(player.Character)
 end
 
-
+-- ============================================
+-- ANTI-DETECTION
+-- ============================================
 
 task.spawn(function()
     while task.wait(math.random(30, 60)) do
@@ -946,5 +1045,5 @@ task.spawn(function()
     end
 end)
 
-print("[MangaHub V4.5] Fully loaded. Press Insert to open.")
-print("[MangaHub V4.5] ESP Line: From screen center to target torso.")
+print("[MangaHub V4.8] Fully loaded. Press Insert to open.")
+print("[MangaHub V4.8] ESP Line: Head-based, consistent with Box.")
