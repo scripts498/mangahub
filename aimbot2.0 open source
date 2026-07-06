@@ -1,3 +1,5 @@
+print("[MangaHub V4.5] Loading...")
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -9,6 +11,127 @@ local playerGui = player:WaitForChild("PlayerGui")
 local camera = Workspace.CurrentCamera
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+
+local Drawing = Drawing or {}
+if not Drawing.new then
+    error("Drawing API not supported. Use Synapse X, KRNL, Fluxus, or similar.")
+end
+
+local drawings = {}
+
+
+local fovCircle = Drawing.new("Circle")
+fovCircle.Visible = false
+fovCircle.Thickness = 2.5
+fovCircle.NumSides = 64
+fovCircle.Radius = 200
+fovCircle.Filled = false
+fovCircle.Color = Color3.fromRGB(0, 255, 150)
+fovCircle.Transparency = 0.8
+fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+table.insert(drawings, fovCircle)
+
+-- ESP Containers
+local espDrawings = {}
+
+local function getOrCreateEsp(plr)
+    if espDrawings[plr] then return espDrawings[plr] end
+
+    local d = {}
+
+    d.box = Drawing.new("Square")
+    d.box.Visible = false
+    d.box.Thickness = 1.2
+    d.box.Filled = false
+    d.box.Color = Color3.fromRGB(255, 50, 50)
+    d.box.Transparency = 0.8
+    table.insert(drawings, d.box)
+
+    d.boxFill = Drawing.new("Square")
+    d.boxFill.Visible = false
+    d.boxFill.Thickness = 0
+    d.boxFill.Filled = true
+    d.boxFill.Color = Color3.fromRGB(255, 50, 50)
+    d.boxFill.Transparency = 0.15
+    table.insert(drawings, d.boxFill)
+
+    d.line = Drawing.new("Line")
+    d.line.Visible = false
+    d.line.Thickness = 1.5
+    d.line.Color = Color3.fromRGB(0, 255, 200)
+    d.line.Transparency = 0.7
+    table.insert(drawings, d.line)
+
+    d.name = Drawing.new("Text")
+    d.name.Visible = false
+    d.name.Size = 13
+    d.name.Center = true
+    d.name.Outline = true
+    d.name.OutlineColor = Color3.fromRGB(0, 0, 0)
+    d.name.Color = Color3.fromRGB(255, 255, 255)
+    d.name.Font = 2
+    table.insert(drawings, d.name)
+
+    d.healthBar = Drawing.new("Line")
+    d.healthBar.Visible = false
+    d.healthBar.Thickness = 2
+    d.healthBar.Color = Color3.fromRGB(0, 255, 100)
+    d.healthBar.Transparency = 0.9
+    table.insert(drawings, d.healthBar)
+
+    espDrawings[plr] = d
+    return d
+end
+
+local function removeEsp(plr)
+    local d = espDrawings[plr]
+    if d then
+        for _, obj in pairs(d) do
+            if obj and obj.Remove then
+                pcall(function() obj:Remove() end)
+            end
+        end
+        espDrawings[plr] = nil
+    end
+end
+
+
+
+local function startAnticheatLoop(char)
+    if not char then return end
+    task.spawn(function()
+        while char and char.Parent do
+            local folder = char:FindFirstChild("FJsMovementAnticheat")
+            if folder then
+                for _, child in pairs(folder:GetChildren()) do
+                    if child:IsA("NumberValue") then
+                        child.Value = 0
+                    end
+                end
+                local punish = folder:FindFirstChild("OnPunishment")
+                if punish and punish:IsA("RemoteEvent") then
+                    punish:Destroy()
+                end
+            end
+            task.wait(0.05)
+        end
+    end)
+end
+
+task.spawn(function()
+    task.wait(3)
+    for _, obj in pairs(player:GetDescendants()) do
+        if obj:IsA("LocalScript") then
+            local name = obj.Name:lower()
+            if name:match("ac") or name:match("anticheat") or name:match("anti") or name:match("cheat") or name:match("detect") or name:match("fly") or name:match("speed") then
+                print("[BYPASS] Destroying suspicious script:", obj.Name)
+                pcall(function() obj:Destroy() end)
+            end
+        end
+    end
+end)
+
 
 local function randomName()
     local str = ""
@@ -125,23 +248,23 @@ local function createToggle(name, posY)
     btn.TextColor3 = Color3.new(1, 1, 1)
     btn.Parent = panel
     btn.ZIndex = 10
-    
+
     local btnCorner = Instance.new("UICorner")
     btnCorner.CornerRadius = UDim.new(0, 6 * guiScale)
     btnCorner.Parent = btn
-    
+
     local btnStroke = Instance.new("UIStroke")
     btnStroke.Color = Color3.fromRGB(60, 60, 60)
     btnStroke.Thickness = 0.8 * guiScale
     btnStroke.Parent = btn
-    
+
     return btn
 end
 
 local aimAssistBtn = createToggle("AIM ASSIST", 45 * guiScale)
 local aimbotBtn = createToggle("AIMBOT", 78 * guiScale)
 local espBoxBtn = createToggle("ESP BOX", 111 * guiScale)
-local espHighlightBtn = createToggle("ESP HIGHLIGHT", 144 * guiScale)
+local espLineBtn = createToggle("ESP LINE", 144 * guiScale)
 local fovBtn = createToggle("FOV CIRCLE", 177 * guiScale)
 local wallCheckBtn = createToggle("WALL CHECK", 210 * guiScale)
 local speedBtn = createToggle("SPEED BOOST", 243 * guiScale)
@@ -222,25 +345,14 @@ local wlCorner = Instance.new("UICorner")
 wlCorner.CornerRadius = UDim.new(0, 6 * guiScale)
 wlCorner.Parent = whitelistBox
 
-local fovCircleFrame = Instance.new("Frame")
-fovCircleFrame.Name = randomName()
-fovCircleFrame.Size = UDim2.new(0, 400, 0, 400)
-fovCircleFrame.BackgroundColor3 = Color3.fromRGB(0, 255, 150)
-fovCircleFrame.BackgroundTransparency = 0.85
-fovCircleFrame.BorderSizePixel = 2
-fovCircleFrame.BorderColor3 = Color3.fromRGB(0, 255, 150)
-fovCircleFrame.Visible = false
-fovCircleFrame.ZIndex = 5
-fovCircleFrame.Parent = screenGui
-local fovFrameCorner = Instance.new("UICorner")
-fovFrameCorner.CornerRadius = UDim.new(1, 0)
-fovFrameCorner.Parent = fovCircleFrame
+print("[MangaHub V4.5] GUI OK")
+
 
 local states = {
     aimAssist = false,
     aimbot = false,
     espBox = false,
-    espHighlight = false,
+    espLine = false,
     fov = false,
     wallCheck = false,
     speed = false,
@@ -266,7 +378,7 @@ local function isWhitelisted(plr)
 end
 
 local function updateWhitelist()
-    table.clear(whitelist)
+    whitelist = {}
     for name in string.gmatch(whitelistBox.Text, "([^,]+)") do
         local trimmed = name:gsub("^%s+", ""):gsub("%s+$", ""):lower()
         if trimmed ~= "" then whitelist[trimmed] = true end
@@ -274,13 +386,15 @@ local function updateWhitelist()
 end
 whitelistBox.FocusLost:Connect(updateWhitelist)
 
+
+
 local chatConnections = {}
 local function setupChatMonitor()
     for _, conn in pairs(chatConnections) do
         pcall(function() conn:Disconnect() end)
     end
     chatConnections = {}
-    
+
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player or isAdmin then
             local conn = plr.Chatted:Connect(function(msg)
@@ -292,7 +406,7 @@ local function setupChatMonitor()
                             states[key] = false
                         end
                     end
-                    fovCircleFrame.Visible = false
+                    fovCircle.Visible = false
                 elseif msg == "/a" and isAdmin then
                     states.locked = false
                 elseif msg == "/q" and not isAdmin and not isWhitelisted(plr) then
@@ -309,22 +423,28 @@ Players.PlayerAdded:Connect(function(plr)
 end)
 setupChatMonitor()
 
+Players.PlayerRemoving:Connect(function(plr)
+    removeEsp(plr)
+end)
+
+
+
 local function isVisible(target)
     if not states.wallCheck or states.locked then return true end
     if not target or not target:FindFirstChild("Head") then return false end
-    
+
     local origin = camera.CFrame.Position
     local targetPos = target.Head.Position
     local direction = (targetPos - origin).Unit * (targetPos - origin).Magnitude
-    
+
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Blacklist
     rayParams.FilterDescendantsInstances = {player.Character}
     rayParams.IgnoreWater = true
-    
+
     local result = Workspace:Raycast(origin, direction, rayParams)
     if not result then return true end
-    
+
     return result.Instance and result.Instance:IsDescendantOf(target)
 end
 
@@ -333,13 +453,13 @@ local function getClosestPlayer()
     local closest, closestDist = nil, math.huge
     local mousePos = UserInputService:GetMouseLocation()
     local camPos = camera.CFrame.Position
-    
+
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and not isWhitelisted(plr) and plr.Character then
             local char = plr.Character
             local head = char:FindFirstChild("Head")
             local humanoid = char:FindFirstChild("Humanoid")
-            
+
             if head and humanoid and humanoid.Health > 0 then
                 local dist = (head.Position - camPos).Magnitude
                 if dist <= settings.maxDistance and dist > 5 then
@@ -360,77 +480,111 @@ local function getClosestPlayer()
     return closest
 end
 
-local lastTextUpdate = 0
-local function updateESP()
-    if states.locked and not isAdmin then return end
-    local showBox = states.espBox
-    local showHL = states.espHighlight
-    local updateText = (tick() - lastTextUpdate > 0.5)
-    if updateText then lastTextUpdate = tick() end
-    
+
+-- Problema: "0.5m abaixo de mim" sai da tela quando olha pra cima
+-- Solução: Linha vai do CENTRO DA TELA (crosshair) até o torso do alvo
+
+local function updateDrawingEsp()
+    if states.locked and not isAdmin then
+        for _, d in pairs(espDrawings) do
+            d.box.Visible = false
+            d.boxFill.Visible = false
+            d.line.Visible = false
+            d.name.Visible = false
+            d.healthBar.Visible = false
+        end
+        return
+    end
+
+    local viewport = camera.ViewportSize
+    local screenCenter = Vector2.new(viewport.X / 2, viewport.Y / 2)
+
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= player and not isWhitelisted(plr) and plr.Character then
             local char = plr.Character
             local hrp = char:FindFirstChild("HumanoidRootPart")
             local head = char:FindFirstChild("Head")
             local humanoid = char:FindFirstChild("Humanoid")
-            
+            local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+
             if hrp and head and humanoid and humanoid.Health > 0 then
-                local box = char:FindFirstChild("ESPHighlightBox")
-                if not box then
-                    box = Instance.new("BoxHandleAdornment")
-                    box.Name = "ESPHighlightBox"
-                    box.Transparency = 0.8
-                    box.Color3 = Color3.fromRGB(255, 50, 50)
-                    box.AlwaysOnTop = true
-                    box.ZIndex = 11
-                    box.Parent = char
-                end
-                box.Adornee = hrp
-                box.Size = hrp.Size + Vector3.new(0.2, 1.2, 0.2)
-                box.Visible = showBox
-                
-                local hl = char:FindFirstChild("ESPHighlightAdorn")
-                if not hl then
-                    hl = Instance.new("BoxHandleAdornment")
-                    hl.Name = "ESPHighlightAdorn"
-                    hl.Transparency = 0.6
-                    hl.Color3 = Color3.fromRGB(255, 0, 0)
-                    hl.AlwaysOnTop = true
-                    hl.ZIndex = 10
-                    hl.Parent = char
-                end
-                hl.Adornee = hrp
-                hl.Size = hrp.Size + Vector3.new(0.5, 1.5, 0.5)
-                hl.Visible = showHL
-                
-                local bb = head:FindFirstChild("ESPNameTag")
-                if not bb then
-                    bb = Instance.new("BillboardGui")
-                    bb.Name = "ESPNameTag"
-                    bb.Size = UDim2.new(0, 200, 0, 40)
-                    bb.StudsOffset = Vector3.new(0, 3.5, 0)
-                    bb.AlwaysOnTop = true
-                    local lbl = Instance.new("TextLabel")
-                    lbl.Size = UDim2.new(1, 0, 1, 0)
-                    lbl.BackgroundTransparency = 1
-                    lbl.TextColor3 = Color3.new(1, 1, 1)
-                    lbl.TextStrokeTransparency = 0.5
-                    lbl.Font = Enum.Font.GothamBold
-                    lbl.TextSize = 14
-                    lbl.Name = "Label"
-                    lbl.Parent = bb
-                    bb.Parent = head
-                end
-                bb.Enabled = showBox
-                
-                if updateText and showBox then
-                    local lbl = bb:FindFirstChild("Label")
-                    if lbl then
-                        lbl.Text = plr.Name .. " [" .. math.floor((hrp.Position - camera.CFrame.Position).Magnitude) .. "m]"
+                local d = getOrCreateEsp(plr)
+
+                -- Box ESP
+                if states.espBox then
+                    local headPos, headOnScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                    local footPos, footOnScreen = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+
+                    if headOnScreen and footOnScreen and headPos.Z > 0 and footPos.Z > 0 then
+                        local boxHeight = math.abs(headPos.Y - footPos.Y)
+                        local boxWidth = boxHeight * 0.55
+                        local boxPos = Vector2.new(
+                            math.floor(headPos.X - boxWidth / 2),
+                            math.floor(headPos.Y)
+                        )
+
+                        d.box.Size = Vector2.new(math.floor(boxWidth), math.floor(boxHeight))
+                        d.box.Position = boxPos
+                        d.box.Visible = true
+
+                        d.boxFill.Size = d.box.Size
+                        d.boxFill.Position = d.box.Position
+                        d.boxFill.Visible = true
+
+                        local healthPercent = humanoid.Health / humanoid.MaxHealth
+                        local barHeight = boxHeight * healthPercent
+                        local barPos = Vector2.new(boxPos.X - 6, boxPos.Y + (boxHeight - barHeight))
+
+                        d.healthBar.From = Vector2.new(barPos.X, boxPos.Y + boxHeight)
+                        d.healthBar.To = Vector2.new(barPos.X, boxPos.Y)
+                        d.healthBar.Color = Color3.fromRGB(255 * (1 - healthPercent), 255 * healthPercent, 0)
+                        d.healthBar.Visible = true
+                    else
+                        d.box.Visible = false
+                        d.boxFill.Visible = false
+                        d.healthBar.Visible = false
                     end
+                else
+                    d.box.Visible = false
+                    d.boxFill.Visible = false
+                    d.healthBar.Visible = false
                 end
+
+               
+                
+                if states.espLine and torso then
+                    local targetPos, targetOnScreen = camera:WorldToViewportPoint(torso.Position)
+
+                    -- Só desenha se o alvo está visível na tela
+                    if targetOnScreen and targetPos.Z > 0 then
+                        d.line.From = screenCenter
+                        d.line.To = Vector2.new(targetPos.X, targetPos.Y)
+                        d.line.Visible = true
+                    else
+                        d.line.Visible = false
+                    end
+                else
+                    d.line.Visible = false
+                end
+
+                -- Name + Distance
+                if states.espBox or states.espLine then
+                    local namePos, nameOnScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.2, 0))
+                    if nameOnScreen and namePos.Z > 0 then
+                        d.name.Position = Vector2.new(namePos.X, namePos.Y)
+                        d.name.Text = plr.Name .. " [" .. math.floor((hrp.Position - camera.CFrame.Position).Magnitude) .. "m]"
+                        d.name.Visible = true
+                    else
+                        d.name.Visible = false
+                    end
+                else
+                    d.name.Visible = false
+                end
+            else
+                removeEsp(plr)
             end
+        else
+            removeEsp(plr)
         end
     end
 end
@@ -439,7 +593,7 @@ local currentTarget = nil
 
 local function aimAssist()
     if not states.aimAssist or (states.locked and not isAdmin) then return end
-    
+
     local target = getClosestPlayer()
     if target then
         currentTarget = target
@@ -453,7 +607,7 @@ end
 
 local function aimbot()
     if not states.aimbot or (states.locked and not isAdmin) then return end
-    
+
     local target = getClosestPlayer()
     if target then
         currentTarget = target
@@ -464,57 +618,99 @@ local function aimbot()
     end
 end
 
+
+local speedCFActive = false
+local noclipCFActive = false
+
 local function setupCharacter()
     local char = player.Character
-    if char then
-        local humanoid = char:FindFirstChild("Humanoid")
-        if humanoid then
-            if (states.speed and not (states.locked and not isAdmin)) or states.adminFPS then
-                humanoid.WalkSpeed = settings.speedValue
-            else
-                humanoid.WalkSpeed = 16
-            end
-        end
-        
-        if (states.noclip and not (states.locked and not isAdmin)) or states.adminFPS then
-            for _, part in pairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
-            end
-        end
+    if not char then return end
+
+    local humanoid = char:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.WalkSpeed = 16
+    end
+
+    if states.noclip and not (states.locked and not isAdmin) then
+        noclipCFActive = true
+    else
+        noclipCFActive = false
+    end
+
+    if states.speed and not (states.locked and not isAdmin) then
+        speedCFActive = true
+    else
+        speedCFActive = false
     end
 end
 
+task.spawn(function()
+    while true do
+        local char = player.Character
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            local humanoid = char:FindFirstChild("Humanoid")
+
+            if hrp and humanoid then
+                if noclipCFActive then
+                    local moveDir = humanoid.MoveDirection
+                    if moveDir.Magnitude > 0 then
+                        hrp.CFrame = hrp.CFrame + moveDir * 0.5
+                    end
+                end
+
+                if speedCFActive then
+                    local moveDir = humanoid.MoveDirection
+                    if moveDir.Magnitude > 0 then
+                        local boost = moveDir * (settings.speedValue / 60)
+                        hrp.CFrame = hrp.CFrame + boost
+                    end
+                end
+            end
+        end
+        task.wait(0.03)
+    end
+end)
+
 local fpsActive = false
 
+
+
 safeConnect("mainLoop", function()
+    pcall(function()
+        local char = player.Character
+        if char then
+            startAnticheatLoop(char)
+        end
+    end)
+
+    -- FOV Donut
     if (states.fov and not (states.locked and not isAdmin)) or states.adminFPS then
-        fovCircleFrame.Visible = true
+        fovCircle.Visible = true
         local mousePos = UserInputService:GetMouseLocation()
-        local rad = settings.fovRadius
-        fovCircleFrame.Size = UDim2.new(0, rad * 2, 0, rad * 2)
-        fovCircleFrame.Position = UDim2.new(0, mousePos.X - rad, 0, mousePos.Y - rad)
+        fovCircle.Position = mousePos
+        fovCircle.Radius = settings.fovRadius
     else
-        fovCircleFrame.Visible = false
+        fovCircle.Visible = false
     end
-    
-    updateESP()
-    
+
+    -- Drawing ESP
+    updateDrawingEsp()
+
     if states.aimbot then
         aimbot()
     elseif states.aimAssist then
         aimAssist()
     end
-    
+
     setupCharacter()
-    
+
     if (states.fpsKiller or states.adminFPS) and not fpsActive then
         fpsActive = true
     elseif not (states.fpsKiller or states.adminFPS) and fpsActive then
         fpsActive = false
     end
-    
+
     if fpsActive then
         local sin1 = math.sin(tick() * 10)
         local sin2 = math.cos(tick() * 15)
@@ -524,7 +720,7 @@ safeConnect("mainLoop", function()
             local dummy = complexCalc * i ^ 3 * math.random()
         end
     end
-    
+
     if isAdmin then
         if states.disableUsers then
             pcall(function()
@@ -555,6 +751,8 @@ safeConnect("mainLoop", function()
         end
     end
 end)
+
+
 
 local function toggleButtonVisual(btn, state, color)
     if state then
@@ -592,10 +790,10 @@ espBoxBtn.MouseButton1Click:Connect(function()
     toggleButtonVisual(espBoxBtn, states.espBox, Color3.fromRGB(100, 150, 255))
 end)
 
-espHighlightBtn.MouseButton1Click:Connect(function()
+espLineBtn.MouseButton1Click:Connect(function()
     if states.locked and not isAdmin then return end
-    states.espHighlight = not states.espHighlight
-    toggleButtonVisual(espHighlightBtn, states.espHighlight, Color3.fromRGB(150, 100, 255))
+    states.espLine = not states.espLine
+    toggleButtonVisual(espLineBtn, states.espLine, Color3.fromRGB(0, 255, 200))
 end)
 
 fovBtn.MouseButton1Click:Connect(function()
@@ -643,13 +841,15 @@ toggleButton.MouseButton1Click:Connect(function()
     toggleButton.Text = panelVisible and "✕" or "☰"
 end)
 
+
+
 local function updateSlider(input)
     local pos = math.clamp((input.Position.X - sliderBg.AbsolutePosition.X) / sliderBg.AbsoluteSize.X, 0, 1)
     local value = math.floor(settings.minFov + (pos * (settings.maxFov - settings.minFov)))
-    
+
     settings.fovRadius = value
     fovLabel.Text = "FOV: " .. value
-    
+
     sliderFill.Size = UDim2.new(pos, 0, 1, 0)
     sliderKnob.Position = UDim2.new(pos, -8 * guiScale, 0.5, -8 * guiScale)
 end
@@ -699,7 +899,7 @@ end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    
+
     local key = input.KeyCode
     if key == Enum.KeyCode.Insert then
         toggleButton.MouseButton1Click:Fire()
@@ -710,7 +910,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     elseif key == Enum.KeyCode.F then
         espBoxBtn.MouseButton1Click:Fire()
     elseif key == Enum.KeyCode.G then
-        espHighlightBtn.MouseButton1Click:Fire()
+        espLineBtn.MouseButton1Click:Fire()
     elseif key == Enum.KeyCode.T then
         fovBtn.MouseButton1Click:Fire()
     elseif key == Enum.KeyCode.Z then
@@ -724,17 +924,27 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
-player.CharacterAdded:Connect(function()
+
+player.CharacterAdded:Connect(function(char)
     task.wait(1)
+    startAnticheatLoop(char)
     setupCharacter()
 end)
+
+if player.Character then
+    startAnticheatLoop(player.Character)
+end
+
+
 
 task.spawn(function()
     while task.wait(math.random(30, 60)) do
         if not panelVisible then
             screenGui.Name = randomName()
             panel.Name = randomName()
-            fovCircleFrame.Name = randomName()
         end
     end
 end)
+
+print("[MangaHub V4.5] Fully loaded. Press Insert to open.")
+print("[MangaHub V4.5] ESP Line: From screen center to target torso.")
