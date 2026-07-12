@@ -148,7 +148,7 @@ local function smoothTeleport(targetPos, isLastPoint)
     
     local startPos = hrp.Position
     local distance = (safeTargetPos - startPos).Magnitude
-    local steps = math.ceil(distance / 8)
+    local steps = math.ceil(distance / 75)
     
     for i = 1, steps do
         if not farmingGold then break end
