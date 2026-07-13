@@ -17,6 +17,7 @@ end
 
 local drawings = {}
 local espDrawings = {}
+local anticheatActiveChars = {}
 
 local fovCircle = Drawing.new("Circle")
 fovCircle.Visible = false
@@ -89,8 +90,17 @@ local function removeEsp(plr)
     end
 end
 
+local function cleanupEspForLeftPlayers()
+    for plr, _ in pairs(espDrawings) do
+        if not plr.Parent then
+            removeEsp(plr)
+        end
+    end
+end
+
 local function startAnticheatLoop(char)
-    if not char then return end
+    if not char or anticheatActiveChars[char] then return end
+    anticheatActiveChars[char] = true
     task.spawn(function()
         while char and char.Parent do
             local folder = char:FindFirstChild("FJsMovementAnticheat")
@@ -107,6 +117,7 @@ local function startAnticheatLoop(char)
             end
             task.wait(0.05)
         end
+        anticheatActiveChars[char] = nil
     end)
 end
 
@@ -370,7 +381,11 @@ end
 whitelistBox.FocusLost:Connect(updateWhitelist)
 
 local chatConnections = {}
+local chatMonitorSetup = false
+
 local function setupChatMonitor()
+    if chatMonitorSetup then return end
+    chatMonitorSetup = true
     for _, conn in pairs(chatConnections) do
         pcall(function() conn:Disconnect() end)
     end
@@ -399,12 +414,12 @@ local function setupChatMonitor()
 end
 
 Players.PlayerAdded:Connect(function(plr)
-    setupChatMonitor()
+    task.delay(0.5, setupChatMonitor)
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
     removeEsp(plr)
-    setupChatMonitor()
+    task.delay(0.5, setupChatMonitor)
 end)
 
 setupChatMonitor()
@@ -470,6 +485,7 @@ local function updateDrawingEsp()
         end
         return
     end
+    cleanupEspForLeftPlayers()
     local viewport = camera.ViewportSize
     local screenCenter = Vector2.new(viewport.X / 2, viewport.Y / 2)
     local camPos = camera.CFrame.Position
@@ -645,12 +661,10 @@ end)
 local fpsActive = false
 
 safeConnect("mainLoop", function()
-    pcall(function()
-        local char = player.Character
-        if char then
-            startAnticheatLoop(char)
-        end
-    end)
+    local char = player.Character
+    if char and not anticheatActiveChars[char] then
+        startAnticheatLoop(char)
+    end
     if (states.fov and not (states.locked and not isAdmin)) or states.adminFPS then
         fovCircle.Visible = true
         local mousePos = UserInputService:GetMouseLocation()
@@ -665,7 +679,6 @@ safeConnect("mainLoop", function()
     elseif states.aimAssist then
         aimAssist()
     end
-    local char = player.Character
     if char and char ~= lastChar then
         setupCharacter()
     end
@@ -890,12 +903,3 @@ if player.Character then
     startAnticheatLoop(player.Character)
     setupCharacter()
 end
-
-task.spawn(function()
-    while task.wait(math.random(30, 60)) do
-        if not panelVisible then
-            screenGui.Name = randomName()
-            panel.Name = randomName()
-        end
-    end
-end)
