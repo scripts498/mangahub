@@ -1,0 +1,132 @@
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+local Window = Fluent:CreateWindow({
+    Title = "Manga Hub",
+    SubTitle = "by haxxmod_01299",
+    TabWidth = 120,
+    Size = UDim2.fromOffset(600, 400),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local FeraTab = Window:AddTab({ Title = "Fera", Icon = "sword" })
+
+
+local slowFeraActive = false
+local slowFeraTask = nil
+
+local function iHaveHammer()
+    local char = LocalPlayer.Character
+    return char and char:FindFirstChild("Hammer") ~= nil
+end
+
+local function findHammerOwners()
+    local owners = {}
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("Hammer") then
+            table.insert(owners, plr)
+        end
+    end
+    return owners
+end
+
+local function startSlowFera()
+    slowFeraTask = task.spawn(function()
+        while slowFeraActive do
+            local owners = findHammerOwners()
+            for _, target in pairs(owners) do
+                pcall(function()
+                    local args = { [1] = "Jumped" }
+                    target.Character.BeastPowers.PowersEvent:FireServer(unpack(args))
+                end)
+            end
+            task.wait(2)
+        end
+    end)
+end
+
+FeraTab:AddToggle("SlowFera", {
+    Title = "Slow Fera",
+    Description = "Deixa a fera lenta.",
+    Default = false
+}):OnChanged(function(state)
+    if state then
+        if iHaveHammer() then
+            Fluent:Notify({
+                Title = "erro",
+                Content = "Você é a fera.",
+                Duration = 4
+            })
+            task.delay(0.1, function()
+                slowFeraActive = false
+            end)
+            return
+        end
+        slowFeraActive = true
+        startSlowFera()
+        Fluent:Notify({
+            Title = "Slow Fera",
+            Content = "agora a fera vai ficar lenta.",
+            Duration = 3
+        })
+    else
+        slowFeraActive = false
+        if slowFeraTask then
+            task.cancel(slowFeraTask)
+            slowFeraTask = nil
+        end
+    end
+end)
+
+
+local antiSlowActive = false
+local originalNamecall = nil
+
+
+local function setupAntiSlowHook()
+    originalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if antiSlowActive and method == "FireServer" then
+            
+            if self.Name == "PowersEvent" and self.Parent and self.Parent.Name == "BeastPowers" then
+                local args = {...}
+                if args[1] == "Jumped" then
+                    
+                    return nil
+                end
+            end
+        end
+        return originalNamecall(self, ...)
+    end)
+end
+
+
+pcall(setupAntiSlowHook)
+
+FeraTab:AddToggle("AntiSlow", {
+    Title = "Anti-Slow",
+    Description = "Te protege do slow fera dos outros scripters. Ative apenas se você for a fera.",
+    Default = false
+}):OnChanged(function(state)
+    antiSlowActive = state
+    if state then
+        Fluent:Notify({
+            Title = "Anti-Slow",
+            Content = "Proteção ativa.",
+            Duration = 3
+        })
+    else
+        Fluent:Notify({
+            Title = "Anti-Slow",
+            Content = "Proteção desativada.",
+            Duration = 3
+        })
+    end
+end)
+
+Window:SelectTab(1)
