@@ -45,7 +45,7 @@ local function startSlowFera()
                     target.Character.BeastPowers.PowersEvent:FireServer(unpack(args))
                 end)
             end
-            task.wait(2)
+            task.wait(0.1)
         end
     end)
 end
