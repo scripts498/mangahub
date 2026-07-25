@@ -1,0 +1,196 @@
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local RunService = game:GetService("RunService")
+
+getgenv().gethui = function()
+    return game:GetService("CoreGui")
+end
+
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local windowSize
+
+if isMobile then
+    windowSize = UDim2.fromOffset(400, 300)
+else
+    windowSize = UDim2.fromOffset(600, 400)
+end
+
+local Window = Fluent:CreateWindow({
+    Title = "Manga Hub 2.1 | Brookhaven RP | Português",
+    SubTitle = "Bem-vindo ao Manga Hub!",
+    TabWidth = 120,
+    Size = windowSize,
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+Fluent:Notify({
+    Title = "Bem-vindo",
+    Content = "Bem-vindo ao MANGA HUB!!",
+    Duration = 15
+})
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MangaHubMinimizeButton"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.DisplayOrder = 999
+ScreenGui.Parent = CoreGui
+
+local Button = Instance.new("TextButton")
+Button.Size = isMobile and UDim2.fromOffset(40, 40) or UDim2.fromOffset(55, 55)
+Button.Position = UDim2.new(1, -70, 0, 70)
+Button.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+Button.Text = "🥭"
+Button.TextScaled = true
+Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+Button.BorderSizePixel = 0
+Button.AutoButtonColor = true
+Button.AnchorPoint = Vector2.new(0.5, 0.5)
+Button.BackgroundTransparency = 0.1
+Button.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(1,0)
+UICorner.Parent = Button
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(200, 100, 0)
+UIStroke.Thickness = 2
+UIStroke.Parent = Button
+
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    Button.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+Button.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Button.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Button.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+Button.MouseButton1Click:Connect(function()
+    local WindowFrame = CoreGui:FindFirstChild("ScreenGui")
+    if WindowFrame then
+        WindowFrame.Enabled = not WindowFrame.Enabled
+    end
+end)
+
+
+local PlayerTab = Window:AddTab({ Title = "Player", Icon = "user" })
+
+
+local utilFolder = ReplicatedStorage:WaitForChild("Util", 5)
+local netModule = utilFolder and utilFolder:WaitForChild("Net", 5)
+local targetRemote = netModule and netModule:FindFirstChild("RE/PlayerLostSanity")
+
+local sanityLoopConnection
+local isSanityLoopRunning = false
+
+local function startSanityLoop()
+    if isSanityLoopRunning then return end
+    isSanityLoopRunning = true
+    
+    sanityLoopConnection = task.spawn(function()
+        while isSanityLoopRunning do
+            local args = {
+                [1] = 0/0, -- NaN
+                [2] = "Job Stress",
+                [3] = true
+            }
+            
+            local success, err = pcall(function()
+                if targetRemote then
+                    targetRemote:FireServer(unpack(args))
+                end
+            end)
+            
+            if not success then
+                warn("Erro no loop de sanidade: " .. tostring(err))
+            end
+            
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function stopSanityLoop()
+    isSanityLoopRunning = false
+    if sanityLoopConnection then
+        -- task.spawn não retorna connection, então apenas marcamos a flag
+        sanityLoopConnection = nil
+    end
+end
+
+local SanidadeInfinitaToggle = PlayerTab:AddToggle("SanidadeInfinita", {
+    Title = "Sanidade Infinita",
+    Description = "Mantém sua sanidade no máximo.",
+    Default = false
+})
+
+SanidadeInfinitaToggle:OnChanged(function(value)
+    if not targetRemote then
+        Fluent:Notify({
+            Title = "Erro",
+            Content = "Remote não encontrado!",
+            Duration = 5
+        })
+        return
+    end
+    
+    if value then
+        startSanityLoop()
+        Fluent:Notify({
+            Title = "Sanidade Infinita Ativada",
+            Content = "sanidade infinita!",
+            Duration = 3
+        })
+    else
+        stopSanityLoop()
+        Fluent:Notify({
+            Title = "Sanidade Infinita Desativada",
+            Content = "agora você não tem mais sanidade infinita.",
+            Duration = 3
+        })
+    end
+end)
+
+-- Garante que o loop pare se o jogador morrer/respawnar
+player.CharacterRemoving:Connect(function()
+    if isSanityLoopRunning then
+        stopSanityLoop()
+        SanidadeInfinitaToggle:SetValue(false)
+    end
+end)
+
+Window:SelectTab(1)
