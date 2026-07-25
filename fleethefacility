@@ -3,6 +3,8 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local Window = Fluent:CreateWindow({
     Title = "Manga Hub",
@@ -15,13 +17,19 @@ local Window = Fluent:CreateWindow({
 })
 
 local FeraTab = Window:AddTab({ Title = "Fera", Icon = "sword" })
-
+local ESPTab = Window:AddTab({ Title = "ESP", Icon = "eye" })
+local PlayerTab = Window:AddTab({ Title = "Player", Icon = "user" })
 
 local slowFeraActive = false
 local slowFeraTask = nil
 
 local function iHaveHammer()
     local char = LocalPlayer.Character
+    return char and char:FindFirstChild("Hammer") ~= nil
+end
+
+local function playerHasHammer(plr)
+    local char = plr.Character
     return char and char:FindFirstChild("Hammer") ~= nil
 end
 
@@ -83,20 +91,16 @@ FeraTab:AddToggle("SlowFera", {
     end
 end)
 
-
 local antiSlowActive = false
 local originalNamecall = nil
-
 
 local function setupAntiSlowHook()
     originalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
         local method = getnamecallmethod()
         if antiSlowActive and method == "FireServer" then
-            
             if self.Name == "PowersEvent" and self.Parent and self.Parent.Name == "BeastPowers" then
                 local args = {...}
                 if args[1] == "Jumped" then
-                    
                     return nil
                 end
             end
@@ -104,7 +108,6 @@ local function setupAntiSlowHook()
         return originalNamecall(self, ...)
     end)
 end
-
 
 pcall(setupAntiSlowHook)
 
@@ -124,6 +127,791 @@ FeraTab:AddToggle("AntiSlow", {
         Fluent:Notify({
             Title = "Anti-Slow",
             Content = "Proteção desativada.",
+            Duration = 3
+        })
+    end
+end)
+
+local hitboxActive = false
+local hitboxObjects = {}
+local HITBOX_SIZE = 15
+
+local function isSurvivor(plr)
+    if plr == LocalPlayer then return false end
+    return not playerHasHammer(plr)
+end
+
+local function applyHitbox(plr)
+    if not isSurvivor(plr) then return end
+    local char = plr.Character
+    if not char then return end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp and hrp:IsA("BasePart") then
+        if not hrp:GetAttribute("_origSize") then
+            hrp:SetAttribute("_origSize", hrp.Size)
+        end
+        hrp.Size = Vector3.new(HITBOX_SIZE, HITBOX_SIZE, HITBOX_SIZE)
+        hrp.Transparency = 0.7
+        hrp.Color = Color3.fromRGB(255, 0, 255)
+    end
+
+    if not char:FindFirstChild("_MangaHitbox") then
+        local hitboxPart = Instance.new("Part")
+        hitboxPart.Name = "_MangaHitbox"
+        hitboxPart.Size = Vector3.new(HITBOX_SIZE, HITBOX_SIZE, HITBOX_SIZE)
+        hitboxPart.Transparency = 1
+        hitboxPart.CanCollide = false
+        hitboxPart.Anchored = false
+        hitboxPart.Parent = char
+
+        local weld = Instance.new("Weld")
+        weld.Part0 = hitboxPart
+        weld.Part1 = hrp
+        weld.C0 = CFrame.new(0, 0, 0)
+        weld.Parent = hitboxPart
+
+        table.insert(hitboxObjects, {
+            player = plr,
+            part = hitboxPart,
+            hrp = hrp
+        })
+    end
+end
+
+local function removeHitbox(plr)
+    for i = #hitboxObjects, 1, -1 do
+        local obj = hitboxObjects[i]
+        if obj.player == plr then
+            if obj.part and obj.part.Parent then
+                pcall(function() obj.part:Destroy() end)
+            end
+            if obj.hrp and obj.hrp.Parent then
+                local orig = obj.hrp:GetAttribute("_origSize")
+                if orig then
+                    obj.hrp.Size = orig
+                end
+                obj.hrp.Transparency = 1
+            end
+            table.remove(hitboxObjects, i)
+        end
+    end
+end
+
+local function clearAllHitboxes()
+    for _, obj in ipairs(hitboxObjects) do
+        if obj.part and obj.part.Parent then
+            pcall(function() obj.part:Destroy() end)
+        end
+        if obj.hrp and obj.hrp.Parent then
+            local orig = obj.hrp:GetAttribute("_origSize")
+            if orig then
+                obj.hrp.Size = orig
+            end
+            obj.hrp.Transparency = 1
+        end
+    end
+    hitboxObjects = {}
+end
+
+local function scanHitboxes()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if isSurvivor(plr) then
+            applyHitbox(plr)
+        end
+    end
+end
+
+local function monitorHitboxes()
+    while hitboxActive do
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr == LocalPlayer then continue end
+            local char = plr.Character
+            if not char then continue end
+
+            local hasHammer = playerHasHammer(plr)
+            local hasHitbox = false
+            for _, obj in ipairs(hitboxObjects) do
+                if obj.player == plr then
+                    hasHitbox = true
+                    break
+                end
+            end
+
+            if hasHammer and hasHitbox then
+                removeHitbox(plr)
+            elseif not hasHammer and not hasHitbox then
+                applyHitbox(plr)
+            elseif not hasHammer and hasHitbox then
+                applyHitbox(plr)
+            end
+        end
+        task.wait(0.3)
+    end
+end
+
+FeraTab:AddToggle("Hitbox", {
+    Title = "Aumentar Hitbox",
+    Description = "Aumenta o hitbox dos sobreviventes.",
+    Default = false
+}):OnChanged(function(state)
+    if state then
+        hitboxActive = true
+        scanHitboxes()
+        task.spawn(monitorHitboxes)
+        Fluent:Notify({
+            Title = "Hitbox",
+            Content = "Hitbox dos survivors aumentada.",
+            Duration = 3
+        })
+    else
+        hitboxActive = false
+        clearAllHitboxes()
+        Fluent:Notify({
+            Title = "Hitbox",
+            Content = "Hitbox restaurada.",
+            Duration = 3
+        })
+    end
+end)
+
+local spamCrouchActive = false
+local spamCrouchTask = nil
+
+local function startSpamCrouch()
+    spamCrouchTask = task.spawn(function()
+        while spamCrouchActive do
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
+            end)
+            task.wait(0.027)
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
+            end)
+            task.wait(0.027)
+        end
+    end)
+end
+
+PlayerTab:AddToggle("SpamCrouch", {
+    Title = "Spammar Agachada",
+    Description = "Spamma a agachada.",
+    Default = false
+}):OnChanged(function(state)
+    if state then
+        spamCrouchActive = true
+        startSpamCrouch()
+        Fluent:Notify({
+            Title = "Spam Agachada",
+            Content = "Spam ativado.",
+            Duration = 3
+        })
+    else
+        spamCrouchActive = false
+        if spamCrouchTask then
+            task.cancel(spamCrouchTask)
+            spamCrouchTask = nil
+        end
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
+        end)
+        Fluent:Notify({
+            Title = "Spam Agachada",
+            Content = "Spam desativado.",
+            Duration = 3
+        })
+    end
+end)
+
+local animCrouchActive = false
+local animCrouchTrack = nil
+local animCrouchSpeed = 1
+
+local function stopAnimCrouch()
+    if animCrouchTrack then
+        pcall(function() animCrouchTrack:Stop() end)
+        animCrouchTrack = nil
+    end
+end
+
+local function playAnimCrouch()
+    stopAnimCrouch()
+    if not animCrouchActive then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if not animator then
+        animator = Instance.new("Animator")
+        animator.Parent = humanoid
+    end
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://961932719"
+    local track = animator:LoadAnimation(anim)
+    anim:Destroy()
+    track.Looped = true
+    track:Play(0.1, 1, animCrouchSpeed)
+    animCrouchTrack = track
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+    if animCrouchActive then
+        task.wait(0.5)
+        playAnimCrouch()
+    end
+end)
+
+PlayerTab:AddToggle("AnimCrouch", {
+    Title = "Ativar animação de agachar",
+    Description = "Auto-explicativo",
+    Default = false
+}):OnChanged(function(state)
+    animCrouchActive = state
+    animCrouchSpeed = 1
+    if state then
+        playAnimCrouch()
+        Fluent:Notify({
+            Title = "Animação Agachar",
+            Content = "Ativada.",
+            Duration = 3
+        })
+    else
+        stopAnimCrouch()
+        Fluent:Notify({
+            Title = "Animação Agachar",
+            Content = "Desativada.",
+            Duration = 3
+        })
+    end
+end)
+
+local animCrouch15Active = false
+local animCrouch15Track = nil
+
+local function stopAnimCrouch15()
+    if animCrouch15Track then
+        pcall(function() animCrouch15Track:Stop() end)
+        animCrouch15Track = nil
+    end
+end
+
+local function playAnimCrouch15()
+    stopAnimCrouch15()
+    if not animCrouch15Active then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if not animator then
+        animator = Instance.new("Animator")
+        animator.Parent = humanoid
+    end
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://961932719"
+    local track = animator:LoadAnimation(anim)
+    anim:Destroy()
+    track.Looped = true
+    track:Play(0.1, 1, 30)
+    animCrouch15Track = track
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+    if animCrouch15Active then
+        task.wait(0.5)
+        playAnimCrouch15()
+    end
+end)
+
+PlayerTab:AddToggle("AnimCrouch15", {
+    Title = "Ativar animação de agachar 30x",
+    Description = "Auto-explicativo",
+    Default = false
+}):OnChanged(function(state)
+    animCrouch15Active = state
+    if state then
+        playAnimCrouch15()
+        Fluent:Notify({
+            Title = "Animação Agachar 30x",
+            Content = "Ativada.",
+            Duration = 3
+        })
+    else
+        stopAnimCrouch15()
+        Fluent:Notify({
+            Title = "Animação Agachar 30x",
+            Content = "Desativada.",
+            Duration = 3
+        })
+    end
+end)
+
+local animTypeActive = false
+local animTypeTrack = nil
+local animTypeSpeed = 1
+
+local function stopAnimType()
+    if animTypeTrack then
+        pcall(function() animTypeTrack:Stop() end)
+        animTypeTrack = nil
+    end
+end
+
+local function playAnimType()
+    stopAnimType()
+    if not animTypeActive then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if not animator then
+        animator = Instance.new("Animator")
+        animator.Parent = humanoid
+    end
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://894496111"
+    local track = animator:LoadAnimation(anim)
+    anim:Destroy()
+    track.Looped = true
+    track:Play(0.1, 1, animTypeSpeed)
+    animTypeTrack = track
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+    if animTypeActive then
+        task.wait(0.5)
+        playAnimType()
+    end
+end)
+
+PlayerTab:AddToggle("AnimType", {
+    Title = "Ativar animação de digitar",
+    Description = "Auto-explicativo",
+    Default = false
+}):OnChanged(function(state)
+    animTypeActive = state
+    animTypeSpeed = 1
+    if state then
+        playAnimType()
+        Fluent:Notify({
+            Title = "Animação Digitar",
+            Content = "Ativada.",
+            Duration = 3
+        })
+    else
+        stopAnimType()
+        Fluent:Notify({
+            Title = "Animação Digitar",
+            Content = "Desativada.",
+            Duration = 3
+        })
+    end
+end)
+
+local animType15Active = false
+local animType15Track = nil
+
+local function stopAnimType15()
+    if animType15Track then
+        pcall(function() animType15Track:Stop() end)
+        animType15Track = nil
+    end
+end
+
+local function playAnimType15()
+    stopAnimType15()
+    if not animType15Active then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if not animator then
+        animator = Instance.new("Animator")
+        animator.Parent = humanoid
+    end
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://894496111"
+    local track = animator:LoadAnimation(anim)
+    anim:Destroy()
+    track.Looped = true
+    track:Play(0.1, 1, 30)
+    animType15Track = track
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+    if animType15Active then
+        task.wait(0.5)
+        playAnimType15()
+    end
+end)
+
+PlayerTab:AddToggle("AnimType15", {
+    Title = "Ativar animação de digitar 30x",
+    Description = "Auto-explicativo",
+    Default = false
+}):OnChanged(function(state)
+    animType15Active = state
+    if state then
+        playAnimType15()
+        Fluent:Notify({
+            Title = "Animação Digitar 30x",
+            Content = "Ativada.",
+            Duration = 3
+        })
+    else
+        stopAnimType15()
+        Fluent:Notify({
+            Title = "Animação Digitar 30x",
+            Content = "Desativada.",
+            Duration = 3
+        })
+    end
+end)
+
+local espComputersActive = false
+local espComputersConnections = {}
+local espComputersObjects = {}
+
+local function isScreenGreen(computer)
+    local screen = computer:FindFirstChild("Screen")
+    if not screen or not screen:IsA("BasePart") then return false end
+    local color = screen.Color
+    return color.G > color.R and color.G > color.B
+end
+
+local function removeComputerESP(computer)
+    for i, obj in ipairs(espComputersObjects) do
+        if obj.computer == computer then
+            if obj.highlight then pcall(function() obj.highlight:Destroy() end) end
+            if obj.billboard then pcall(function() obj.billboard:Destroy() end) end
+            table.remove(espComputersObjects, i)
+            break
+        end
+    end
+end
+
+local function createComputerESP(computer)
+    if not computer or not computer.Parent then return end
+    if computer:FindFirstChild("_MangaESP") then return end
+    if isScreenGreen(computer) then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "_MangaESP"
+    highlight.FillColor = Color3.fromRGB(0, 255, 100)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Adornee = computer
+    highlight.Parent = computer
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "_MangaESP_Billboard"
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 500
+    billboard.Parent = computer
+
+    local label = Instance.new("TextLabel")
+    label.Name = "_MangaESP_Label"
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(0, 255, 100)
+    label.TextStrokeTransparency = 0.5
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
+    label.Text = "COMPUTADOR"
+    label.Parent = billboard
+
+    local distLabel = Instance.new("TextLabel")
+    distLabel.Name = "_MangaESP_Dist"
+    distLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    distLabel.Position = UDim2.new(0, 0, 0.5, 0)
+    distLabel.BackgroundTransparency = 1
+    distLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    distLabel.TextStrokeTransparency = 0.5
+    distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    distLabel.Font = Enum.Font.Gotham
+    distLabel.TextSize = 12
+    distLabel.Text = "[0m]"
+    distLabel.Parent = billboard
+
+    table.insert(espComputersObjects, {
+        computer = computer,
+        highlight = highlight,
+        billboard = billboard,
+        distLabel = distLabel
+    })
+end
+
+local function scanForComputers()
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "ComputerTable" and obj:IsA("Model") then
+            createComputerESP(obj)
+        end
+    end
+end
+
+local function clearComputerESP()
+    for _, obj in ipairs(espComputersObjects) do
+        if obj.highlight then pcall(function() obj.highlight:Destroy() end) end
+        if obj.billboard then pcall(function() obj.billboard:Destroy() end) end
+    end
+    espComputersObjects = {}
+    for _, conn in ipairs(espComputersConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    espComputersConnections = {}
+end
+
+local function updateComputerDistances()
+    while espComputersActive do
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            for _, obj in ipairs(espComputersObjects) do
+                if obj.computer and obj.computer.Parent and obj.distLabel then
+                    local primary = obj.computer.PrimaryPart or obj.computer:FindFirstChildWhichIsA("BasePart")
+                    if primary then
+                        local dist = math.floor((hrp.Position - primary.Position).Magnitude)
+                        obj.distLabel.Text = "[" .. tostring(dist) .. "m]"
+                    end
+                end
+            end
+        end
+        task.wait(0.1)
+    end
+end
+
+local function monitorComputerScreens()
+    while espComputersActive do
+        for i = #espComputersObjects, 1, -1 do
+            local obj = espComputersObjects[i]
+            if obj.computer and obj.computer.Parent then
+                if isScreenGreen(obj.computer) then
+                    removeComputerESP(obj.computer)
+                end
+            end
+        end
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj.Name == "ComputerTable" and obj:IsA("Model") then
+                local hasESP = false
+                for _, existing in ipairs(espComputersObjects) do
+                    if existing.computer == obj then
+                        hasESP = true
+                        break
+                    end
+                end
+                if not hasESP and not isScreenGreen(obj) then
+                    createComputerESP(obj)
+                end
+            end
+        end
+        task.wait(0.5)
+    end
+end
+
+ESPTab:AddToggle("ESPComputers", {
+    Title = "ESP Computadores",
+    Description = "Destaca todos os computadores no mapa.",
+    Default = false
+}):OnChanged(function(state)
+    if state then
+        espComputersActive = true
+        scanForComputers()
+        task.spawn(updateComputerDistances)
+        task.spawn(monitorComputerScreens)
+        Fluent:Notify({
+            Title = "ESP Computadores",
+            Content = "ESP ativado.",
+            Duration = 3
+        })
+    else
+        espComputersActive = false
+        clearComputerESP()
+        Fluent:Notify({
+            Title = "ESP Computadores",
+            Content = "ESP desativado.",
+            Duration = 3
+        })
+    end
+end)
+
+local espPlayersActive = false
+local espPlayersObjects = {}
+local espPlayersConnections = {}
+local MAX_PLAYER_DISTANCE = 200
+
+local function removePlayerESP(plr)
+    for i, obj in ipairs(espPlayersObjects) do
+        if obj.player == plr then
+            if obj.highlight then pcall(function() obj.highlight:Destroy() end) end
+            if obj.billboard then pcall(function() obj.billboard:Destroy() end) end
+            table.remove(espPlayersObjects, i)
+            break
+        end
+    end
+end
+
+local function createPlayerESP(plr)
+    if plr == LocalPlayer then return end
+    if not plr.Character then return end
+    local char = plr.Character
+    if not char:FindFirstChild("HumanoidRootPart") then return end
+
+    for _, existing in ipairs(espPlayersObjects) do
+        if existing.player == plr then return end
+    end
+
+    local hasHammer = playerHasHammer(plr)
+    local color = hasHammer and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 100)
+    local labelText = hasHammer and "FERA" or "SURVIVOR"
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "_MangaESP_Player"
+    highlight.FillColor = color
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Adornee = char
+    highlight.Parent = char
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "_MangaESP_Player_Billboard"
+    billboard.Size = UDim2.new(0, 200, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 4, 0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = MAX_PLAYER_DISTANCE
+    billboard.Parent = char
+
+    local label = Instance.new("TextLabel")
+    label.Name = "_MangaESP_Player_Label"
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0.5
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
+    label.Text = plr.Name .. " [" .. labelText .. "]"
+    label.Parent = billboard
+
+    table.insert(espPlayersObjects, {
+        player = plr,
+        highlight = highlight,
+        billboard = billboard,
+        label = label,
+        hasHammer = hasHammer
+    })
+end
+
+local function clearPlayerESP()
+    for _, obj in ipairs(espPlayersObjects) do
+        if obj.highlight then pcall(function() obj.highlight:Destroy() end) end
+        if obj.billboard then pcall(function() obj.billboard:Destroy() end) end
+    end
+    espPlayersObjects = {}
+    for _, conn in ipairs(espPlayersConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    espPlayersConnections = {}
+end
+
+local function getCharacterPosition(plr)
+    local char = plr.Character
+    if not char then return nil end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then return hrp.Position end
+    return nil
+end
+
+local function updatePlayerESP()
+    while espPlayersActive do
+        local myPos = getCharacterPosition(LocalPlayer)
+        if myPos then
+            for i = #espPlayersObjects, 1, -1 do
+                local obj = espPlayersObjects[i]
+                local plr = obj.player
+                if not plr or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
+                    if obj.highlight then pcall(function() obj.highlight:Destroy() end) end
+                    if obj.billboard then pcall(function() obj.billboard:Destroy() end) end
+                    table.remove(espPlayersObjects, i)
+                else
+                    local theirPos = getCharacterPosition(plr)
+                    if theirPos then
+                        local dist = (myPos - theirPos).Magnitude
+                        if dist > MAX_PLAYER_DISTANCE then
+                            if obj.highlight then pcall(function() obj.highlight:Destroy() end) end
+                            if obj.billboard then pcall(function() obj.billboard:Destroy() end) end
+                            table.remove(espPlayersObjects, i)
+                        else
+                            local currentHasHammer = playerHasHammer(plr)
+                            if currentHasHammer ~= obj.hasHammer then
+                                local newColor = currentHasHammer and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(0, 255, 100)
+                                local newText = currentHasHammer and "FERA" or "SURVIVOR"
+                                obj.hasHammer = currentHasHammer
+                                if obj.highlight then
+                                    obj.highlight.FillColor = newColor
+                                end
+                                if obj.label then
+                                    obj.label.TextColor3 = newColor
+                                    obj.label.Text = plr.Name .. " [" .. newText .. "]"
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer then
+                    local theirPos = getCharacterPosition(plr)
+                    if theirPos and (myPos - theirPos).Magnitude <= MAX_PLAYER_DISTANCE then
+                        createPlayerESP(plr)
+                    end
+                end
+            end
+        end
+        task.wait(0.2)
+    end
+end
+
+ESPTab:AddToggle("ESPPlayers", {
+    Title = "ESP Players",
+    Description = "Destaca players próximos. Verde = survivor, Vermelho = fera.",
+    Default = false
+}):OnChanged(function(state)
+    if state then
+        espPlayersActive = true
+        for _, plr in ipairs(Players:GetPlayers()) do
+            createPlayerESP(plr)
+        end
+        local addedConn = Players.PlayerAdded:Connect(function(plr)
+            task.wait(1)
+            createPlayerESP(plr)
+        end)
+        table.insert(espPlayersConnections, addedConn)
+        local removingConn = Players.PlayerRemoving:Connect(function(plr)
+            removePlayerESP(plr)
+        end)
+        table.insert(espPlayersConnections, removingConn)
+        task.spawn(updatePlayerESP)
+        Fluent:Notify({
+            Title = "ESP Players",
+            Content = "ESP ativado.",
+            Duration = 3
+        })
+    else
+        espPlayersActive = false
+        clearPlayerESP()
+        Fluent:Notify({
+            Title = "ESP Players",
+            Content = "ESP desativado.",
             Duration = 3
         })
     end
