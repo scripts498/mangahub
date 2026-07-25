@@ -1,0 +1,15 @@
+local id = game.PlaceId
+
+if id == 66654135 then
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/murdermystery2",true))()
+elseif id == 1225203548 then
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/BBB%20brasil",true))()
+elseif id == 4924922222 then
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/manga%20hub%20brookhaven",true))()
+elseif id == 893973440 then
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/fleethefacility",true))()
+elseif id == 78515283254292 then
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/hospital%20de%20animais",true))()
+elseif id == 14313259147 then
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/fortline%20manga%20hub",true))()
+end
