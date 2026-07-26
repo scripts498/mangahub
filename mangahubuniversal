@@ -1,23 +1,16 @@
-local id = game.PlaceId
+local scripts = {
+    [66654135] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/murdermystery2",
+    [498792494] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/BBB%20brasil",
+    [1686885941] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/manga%20hub%20brookhaven",
+    [372226183] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/fleethefacility",
+    [10148749921] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/hospital%20de%20animais",
+    [4948814458] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/fortline%20manga%20hub"
+}
 
-if id == 66654135 then
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/murdermystery2", true))()
+local url = scripts[game.GameId]
 
-elseif id == 1225203548 then
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/BBB%20brasil", true))()
-
-elseif id == 4924922222 then
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/manga%20hub%20brookhaven", true))()
-
-elseif id == 893973440 then
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/fleethefacility", true))()
-
-elseif id == 78515283254292 then
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/hospital%20de%20animais", true))()
-
-elseif id == 14313259147 then
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/fortline%20manga%20hub", true))()
-
+if url then
+    loadstring(game:HttpGet(url, true))()
 else
     game.Players.LocalPlayer:Kick("Esse jogo não é suportado pelo Manga Hub.")
 end
