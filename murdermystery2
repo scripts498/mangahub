@@ -177,6 +177,11 @@ end
 
 local function monitorESP()
     while espActive do
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and not espData[plr] then
+                createESP(plr)
+            end
+        end
         for plr, data in pairs(espData) do
             if not plr.Parent then
                 removeESP(plr)
@@ -209,8 +214,15 @@ ESPTab:AddToggle("ESPPlayers", {
             createESP(plr)
         end
         local addedConn = Players.PlayerAdded:Connect(function(plr)
-            task.wait(1)
-            createESP(plr)
+            local charConn
+            charConn = plr.CharacterAdded:Connect(function()
+                createESP(plr)
+                if charConn then charConn:Disconnect() end
+            end)
+            if plr.Character then
+                createESP(plr)
+                if charConn then charConn:Disconnect() end
+            end
         end)
         table.insert(espConnections, addedConn)
         local removingConn = Players.PlayerRemoving:Connect(function(plr)
