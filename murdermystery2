@@ -2,7 +2,6 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local Workspace = game:GetService("Workspace")
 
 local Window = Fluent:CreateWindow({
     Title = "Manga Hub",
@@ -45,48 +44,69 @@ end
 local function removeESP(plr)
     local data = espData[plr]
     if not data then return end
+    for _, conn in ipairs(data.connections or {}) do
+        pcall(function() conn:Disconnect() end)
+    end
     if data.highlight then pcall(function() data.highlight:Destroy() end) end
     if data.billboard then pcall(function() data.billboard:Destroy() end) end
-    if data.charAddedConn then pcall(function() data.charAddedConn:Disconnect() end) end
-    if data.charRemovingConn then pcall(function() data.charRemovingConn:Disconnect() end) end
-    if data.backpackConn then pcall(function() data.backpackConn:Disconnect() end) end
     espData[plr] = nil
 end
 
-local function setupItemListeners(plr, data)
-    local char = plr.Character
-    if not char then return end
-    local backpack = plr:FindFirstChild("Backpack")
-
-    local function update()
-        local role, color = getRole(plr)
+local function updateESPVisuals(data, plr)
+    local role, color = getRole(plr)
+    if data.highlight then
         data.highlight.FillColor = color
         data.highlight.OutlineColor = color
+    end
+    if data.label then
         data.label.TextColor3 = color
         data.label.Text = plr.Name .. " [" .. role .. "]"
     end
+end
 
-    if data.charAddedConn then pcall(function() data.charAddedConn:Disconnect() end) end
-    if data.charRemovingConn then pcall(function() data.charRemovingConn:Disconnect() end) end
-    if data.backpackConn then pcall(function() data.backpackConn:Disconnect() end) end
+local function setupListeners(plr, data)
+    local conns = {}
 
-    data.charAddedConn = char.ChildAdded:Connect(function(child)
-        if child.Name == "Knife" or child.Name == "Gun" then
-            update()
+    local function onChar(char)
+        for _, c in ipairs(conns) do
+            pcall(function() c:Disconnect() end)
         end
-    end)
-    data.charRemovingConn = char.ChildRemoved:Connect(function(child)
-        if child.Name == "Knife" or child.Name == "Gun" then
-            update()
-        end
-    end)
-    if backpack then
-        data.backpackConn = backpack.ChildAdded:Connect(function(child)
+        table.clear(conns)
+
+        if not char then return end
+
+        table.insert(conns, char.ChildAdded:Connect(function(child)
             if child.Name == "Knife" or child.Name == "Gun" then
-                update()
+                updateESPVisuals(data, plr)
             end
-        end)
+        end))
+
+        table.insert(conns, char.ChildRemoved:Connect(function(child)
+            if child.Name == "Knife" or child.Name == "Gun" then
+                updateESPVisuals(data, plr)
+            end
+        end))
+
+        local backpack = plr:FindFirstChild("Backpack")
+        if backpack then
+            table.insert(conns, backpack.ChildAdded:Connect(function(child)
+                if child.Name == "Knife" or child.Name == "Gun" then
+                    updateESPVisuals(data, plr)
+                end
+            end))
+            table.insert(conns, backpack.ChildRemoved:Connect(function(child)
+                if child.Name == "Knife" or child.Name == "Gun" then
+                    updateESPVisuals(data, plr)
+                end
+            end))
+        end
     end
+
+    local char = plr.Character
+    if char then onChar(char) end
+
+    table.insert(conns, plr.CharacterAdded:Connect(onChar))
+    data.connections = conns
 end
 
 local function createESP(plr)
@@ -129,23 +149,24 @@ local function createESP(plr)
     label.Text = plr.Name .. " [" .. role .. "]"
     label.Parent = billboard
 
-    espData[plr] = {
+    local data = {
         player = plr,
         highlight = highlight,
         billboard = billboard,
-        label = label
+        label = label,
+        connections = {}
     }
-
-    setupItemListeners(plr, espData[plr])
+    espData[plr] = data
+    setupListeners(plr, data)
 end
 
 local function clearAllESP()
     for plr, data in pairs(espData) do
+        for _, conn in ipairs(data.connections or {}) do
+            pcall(function() conn:Disconnect() end)
+        end
         if data.highlight then pcall(function() data.highlight:Destroy() end) end
         if data.billboard then pcall(function() data.billboard:Destroy() end) end
-        if data.charAddedConn then pcall(function() data.charAddedConn:Disconnect() end) end
-        if data.charRemovingConn then pcall(function() data.charRemovingConn:Disconnect() end) end
-        if data.backpackConn then pcall(function() data.backpackConn:Disconnect() end) end
     end
     espData = {}
     for _, conn in ipairs(espConnections) do
@@ -159,14 +180,21 @@ local function monitorESP()
         for plr, data in pairs(espData) do
             if not plr.Parent then
                 removeESP(plr)
-            elseif plr.Character and data.highlight and data.highlight.Parent ~= plr.Character then
-                pcall(function() data.highlight:Destroy() end)
-                pcall(function() data.billboard:Destroy() end)
-                espData[plr] = nil
-                createESP(plr)
+            else
+                local char = plr.Character
+                if char and data.highlight then
+                    if data.highlight.Parent ~= char then
+                        pcall(function() data.highlight:Destroy() end)
+                        pcall(function() data.billboard:Destroy() end)
+                        espData[plr] = nil
+                        createESP(plr)
+                    else
+                        updateESPVisuals(data, plr)
+                    end
+                end
             end
         end
-        task.wait(1)
+        task.wait(0.5)
     end
 end
 
