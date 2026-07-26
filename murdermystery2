@@ -2,7 +2,6 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
 
 local Window = Fluent:CreateWindow({
     Title = "Manga Hub",
@@ -15,7 +14,11 @@ local Window = Fluent:CreateWindow({
 })
 
 local ESPTab = Window:AddTab({ Title = "ESP", Icon = "eye" })
+local CombatTab = Window:AddTab({ Title = "Combat", Icon = "crosshair" })
 
+-- ============================================================
+-- ESP
+-- ============================================================
 local espActive = false
 local espData = {}
 local espConnections = {}
@@ -119,53 +122,32 @@ local function createESP(plr)
     local conns = {}
 
     local function onChar(newChar)
-        for _, c in ipairs(conns) do
-            pcall(function() c:Disconnect() end)
-        end
-        table.clear(conns)
-
-        if not newChar then return end
-        local newHrp = newChar:WaitForChild("HumanoidRootPart", 3)
-        if not newHrp then return end
-
-        pcall(function()
-            data.highlight.Adornee = newHrp
-            data.highlight.Parent = newHrp
-            data.billboard.Parent = newHrp
-        end)
-
-        table.insert(conns, newChar.ChildAdded:Connect(function(child)
-            if child.Name == "Knife" or child.Name == "Gun" then
-                updateVisuals(data, plr)
-            end
-        end))
-
-        table.insert(conns, newChar.ChildRemoved:Connect(function(child)
-            if child.Name == "Knife" or child.Name == "Gun" then
-                updateVisuals(data, plr)
-            end
-        end))
-
-        local backpack = plr:FindFirstChild("Backpack")
-        if backpack then
-            table.insert(conns, backpack.ChildAdded:Connect(function(child)
-                if child.Name == "Knife" or child.Name == "Gun" then
-                    updateVisuals(data, plr)
-                end
-            end))
-            table.insert(conns, backpack.ChildRemoved:Connect(function(child)
-                if child.Name == "Knife" or child.Name == "Gun" then
-                    updateVisuals(data, plr)
-                end
-            end))
+        removeESP(plr)
+        if espActive then
+            task.delay(0.5, function()
+                createESP(plr)
+            end)
         end
     end
 
     table.insert(conns, plr.CharacterAdded:Connect(onChar))
     table.insert(conns, plr.CharacterRemoving:Connect(function()
-        pcall(function() data.highlight.Parent = nil end)
-        pcall(function() data.billboard.Parent = nil end)
+        removeESP(plr)
     end))
+
+    local backpack = plr:FindFirstChild("Backpack")
+    if backpack then
+        table.insert(conns, backpack.ChildAdded:Connect(function(child)
+            if child.Name == "Knife" or child.Name == "Gun" then
+                updateVisuals(data, plr)
+            end
+        end))
+        table.insert(conns, backpack.ChildRemoved:Connect(function(child)
+            if child.Name == "Knife" or child.Name == "Gun" then
+                updateVisuals(data, plr)
+            end
+        end))
+    end
 
     data.connections = conns
 end
@@ -228,7 +210,7 @@ end
 
 ESPTab:AddToggle("ESPPlayers", {
     Title = "ESP Players",
-    Description = "Verde = inocente, Vermelho = assasino, Azul = sheriff. Max: 600 studs.",
+    Description = "Verde = inocente, Vermelho = assasino, Azul = sheriff.",
     Default = false
 }):OnChanged(function(state)
     if state then
@@ -238,15 +220,11 @@ ESPTab:AddToggle("ESPPlayers", {
         end
 
         local addedConn = Players.PlayerAdded:Connect(function(plr)
-            local charConn
-            charConn = plr.CharacterAdded:Connect(function()
-                createESP(plr)
-                if charConn then charConn:Disconnect() end
+            task.delay(1, function()
+                if espActive then
+                    createESP(plr)
+                end
             end)
-            if plr.Character then
-                createESP(plr)
-                if charConn then charConn:Disconnect() end
-            end
         end)
         table.insert(espConnections, addedConn)
 
@@ -258,7 +236,7 @@ ESPTab:AddToggle("ESPPlayers", {
         task.spawn(monitorESP)
         Fluent:Notify({
             Title = "ESP Players",
-            Content = "ESP ativado. Range: 600 studs.",
+            Content = "ESP ativado.",
             Duration = 3
         })
     else
@@ -267,6 +245,166 @@ ESPTab:AddToggle("ESPPlayers", {
         Fluent:Notify({
             Title = "ESP Players",
             Content = "ESP desativado.",
+            Duration = 3
+        })
+    end
+end)
+
+-- ============================================================
+-- HITBOX - EXPANDE TODAS AS PARTES DO CHARACTER
+-- ============================================================
+local hbActive = false
+local hbData = {}
+local HB_SIZE = 15
+
+local HITBOX_PARTS = {
+    "HumanoidRootPart",
+    "Head",
+    "Torso",
+    "UpperTorso",
+    "LowerTorso",
+    "Left Arm",
+    "Right Arm",
+    "Left Leg",
+    "Right Leg",
+    "LeftUpperArm",
+    "LeftLowerArm",
+    "LeftHand",
+    "RightUpperArm",
+    "RightLowerArm",
+    "RightHand",
+    "LeftUpperLeg",
+    "LeftLowerLeg",
+    "LeftFoot",
+    "RightUpperLeg",
+    "RightLowerLeg",
+    "RightFoot"
+}
+
+local function removeHitbox(plr)
+    local data = hbData[plr]
+    if not data then return end
+    for _, conn in ipairs(data.connections or {}) do
+        pcall(function() conn:Disconnect() end)
+    end
+    for partName, info in pairs(data.parts or {}) do
+        if info.part and info.part.Parent then
+            local orig = info.part:GetAttribute("_manga_orig_size")
+            if orig then
+                info.part.Size = orig
+            end
+        end
+    end
+    if data.extraPart and data.extraPart.Parent then
+        pcall(function() data.extraPart:Destroy() end)
+    end
+    hbData[plr] = nil
+end
+
+local function applyHitbox(plr)
+    if plr == LocalPlayer then return end
+    if hbData[plr] then return end
+
+    local char = plr.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local parts = {}
+
+    for _, partName in ipairs(HITBOX_PARTS) do
+        local part = char:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            local origSize = part.Size
+            if not part:GetAttribute("_manga_orig_size") then
+                part:SetAttribute("_manga_orig_size", origSize)
+            end
+            part.Size = Vector3.new(HB_SIZE, HB_SIZE, HB_SIZE)
+            part.Transparency = 1
+            part.CanCollide = false
+            parts[partName] = {
+                part = part,
+                orig = origSize
+            }
+        end
+    end
+
+    local extraPart = Instance.new("Part")
+    extraPart.Name = "_MangaHB"
+    extraPart.Size = Vector3.new(HB_SIZE, HB_SIZE, HB_SIZE)
+    extraPart.Transparency = 1
+    extraPart.CanCollide = false
+    extraPart.Anchored = false
+    extraPart.Parent = char
+
+    local weld = Instance.new("Weld")
+    weld.Part0 = extraPart
+    weld.Part1 = hrp
+    weld.C0 = CFrame.new(0, 0, 0)
+    weld.Parent = extraPart
+
+    local data = {
+        player = plr,
+        parts = parts,
+        extraPart = extraPart,
+        connections = {}
+    }
+    hbData[plr] = data
+
+    local conns = {}
+    table.insert(conns, plr.CharacterAdded:Connect(function(newChar)
+        task.wait(0.3)
+        removeHitbox(plr)
+        if hbActive then
+            applyHitbox(plr)
+        end
+    end))
+    table.insert(conns, plr.CharacterRemoving:Connect(function()
+        removeHitbox(plr)
+    end))
+    data.connections = conns
+end
+
+local function clearAllHitboxes()
+    for plr, data in pairs(hbData) do
+        removeHitbox(plr)
+    end
+    hbData = {}
+end
+
+local function monitorHitbox()
+    while hbActive do
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and not hbData[plr] then
+                applyHitbox(plr)
+            end
+        end
+        task.wait(0.5)
+    end
+end
+
+CombatTab:AddToggle("Hitbox", {
+    Title = "Hitbox Expander",
+    Description = "Aumenta o hitbox dos players.",
+    Default = false
+}):OnChanged(function(state)
+    if state then
+        hbActive = true
+        for _, plr in ipairs(Players:GetPlayers()) do
+            applyHitbox(plr)
+        end
+        task.spawn(monitorHitbox)
+        Fluent:Notify({
+            Title = "Hitbox",
+            Content = "ativo.",
+            Duration = 3
+        })
+    else
+        hbActive = false
+        clearAllHitboxes()
+        Fluent:Notify({
+            Title = "Hitbox",
+            Content = "desativado.",
             Duration = 3
         })
     end
