@@ -7,7 +7,7 @@ local Window = Fluent:CreateWindow({
     Title = "Manga Hub",
     SubTitle = "by haxxmod_01299",
     TabWidth = 120,
-    Size = UDim2.fromOffset(500, 350),
+    Size = UDim2.fromOffset(500, 400),
     Acrylic = true,
     Theme = "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl
@@ -17,13 +17,8 @@ local ESPTab = Window:AddTab({ Title = "ESP", Icon = "eye" })
 local CombatTab = Window:AddTab({ Title = "Combat", Icon = "crosshair" })
 
 -- ============================================================
--- ESP
+-- UTILS
 -- ============================================================
-local espActive = false
-local espData = {}
-local espConnections = {}
-local MAX_DIST = 600
-
 local function hasItem(plr, itemName)
     local char = plr.Character
     if char and char:FindFirstChild(itemName) then
@@ -38,11 +33,39 @@ end
 
 local function getRole(plr)
     if hasItem(plr, "Knife") then
-        return "assasino", Color3.fromRGB(255, 0, 0)
+        return "assassino"
     elseif hasItem(plr, "Gun") then
-        return "sheriff", Color3.fromRGB(0, 0, 139)
+        return "sheriff"
     else
-        return "inocente", Color3.fromRGB(0, 255, 100)
+        return "inocente"
+    end
+end
+
+-- ============================================================
+-- ESP
+-- ============================================================
+local espActive = false
+local espData = {}
+local espConnections = {}
+local MAX_DIST = 600
+
+local function getRoleColor(role)
+    if role == "assassino" then
+        return Color3.fromRGB(255, 0, 0)
+    elseif role == "sheriff" then
+        return Color3.fromRGB(0, 0, 139)
+    else
+        return Color3.fromRGB(0, 255, 100)
+    end
+end
+
+local function getRoleLabel(role)
+    if role == "assassino" then
+        return "assasino"
+    elseif role == "sheriff" then
+        return "sheriff"
+    else
+        return "inocente"
     end
 end
 
@@ -57,15 +80,16 @@ local function removeESP(plr)
     espData[plr] = nil
 end
 
-local function updateVisuals(data, plr)
-    local role, color = getRole(plr)
+local function updateESPVisuals(data, plr)
+    local role = getRole(plr)
+    local color = getRoleColor(role)
     if data.highlight then
         data.highlight.FillColor = color
         data.highlight.OutlineColor = color
     end
     if data.label then
         data.label.TextColor3 = color
-        data.label.Text = plr.Name .. " [" .. role .. "]"
+        data.label.Text = plr.Name .. " [" .. getRoleLabel(role) .. "]"
     end
 end
 
@@ -78,7 +102,8 @@ local function createESP(plr)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    local role, color = getRole(plr)
+    local role = getRole(plr)
+    local color = getRoleColor(role)
 
     local highlight = Instance.new("Highlight")
     highlight.Name = "_MangaESP"
@@ -107,7 +132,7 @@ local function createESP(plr)
     label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     label.Font = Enum.Font.GothamBold
     label.TextSize = 14
-    label.Text = plr.Name .. " [" .. role .. "]"
+    label.Text = plr.Name .. " [" .. getRoleLabel(role) .. "]"
     label.Parent = billboard
 
     local data = {
@@ -121,16 +146,15 @@ local function createESP(plr)
 
     local conns = {}
 
-    local function onChar(newChar)
+    table.insert(conns, plr.CharacterAdded:Connect(function()
         removeESP(plr)
         if espActive then
             task.delay(0.5, function()
                 createESP(plr)
             end)
         end
-    end
+    end))
 
-    table.insert(conns, plr.CharacterAdded:Connect(onChar))
     table.insert(conns, plr.CharacterRemoving:Connect(function()
         removeESP(plr)
     end))
@@ -139,12 +163,12 @@ local function createESP(plr)
     if backpack then
         table.insert(conns, backpack.ChildAdded:Connect(function(child)
             if child.Name == "Knife" or child.Name == "Gun" then
-                updateVisuals(data, plr)
+                updateESPVisuals(data, plr)
             end
         end))
         table.insert(conns, backpack.ChildRemoved:Connect(function(child)
             if child.Name == "Knife" or child.Name == "Gun" then
-                updateVisuals(data, plr)
+                updateESPVisuals(data, plr)
             end
         end))
     end
@@ -196,7 +220,7 @@ local function monitorESP()
                     local show = dist <= MAX_DIST
                     pcall(function() data.highlight.Enabled = show end)
                     pcall(function() data.billboard.Enabled = show end)
-                    updateVisuals(data, plr)
+                    updateESPVisuals(data, plr)
                 else
                     pcall(function() data.highlight.Enabled = false end)
                     pcall(function() data.billboard.Enabled = false end)
@@ -234,179 +258,213 @@ ESPTab:AddToggle("ESPPlayers", {
         table.insert(espConnections, removingConn)
 
         task.spawn(monitorESP)
-        Fluent:Notify({
-            Title = "ESP Players",
-            Content = "ESP ativado.",
-            Duration = 3
-        })
+        Fluent:Notify({ Title = "ESP Players", Content = "ESP ativado.", Duration = 3 })
     else
         espActive = false
         clearAllESP()
-        Fluent:Notify({
-            Title = "ESP Players",
-            Content = "ESP desativado.",
-            Duration = 3
-        })
+        Fluent:Notify({ Title = "ESP Players", Content = "ESP desativado.", Duration = 3 })
     end
 end)
 
 -- ============================================================
--- HITBOX - EXPANDE TODAS AS PARTES DO CHARACTER
+-- HITBOX - SÓ HRP + PARTE EXTRA INVISÍVEL
 -- ============================================================
-local hbActive = false
-local hbData = {}
 local HB_SIZE = 15
 
-local HITBOX_PARTS = {
-    "HumanoidRootPart",
-    "Head",
-    "Torso",
-    "UpperTorso",
-    "LowerTorso",
-    "Left Arm",
-    "Right Arm",
-    "Left Leg",
-    "Right Leg",
-    "LeftUpperArm",
-    "LeftLowerArm",
-    "LeftHand",
-    "RightUpperArm",
-    "RightLowerArm",
-    "RightHand",
-    "LeftUpperLeg",
-    "LeftLowerLeg",
-    "LeftFoot",
-    "RightUpperLeg",
-    "RightLowerLeg",
-    "RightFoot"
-}
-
-local function removeHitbox(plr)
-    local data = hbData[plr]
+local function removeHitbox(dataTable, plr)
+    local data = dataTable[plr]
     if not data then return end
     for _, conn in ipairs(data.connections or {}) do
         pcall(function() conn:Disconnect() end)
     end
-    for partName, info in pairs(data.parts or {}) do
-        if info.part and info.part.Parent then
-            local orig = info.part:GetAttribute("_manga_orig_size")
-            if orig then
-                info.part.Size = orig
-            end
+    if data.hrp and data.hrp.Parent then
+        local orig = data.hrp:GetAttribute("_manga_orig")
+        if orig then
+            data.hrp.Size = orig
         end
     end
-    if data.extraPart and data.extraPart.Parent then
-        pcall(function() data.extraPart:Destroy() end)
+    if data.hbPart and data.hbPart.Parent then
+        pcall(function() data.hbPart:Destroy() end)
     end
-    hbData[plr] = nil
+    dataTable[plr] = nil
 end
 
-local function applyHitbox(plr)
+local function clearHitboxes(dataTable)
+    for plr, data in pairs(dataTable) do
+        removeHitbox(dataTable, plr)
+    end
+end
+
+local function applyHitbox(dataTable, plr)
     if plr == LocalPlayer then return end
-    if hbData[plr] then return end
+    if dataTable[plr] then return end
 
     local char = plr.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    local parts = {}
-
-    for _, partName in ipairs(HITBOX_PARTS) do
-        local part = char:FindFirstChild(partName)
-        if part and part:IsA("BasePart") then
-            local origSize = part.Size
-            if not part:GetAttribute("_manga_orig_size") then
-                part:SetAttribute("_manga_orig_size", origSize)
-            end
-            part.Size = Vector3.new(HB_SIZE, HB_SIZE, HB_SIZE)
-            part.Transparency = 1
-            part.CanCollide = false
-            parts[partName] = {
-                part = part,
-                orig = origSize
-            }
-        end
+    local origSize = hrp.Size
+    if not hrp:GetAttribute("_manga_orig") then
+        hrp:SetAttribute("_manga_orig", origSize)
     end
 
-    local extraPart = Instance.new("Part")
-    extraPart.Name = "_MangaHB"
-    extraPart.Size = Vector3.new(HB_SIZE, HB_SIZE, HB_SIZE)
-    extraPart.Transparency = 1
-    extraPart.CanCollide = false
-    extraPart.Anchored = false
-    extraPart.Parent = char
+    hrp.Size = Vector3.new(HB_SIZE, HB_SIZE, HB_SIZE)
+    hrp.Transparency = 1
+    hrp.CanCollide = false
+    hrp.Massless = true
+
+    local hbPart = Instance.new("Part")
+    hbPart.Name = "_MangaHB"
+    hbPart.Size = Vector3.new(HB_SIZE, HB_SIZE, HB_SIZE)
+    hbPart.Transparency = 1
+    hbPart.CanCollide = false
+    hbPart.Anchored = false
+    hbPart.Massless = true
+    hbPart.Parent = char
 
     local weld = Instance.new("Weld")
-    weld.Part0 = extraPart
+    weld.Part0 = hbPart
     weld.Part1 = hrp
     weld.C0 = CFrame.new(0, 0, 0)
-    weld.Parent = extraPart
+    weld.Parent = hbPart
 
     local data = {
         player = plr,
-        parts = parts,
-        extraPart = extraPart,
+        hrp = hrp,
+        hbPart = hbPart,
         connections = {}
     }
-    hbData[plr] = data
+    dataTable[plr] = data
 
-    local conns = {}
-    table.insert(conns, plr.CharacterAdded:Connect(function(newChar)
-        task.wait(0.3)
-        removeHitbox(plr)
-        if hbActive then
-            applyHitbox(plr)
-        end
+    table.insert(data.connections, plr.CharacterAdded:Connect(function()
+        task.delay(0.3, function()
+            removeHitbox(dataTable, plr)
+        end)
     end))
-    table.insert(conns, plr.CharacterRemoving:Connect(function()
-        removeHitbox(plr)
+
+    table.insert(data.connections, plr.CharacterRemoving:Connect(function()
+        removeHitbox(dataTable, plr)
     end))
-    data.connections = conns
 end
 
-local function clearAllHitboxes()
-    for plr, data in pairs(hbData) do
-        removeHitbox(plr)
-    end
-    hbData = {}
-end
-
-local function monitorHitbox()
-    while hbActive do
+local function monitorHitbox(dataTable, activeFlag, targetRole)
+    while activeFlag do
         for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and not hbData[plr] then
-                applyHitbox(plr)
+            if plr ~= LocalPlayer then
+                local role = getRole(plr)
+                local hasHB = dataTable[plr] ~= nil
+
+                if role == targetRole and not hasHB then
+                    applyHitbox(dataTable, plr)
+                elseif role ~= targetRole and hasHB then
+                    removeHitbox(dataTable, plr)
+                end
             end
         end
         task.wait(0.5)
     end
 end
 
-CombatTab:AddToggle("Hitbox", {
-    Title = "Hitbox Expander",
-    Description = "Aumenta o hitbox dos players.",
+-- ============================================================
+-- TOGGLE: HITBOX SHERIFF
+-- ============================================================
+local hbSheriffActive = false
+local hbSheriffData = {}
+
+CombatTab:AddToggle("HBSheriff", {
+    Title = "Hitbox Expander (Sheriff)",
+    Description = "Aumenta hitbox dos sheriffs. Não funciona se você for sheriff.",
     Default = false
 }):OnChanged(function(state)
     if state then
-        hbActive = true
-        for _, plr in ipairs(Players:GetPlayers()) do
-            applyHitbox(plr)
+        if getRole(LocalPlayer) == "sheriff" then
+            Fluent:Notify({ Title = "Hitbox Sheriff", Content = "Você é sheriff.", Duration = 4 })
+            task.delay(0.1, function()
+                -- não conseguimos reverter o toggle do fluent externamente, só notificar
+            end)
+            return
         end
-        task.spawn(monitorHitbox)
-        Fluent:Notify({
-            Title = "Hitbox",
-            Content = "ativo.",
-            Duration = 3
-        })
+        hbSheriffActive = true
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if getRole(plr) == "sheriff" then
+                applyHitbox(hbSheriffData, plr)
+            end
+        end
+        task.spawn(function()
+            monitorHitbox(hbSheriffData, hbSheriffActive, "sheriff")
+        end)
+        Fluent:Notify({ Title = "Hitbox Sheriff", Content = "Ativado.", Duration = 3 })
     else
-        hbActive = false
-        clearAllHitboxes()
-        Fluent:Notify({
-            Title = "Hitbox",
-            Content = "desativado.",
-            Duration = 3
-        })
+        hbSheriffActive = false
+        clearHitboxes(hbSheriffData)
+        Fluent:Notify({ Title = "Hitbox Sheriff", Content = "Desativado.", Duration = 3 })
+    end
+end)
+
+-- ============================================================
+-- TOGGLE: HITBOX ASSASSINO
+-- ============================================================
+local hbAssassinoActive = false
+local hbAssassinoData = {}
+
+CombatTab:AddToggle("HBAssassino", {
+    Title = "Hitbox Expander (Assassino)",
+    Description = "Aumenta hitbox dos assassinos. Não funciona se você for assassino.",
+    Default = false
+}):OnChanged(function(state)
+    if state then
+        if getRole(LocalPlayer) == "assassino" then
+            Fluent:Notify({ Title = "Hitbox Assassino", Content = "Você é o assassino..", Duration = 4 })
+            return
+        end
+        hbAssassinoActive = true
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if getRole(plr) == "assassino" then
+                applyHitbox(hbAssassinoData, plr)
+            end
+        end
+        task.spawn(function()
+            monitorHitbox(hbAssassinoData, hbAssassinoActive, "assassino")
+        end)
+        Fluent:Notify({ Title = "Hitbox Assassino", Content = "Ativado.", Duration = 3 })
+    else
+        hbAssassinoActive = false
+        clearHitboxes(hbAssassinoData)
+        Fluent:Notify({ Title = "Hitbox Assassino", Content = "Desativado.", Duration = 3 })
+    end
+end)
+
+-- ============================================================
+-- TOGGLE: HITBOX INOCENTE
+-- ============================================================
+local hbInocenteActive = false
+local hbInocenteData = {}
+
+CombatTab:AddToggle("HBInocente", {
+    Title = "Hitbox Expander (Inocentes)",
+    Description = "Aumenta hitbox dos inocentes. Não funciona se você for inocente.",
+    Default = false
+}):OnChanged(function(state)
+    if state then
+        if getRole(LocalPlayer) == "inocente" then
+            Fluent:Notify({ Title = "Hitbox Inocentes", Content = "Você é inocente.", Duration = 4 })
+            return
+        end
+        hbInocenteActive = true
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if getRole(plr) == "inocente" then
+                applyHitbox(hbInocenteData, plr)
+            end
+        end
+        task.spawn(function()
+            monitorHitbox(hbInocenteData, hbInocenteActive, "inocente")
+        end)
+        Fluent:Notify({ Title = "Hitbox Inocentes", Content = "Ativado.", Duration = 3 })
+    else
+        hbInocenteActive = false
+        clearHitboxes(hbInocenteData)
+        Fluent:Notify({ Title = "Hitbox Inocentes", Content = "Desativado.", Duration = 3 })
     end
 end)
 
