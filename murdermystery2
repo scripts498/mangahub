@@ -2,6 +2,7 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 
 local Window = Fluent:CreateWindow({
     Title = "Manga Hub",
@@ -18,6 +19,7 @@ local ESPTab = Window:AddTab({ Title = "ESP", Icon = "eye" })
 local espActive = false
 local espData = {}
 local espConnections = {}
+local MAX_DIST = 600
 
 local function hasItem(plr, itemName)
     local char = plr.Character
@@ -52,7 +54,7 @@ local function removeESP(plr)
     espData[plr] = nil
 end
 
-local function updateESPVisuals(data, plr)
+local function updateVisuals(data, plr)
     local role, color = getRole(plr)
     if data.highlight then
         data.highlight.FillColor = color
@@ -64,54 +66,10 @@ local function updateESPVisuals(data, plr)
     end
 end
 
-local function setupListeners(plr, data)
-    local conns = {}
-
-    local function onChar(char)
-        for _, c in ipairs(conns) do
-            pcall(function() c:Disconnect() end)
-        end
-        table.clear(conns)
-
-        if not char then return end
-
-        table.insert(conns, char.ChildAdded:Connect(function(child)
-            if child.Name == "Knife" or child.Name == "Gun" then
-                updateESPVisuals(data, plr)
-            end
-        end))
-
-        table.insert(conns, char.ChildRemoved:Connect(function(child)
-            if child.Name == "Knife" or child.Name == "Gun" then
-                updateESPVisuals(data, plr)
-            end
-        end))
-
-        local backpack = plr:FindFirstChild("Backpack")
-        if backpack then
-            table.insert(conns, backpack.ChildAdded:Connect(function(child)
-                if child.Name == "Knife" or child.Name == "Gun" then
-                    updateESPVisuals(data, plr)
-                end
-            end))
-            table.insert(conns, backpack.ChildRemoved:Connect(function(child)
-                if child.Name == "Knife" or child.Name == "Gun" then
-                    updateESPVisuals(data, plr)
-                end
-            end))
-        end
-    end
-
-    local char = plr.Character
-    if char then onChar(char) end
-
-    table.insert(conns, plr.CharacterAdded:Connect(onChar))
-    data.connections = conns
-end
-
 local function createESP(plr)
     if plr == LocalPlayer then return end
     if espData[plr] then return end
+
     local char = plr.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -126,16 +84,16 @@ local function createESP(plr)
     highlight.FillTransparency = 0.6
     highlight.OutlineTransparency = 0
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Adornee = char
-    highlight.Parent = char
+    highlight.Adornee = hrp
+    highlight.Parent = hrp
 
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "_MangaESP_Billboard"
     billboard.Size = UDim2.new(0, 200, 0, 30)
     billboard.StudsOffset = Vector3.new(0, 3.5, 0)
     billboard.AlwaysOnTop = true
-    billboard.MaxDistance = 9999
-    billboard.Parent = char
+    billboard.MaxDistance = MAX_DIST
+    billboard.Parent = hrp
 
     local label = Instance.new("TextLabel")
     label.Name = "_MangaESP_Label"
@@ -157,7 +115,59 @@ local function createESP(plr)
         connections = {}
     }
     espData[plr] = data
-    setupListeners(plr, data)
+
+    local conns = {}
+
+    local function onChar(newChar)
+        for _, c in ipairs(conns) do
+            pcall(function() c:Disconnect() end)
+        end
+        table.clear(conns)
+
+        if not newChar then return end
+        local newHrp = newChar:WaitForChild("HumanoidRootPart", 3)
+        if not newHrp then return end
+
+        pcall(function()
+            data.highlight.Adornee = newHrp
+            data.highlight.Parent = newHrp
+            data.billboard.Parent = newHrp
+        end)
+
+        table.insert(conns, newChar.ChildAdded:Connect(function(child)
+            if child.Name == "Knife" or child.Name == "Gun" then
+                updateVisuals(data, plr)
+            end
+        end))
+
+        table.insert(conns, newChar.ChildRemoved:Connect(function(child)
+            if child.Name == "Knife" or child.Name == "Gun" then
+                updateVisuals(data, plr)
+            end
+        end))
+
+        local backpack = plr:FindFirstChild("Backpack")
+        if backpack then
+            table.insert(conns, backpack.ChildAdded:Connect(function(child)
+                if child.Name == "Knife" or child.Name == "Gun" then
+                    updateVisuals(data, plr)
+                end
+            end))
+            table.insert(conns, backpack.ChildRemoved:Connect(function(child)
+                if child.Name == "Knife" or child.Name == "Gun" then
+                    updateVisuals(data, plr)
+                end
+            end))
+        end
+    end
+
+    table.insert(conns, plr.CharacterAdded:Connect(onChar))
+    table.insert(conns, plr.CharacterRemoving:Connect(function()
+        pcall(function() data.highlight.Parent = nil end)
+        pcall(function() data.billboard.Parent = nil end)
+    end))
+
+    data.connections = conns
 end
 
 local function clearAllESP()
@@ -175,37 +185,50 @@ local function clearAllESP()
     espConnections = {}
 end
 
+local function getHrp(plr)
+    local char = plr.Character
+    if char then
+        return char:FindFirstChild("HumanoidRootPart")
+    end
+    return nil
+end
+
 local function monitorESP()
     while espActive do
+        local myHrp = getHrp(LocalPlayer)
+        local myPos = myHrp and myHrp.Position
+
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and not espData[plr] then
                 createESP(plr)
             end
         end
+
         for plr, data in pairs(espData) do
             if not plr.Parent then
                 removeESP(plr)
             else
-                local char = plr.Character
-                if char and data.highlight then
-                    if data.highlight.Parent ~= char then
-                        pcall(function() data.highlight:Destroy() end)
-                        pcall(function() data.billboard:Destroy() end)
-                        espData[plr] = nil
-                        createESP(plr)
-                    else
-                        updateESPVisuals(data, plr)
-                    end
+                local theirHrp = getHrp(plr)
+                if theirHrp and myPos then
+                    local dist = (myPos - theirHrp.Position).Magnitude
+                    local show = dist <= MAX_DIST
+                    pcall(function() data.highlight.Enabled = show end)
+                    pcall(function() data.billboard.Enabled = show end)
+                    updateVisuals(data, plr)
+                else
+                    pcall(function() data.highlight.Enabled = false end)
+                    pcall(function() data.billboard.Enabled = false end)
                 end
             end
         end
-        task.wait(0.5)
+
+        task.wait(0.2)
     end
 end
 
 ESPTab:AddToggle("ESPPlayers", {
     Title = "ESP Players",
-    Description = "Verde = inocente, Vermelho = assasino, Azul = sheriff.",
+    Description = "Verde = inocente, Vermelho = assasino, Azul = sheriff. Max: 600 studs.",
     Default = false
 }):OnChanged(function(state)
     if state then
@@ -213,6 +236,7 @@ ESPTab:AddToggle("ESPPlayers", {
         for _, plr in ipairs(Players:GetPlayers()) do
             createESP(plr)
         end
+
         local addedConn = Players.PlayerAdded:Connect(function(plr)
             local charConn
             charConn = plr.CharacterAdded:Connect(function()
@@ -225,14 +249,16 @@ ESPTab:AddToggle("ESPPlayers", {
             end
         end)
         table.insert(espConnections, addedConn)
+
         local removingConn = Players.PlayerRemoving:Connect(function(plr)
             removeESP(plr)
         end)
         table.insert(espConnections, removingConn)
+
         task.spawn(monitorESP)
         Fluent:Notify({
             Title = "ESP Players",
-            Content = "ESP ativado.",
+            Content = "ESP ativado. Range: 600 studs.",
             Duration = 3
         })
     else
