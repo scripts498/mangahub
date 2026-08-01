@@ -698,16 +698,45 @@ function MangaUI:CreateTab(name, iconText)
 	})
 	Round(TabButton, 8)
 
+	local tabLabelX = 10
+	local tabIconSize = 16
+	if IS_MOBILE then
+		tabLabelX = 6
+		tabIconSize = 14
+	end
+	if iconText then
+		local iconIds = {
+			skull = "rbxassetid://7733673987",
+			bomb = "rbxassetid://7733671493",
+			shield = "rbxassetid://7733675003",
+			settings = "rbxassetid://7733673987",
+			home = "rbxassetid://7733671493",
+			package = "rbxassetid://7733675003",
+			palette = "rbxassetid://7733673987",
+			info = "rbxassetid://7733671493",
+		}
+		local iconId = iconIds[iconText:lower()]
+		if iconId then
+			New("ImageLabel", {
+				BackgroundTransparency = 1,
+				Image = iconId,
+				Size = UDim2.new(0, tabIconSize, 0, tabIconSize),
+				Position = UDim2.new(0, tabLabelX, 0.5, -tabIconSize/2),
+				Parent = TabButton,
+			})
+			tabLabelX = tabLabelX + tabIconSize + 4
+		end
+	end
 	New("TextLabel", {
 		Name = "Label",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, -10, 1, 0),
-		Position = UDim2.new(0, 10, 0, 0),
+		Size = UDim2.new(1, -tabLabelX - 2, 1, 0),
+		Position = UDim2.new(0, tabLabelX, 0, 0),
 		Font = Enum.Font.GothamMedium,
-		TextSize = 13,
+		TextSize = IS_MOBILE and 11 or 13,
 		TextColor3 = order == 1 and theme.Text or theme.SubText,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Text = (iconText and (iconText .. "  ") or "") .. name,
+		Text = name,
 		Parent = TabButton,
 	})
 
@@ -1118,16 +1147,30 @@ function MangaUI:CreateTab(name, iconText)
 				Parent = MainBtn,
 			})
 
-			local Arrow = New("TextLabel", {
+			local ArrowHolder = New("Frame", {
 				BackgroundTransparency = 1,
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -10, 0, 17),
-				Size = UDim2.new(0, 16, 0, 16),
-				Font = Enum.Font.GothamBold,
-				TextSize = 12,
-				TextColor3 = th2.SubText,
-				Text = "▾",
+				Size = UDim2.new(0, 14, 0, 14),
 				Parent = MainBtn,
+			})
+			local Arrow = New("Frame", {
+				BackgroundColor3 = th2.SubText,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(0.5, -2, 0.5, 0),
+				Size = UDim2.new(0, 7, 0, 2),
+				Rotation = 45,
+				BorderSizePixel = 0,
+				Parent = ArrowHolder,
+			})
+			local Arrow2 = New("Frame", {
+				BackgroundColor3 = th2.SubText,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(0.5, 2, 0.5, 0),
+				Size = UDim2.new(0, 7, 0, 2),
+				Rotation = -45,
+				BorderSizePixel = 0,
+				Parent = ArrowHolder,
 			})
 
 			local ListFrame = New("Frame", {
@@ -1197,7 +1240,8 @@ function MangaUI:CreateTab(name, iconText)
 
 			MainBtn.MouseButton1Click:Connect(function()
 				expanded = not expanded
-				Tween(Arrow, EASE_FAST, {Rotation = expanded and 180 or 0})
+				Tween(Arrow, EASE_FAST, {Rotation = expanded and -135 or 45})
+				Tween(Arrow2, EASE_FAST, {Rotation = expanded and 135 or -45})
 				refreshHolderHeight()
 			end)
 
