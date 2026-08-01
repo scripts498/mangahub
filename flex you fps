@@ -1,0 +1,1003 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local nyaRemote = ReplicatedStorage:WaitForChild("nya")
+
+local THEME_COLOR = Color3.fromRGB(147, 51, 234)
+local BG_COLOR = Color3.fromRGB(12, 8, 20)
+local PANEL_BG = Color3.fromRGB(20, 15, 35)
+local SUB_TEXT = Color3.fromRGB(150, 150, 170)
+
+local loginGui = Instance.new("ScreenGui")
+loginGui.Name = "LoginPortal"
+loginGui.ResetOnSpawn = false
+loginGui.DisplayOrder = 9999
+loginGui.IgnoreGuiInset = true
+
+local loginBg = Instance.new("Frame")
+loginBg.Parent = loginGui
+loginBg.Size = UDim2.new(1, 0, 1, 0)
+loginBg.BackgroundColor3 = BG_COLOR
+loginBg.BorderSizePixel = 0
+
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 10, 40)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(40, 15, 60)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 10, 40))
+})
+gradient.Rotation = 45
+gradient.Parent = loginBg
+
+local glow1 = Instance.new("Frame")
+glow1.Parent = loginBg
+glow1.BackgroundColor3 = Color3.fromRGB(147, 51, 234)
+glow1.BackgroundTransparency = 0.92
+glow1.BorderSizePixel = 0
+glow1.Position = UDim2.new(0.2, 0, 0.1, 0)
+glow1.Size = UDim2.new(0, 500, 0, 500)
+glow1.ZIndex = 0
+local g1c = Instance.new("UICorner")
+g1c.CornerRadius = UDim.new(1, 0)
+g1c.Parent = glow1
+
+local glow2 = Instance.new("Frame")
+glow2.Parent = loginBg
+glow2.BackgroundColor3 = Color3.fromRGB(168, 85, 247)
+glow2.BackgroundTransparency = 0.93
+glow2.BorderSizePixel = 0
+glow2.Position = UDim2.new(0.6, 0, 0.5, 0)
+glow2.Size = UDim2.new(0, 400, 0, 400)
+glow2.ZIndex = 0
+local g2c = Instance.new("UICorner")
+g2c.CornerRadius = UDim.new(1, 0)
+g2c.Parent = glow2
+
+task.spawn(function()
+    while loginGui.Parent do
+        TweenService:Create(glow1, TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Position = UDim2.new(0.25, 0, 0.15, 0)}):Play()
+        task.wait(3)
+        TweenService:Create(glow1, TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Position = UDim2.new(0.2, 0, 0.1, 0)}):Play()
+        TweenService:Create(glow2, TweenInfo.new(4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Position = UDim2.new(0.55, 0, 0.45, 0)}):Play()
+        task.wait(4)
+        TweenService:Create(glow2, TweenInfo.new(4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Position = UDim2.new(0.6, 0, 0.5, 0)}):Play()
+        task.wait(3)
+    end
+end)
+
+local loginPanel = Instance.new("Frame")
+loginPanel.Parent = loginBg
+loginPanel.BackgroundColor3 = PANEL_BG
+loginPanel.BorderSizePixel = 0
+loginPanel.Size = UDim2.new(0.9, 0, 0, 420)
+loginPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
+loginPanel.AnchorPoint = Vector2.new(0.5, 0.5)
+loginPanel.Active = true
+loginPanel.Draggable = true
+loginPanel.ZIndex = 10
+loginPanel.ClipsDescendants = true
+
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0, 16)
+panelCorner.Parent = loginPanel
+
+local panelStroke = Instance.new("UIStroke")
+panelStroke.Parent = loginPanel
+panelStroke.Color = THEME_COLOR
+panelStroke.Thickness = 2
+
+local panelGlow = Instance.new("UIStroke")
+panelGlow.Parent = loginPanel
+panelGlow.Color = Color3.fromRGB(168, 85, 247)
+panelGlow.Thickness = 6
+panelGlow.Transparency = 0.75
+
+local titleLbl = Instance.new("TextLabel")
+titleLbl.Parent = loginPanel
+titleLbl.BackgroundTransparency = 1
+titleLbl.Size = UDim2.new(1, 0, 0, 50)
+titleLbl.Position = UDim2.new(0, 0, 0, 15)
+titleLbl.Font = Enum.Font.GothamBold
+titleLbl.Text = "manga hub loader"
+titleLbl.TextColor3 = THEME_COLOR
+titleLbl.TextSize = 24
+titleLbl.ZIndex = 11
+
+local subtitleLbl = Instance.new("TextLabel")
+subtitleLbl.Parent = loginPanel
+subtitleLbl.BackgroundTransparency = 1
+subtitleLbl.Size = UDim2.new(1, 0, 0, 20)
+subtitleLbl.Position = UDim2.new(0, 0, 0, 60)
+subtitleLbl.Font = Enum.Font.Gotham
+subtitleLbl.Text = "Enter your credentials"
+subtitleLbl.TextColor3 = SUB_TEXT
+subtitleLbl.TextSize = 13
+subtitleLbl.ZIndex = 11
+
+local function createInput(parent, labelText, placeholder, yPos)
+    local container = Instance.new("Frame")
+    container.Parent = parent
+    container.BackgroundTransparency = 1
+    container.Size = UDim2.new(1, -40, 0, 50)
+    container.Position = UDim2.new(0, 20, 0, yPos)
+    container.ZIndex = 11
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Parent = container
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1, 0, 0, 15)
+    lbl.Font = Enum.Font.GothamBold
+    lbl.Text = labelText
+    lbl.TextColor3 = Color3.fromRGB(200, 200, 220)
+    lbl.TextSize = 12
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 12
+
+    local box = Instance.new("TextBox")
+    box.Parent = container
+    box.BackgroundColor3 = Color3.fromRGB(35, 25, 55)
+    box.BorderSizePixel = 0
+    box.Position = UDim2.new(0, 0, 0, 20)
+    box.Size = UDim2.new(1, 0, 0, 35)
+    box.Font = Enum.Font.Gotham
+    box.PlaceholderText = placeholder
+    box.PlaceholderColor3 = Color3.fromRGB(100, 90, 120)
+    box.Text = ""
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.TextSize = 14
+    box.ClearTextOnFocus = false
+    box.ZIndex = 12
+
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 8)
+    boxCorner.Parent = box
+
+    local boxStroke = Instance.new("UIStroke")
+    boxStroke.Parent = box
+    boxStroke.Color = Color3.fromRGB(60, 40, 100)
+    boxStroke.Thickness = 1
+    boxStroke.Transparency = 0.5
+
+    box.Focused:Connect(function()
+        TweenService:Create(boxStroke, TweenInfo.new(0.2), {Color = THEME_COLOR, Transparency = 0}):Play()
+    end)
+
+    box.FocusLost:Connect(function()
+        TweenService:Create(boxStroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(60, 40, 100), Transparency = 0.5}):Play()
+    end)
+
+    return box
+end
+
+local userBox = createInput(loginPanel, "USERNAME", "Enter username...", 90)
+local passBox = createInput(loginPanel, "PASSWORD", "Enter password...", 165)
+
+local loginBtn = Instance.new("TextButton")
+loginBtn.Parent = loginPanel
+loginBtn.BackgroundColor3 = THEME_COLOR
+loginBtn.BorderSizePixel = 0
+loginBtn.Position = UDim2.new(0, 20, 0, 260)
+loginBtn.Size = UDim2.new(1, -40, 0, 45)
+loginBtn.Font = Enum.Font.GothamBold
+loginBtn.Text = "LOGIN"
+loginBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+loginBtn.TextSize = 16
+loginBtn.ZIndex = 11
+loginBtn.AutoButtonColor = false
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 10)
+btnCorner.Parent = loginBtn
+
+local btnStroke = Instance.new("UIStroke")
+btnStroke.Parent = loginBtn
+btnStroke.Color = Color3.fromRGB(168, 85, 247)
+btnStroke.Thickness = 2
+
+loginBtn.MouseEnter:Connect(function()
+    TweenService:Create(loginBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(168, 85, 247)}):Play()
+end)
+
+loginBtn.MouseLeave:Connect(function()
+    TweenService:Create(loginBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME_COLOR}):Play()
+end)
+
+local statusLbl = Instance.new("TextLabel")
+statusLbl.Parent = loginPanel
+statusLbl.BackgroundTransparency = 1
+statusLbl.Position = UDim2.new(0, 20, 0, 315)
+statusLbl.Size = UDim2.new(1, -40, 0, 20)
+statusLbl.Font = Enum.Font.Gotham
+statusLbl.Text = ""
+statusLbl.TextColor3 = Color3.fromRGB(239, 68, 68)
+statusLbl.TextSize = 13
+statusLbl.ZIndex = 11
+
+local hint1 = Instance.new("TextLabel")
+hint1.Parent = loginPanel
+hint1.BackgroundTransparency = 1
+hint1.Position = UDim2.new(0, 20, 0, 355)
+hint1.Size = UDim2.new(1, -40, 0, 18)
+hint1.Font = Enum.Font.Gotham
+hint1.Text = "free / free  =  Free Version"
+hint1.TextColor3 = Color3.fromRGB(100, 100, 120)
+hint1.TextSize = 12
+hint1.ZIndex = 11
+
+local hint2 = Instance.new("TextLabel")
+hint2.Parent = loginPanel
+hint2.BackgroundTransparency = 1
+hint2.Position = UDim2.new(0, 20, 0, 375)
+hint2.Size = UDim2.new(1, -40, 0, 18)
+hint2.Font = Enum.Font.Gotham
+hint2.Text = "admin / mangahub  =  Premium"
+hint2.TextColor3 = Color3.fromRGB(100, 100, 120)
+hint2.TextSize = 12
+hint2.ZIndex = 11
+
+loginPanel.Position = UDim2.new(0.5, 0, 0.5, 80)
+loginPanel.BackgroundTransparency = 1
+titleLbl.TextTransparency = 1
+subtitleLbl.TextTransparency = 1
+
+task.spawn(function()
+    task.wait(0.3)
+    TweenService:Create(loginPanel, TweenInfo.new(0.8, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        BackgroundTransparency = 0
+    }):Play()
+    task.wait(0.3)
+    TweenService:Create(titleLbl, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
+    TweenService:Create(subtitleLbl, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
+end)
+
+local function showWarningScreen(callback)
+    local warnGui = Instance.new("ScreenGui")
+    warnGui.Name = "WarningScreen"
+    warnGui.ResetOnSpawn = false
+    warnGui.DisplayOrder = 10001
+    warnGui.IgnoreGuiInset = true
+
+    local warnBg = Instance.new("Frame")
+    warnBg.Parent = warnGui
+    warnBg.Size = UDim2.new(1, 0, 1, 0)
+    warnBg.BackgroundColor3 = Color3.fromRGB(30, 5, 5)
+    warnBg.BorderSizePixel = 0
+    warnBg.BackgroundTransparency = 1
+
+    local warnGradient = Instance.new("UIGradient")
+    warnGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 5, 5)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(60, 10, 10)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 5, 5))
+    })
+    warnGradient.Rotation = 45
+    warnGradient.Parent = warnBg
+
+    local warnPanel = Instance.new("Frame")
+    warnPanel.Parent = warnBg
+    warnPanel.BackgroundColor3 = Color3.fromRGB(40, 10, 10)
+    warnPanel.BorderSizePixel = 0
+    warnPanel.Size = UDim2.new(0.9, 0, 0, 380)
+    warnPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
+    warnPanel.AnchorPoint = Vector2.new(0.5, 0.5)
+    warnPanel.ZIndex = 10
+    warnPanel.ClipsDescendants = true
+
+    local wpCorner = Instance.new("UICorner")
+    wpCorner.CornerRadius = UDim.new(0, 16)
+    wpCorner.Parent = warnPanel
+
+    local wpStroke = Instance.new("UIStroke")
+    wpStroke.Parent = warnPanel
+    wpStroke.Color = Color3.fromRGB(220, 40, 40)
+    wpStroke.Thickness = 2
+
+    local wpGlow = Instance.new("UIStroke")
+    wpGlow.Parent = warnPanel
+    wpGlow.Color = Color3.fromRGB(255, 50, 50)
+    wpGlow.Thickness = 6
+    wpGlow.Transparency = 0.7
+
+    local warnIcon = Instance.new("TextLabel")
+    warnIcon.Parent = warnPanel
+    warnIcon.BackgroundTransparency = 1
+    warnIcon.Size = UDim2.new(1, 0, 0, 50)
+    warnIcon.Position = UDim2.new(0, 0, 0, 15)
+    warnIcon.Font = Enum.Font.GothamBold
+    warnIcon.Text = "  AVISO!!"
+    warnIcon.TextColor3 = Color3.fromRGB(255, 60, 60)
+    warnIcon.TextSize = 30
+    warnIcon.ZIndex = 11
+
+    local warnText1 = Instance.new("TextLabel")
+    warnText1.Parent = warnPanel
+    warnText1.BackgroundTransparency = 1
+    warnText1.Size = UDim2.new(1, -40, 0, 60)
+    warnText1.Position = UDim2.new(0, 20, 0, 75)
+    warnText1.Font = Enum.Font.Gotham
+    warnText1.Text = "O Free tem o bypass oscilando.\nSe usar, pode tomar BAN."
+    warnText1.TextColor3 = Color3.fromRGB(255, 100, 100)
+    warnText1.TextSize = 15
+    warnText1.TextWrapped = true
+    warnText1.ZIndex = 11
+
+    local warnText2 = Instance.new("TextLabel")
+    warnText2.Parent = warnPanel
+    warnText2.BackgroundTransparency = 1
+    warnText2.Size = UDim2.new(1, -40, 0, 40)
+    warnText2.Position = UDim2.new(0, 20, 0, 140)
+    warnText2.Font = Enum.Font.GothamBold
+    warnText2.Text = "Apenas o Premium não oscila."
+    warnText2.TextColor3 = Color3.fromRGB(255, 200, 50)
+    warnText2.TextSize = 14
+    warnText2.TextWrapped = true
+    warnText2.ZIndex = 11
+
+    local warnText3 = Instance.new("TextLabel")
+    warnText3.Parent = warnPanel
+    warnText3.BackgroundTransparency = 1
+    warnText3.Size = UDim2.new(1, -40, 0, 40)
+    warnText3.Position = UDim2.new(0, 20, 0, 185)
+    warnText3.Font = Enum.Font.Gotham
+    warnText3.Text = "Use o Free com sua responsabilidade.\nRealmente deseja iniciar o Free?"
+    warnText3.TextColor3 = Color3.fromRGB(220, 180, 180)
+    warnText3.TextSize = 13
+    warnText3.TextWrapped = true
+    warnText3.ZIndex = 11
+
+    local confirmBtn = Instance.new("TextButton")
+    confirmBtn.Parent = warnPanel
+    confirmBtn.BackgroundColor3 = Color3.fromRGB(160, 30, 30)
+    confirmBtn.BorderSizePixel = 0
+    confirmBtn.Position = UDim2.new(0, 20, 0, 250)
+    confirmBtn.Size = UDim2.new(1, -40, 0, 50)
+    confirmBtn.Font = Enum.Font.GothamBold
+    confirmBtn.Text = "Desejo, e eu me responsabilizo\na quaisquer Ban."
+    confirmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    confirmBtn.TextSize = 13
+    confirmBtn.TextWrapped = true
+    confirmBtn.ZIndex = 11
+    confirmBtn.AutoButtonColor = false
+
+    local cbCorner = Instance.new("UICorner")
+    cbCorner.CornerRadius = UDim.new(0, 10)
+    cbCorner.Parent = confirmBtn
+
+    local cbStroke = Instance.new("UIStroke")
+    cbStroke.Parent = confirmBtn
+    cbStroke.Color = Color3.fromRGB(255, 80, 80)
+    cbStroke.Thickness = 2
+
+    local cancelBtn = Instance.new("TextButton")
+    cancelBtn.Parent = warnPanel
+    cancelBtn.BackgroundTransparency = 1
+    cancelBtn.Position = UDim2.new(0, 20, 0, 315)
+    cancelBtn.Size = UDim2.new(1, -40, 0, 35)
+    cancelBtn.Font = Enum.Font.Gotham
+    cancelBtn.Text = "Cancelar"
+    cancelBtn.TextColor3 = Color3.fromRGB(150, 120, 120)
+    cancelBtn.TextSize = 13
+    cancelBtn.ZIndex = 11
+
+    confirmBtn.MouseEnter:Connect(function()
+        TweenService:Create(confirmBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(200, 40, 40)}):Play()
+    end)
+
+    confirmBtn.MouseLeave:Connect(function()
+        TweenService:Create(confirmBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(160, 30, 30)}):Play()
+    end)
+
+    warnPanel.BackgroundTransparency = 1
+    warnPanel.Position = UDim2.new(0.5, 0, 0.5, 60)
+
+    warnGui.Parent = playerGui
+
+    TweenService:Create(warnBg, TweenInfo.new(0.5), {BackgroundTransparency = 0}):Play()
+    TweenService:Create(warnPanel, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        BackgroundTransparency = 0
+    }):Play()
+
+    local function closeWarn()
+        TweenService:Create(warnPanel, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, 0, 0.5, -60),
+            BackgroundTransparency = 1
+        }):Play()
+        TweenService:Create(warnBg, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        task.wait(0.5)
+        warnGui:Destroy()
+    end
+
+    confirmBtn.MouseButton1Click:Connect(function() closeWarn(); callback(true) end)
+    confirmBtn.TouchTap:Connect(function() closeWarn(); callback(true) end)
+    cancelBtn.MouseButton1Click:Connect(function() closeWarn(); callback(false) end)
+    cancelBtn.TouchTap:Connect(function() closeWarn(); callback(false) end)
+end
+
+local function runLoadingSequence(onComplete)
+    local loadingGui = Instance.new("ScreenGui")
+    loadingGui.Name = "MangaHubLoader"
+    loadingGui.ResetOnSpawn = false
+    loadingGui.DisplayOrder = 10000
+    loadingGui.IgnoreGuiInset = true
+
+    local loadingBg = Instance.new("Frame")
+    loadingBg.Parent = loadingGui
+    loadingBg.Size = UDim2.new(1, 0, 1, 0)
+    loadingBg.BackgroundColor3 = BG_COLOR
+    loadingBg.BorderSizePixel = 0
+    loadingBg.ZIndex = 1
+
+    local lGradient = Instance.new("UIGradient")
+    lGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 10, 40)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(40, 15, 60)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 10, 40))
+    })
+    lGradient.Rotation = 45
+    lGradient.Parent = loadingBg
+
+    local logoImg = Instance.new("ImageLabel")
+    logoImg.Parent = loadingBg
+    logoImg.BackgroundTransparency = 1
+    logoImg.Size = UDim2.new(0, 200, 0, 200)
+    logoImg.Position = UDim2.new(0.5, -100, 0.5, -180)
+    logoImg.AnchorPoint = Vector2.new(0.5, 0.5)
+    logoImg.Image = "rbxassetid://1785534387809"
+    logoImg.ScaleType = Enum.ScaleType.Fit
+    logoImg.ZIndex = 2
+
+    local loadContainer = Instance.new("Frame")
+    loadContainer.Parent = loadingBg
+    loadContainer.BackgroundTransparency = 1
+    loadContainer.Size = UDim2.new(0.8, 0, 0.4, 0)
+    loadContainer.Position = UDim2.new(0.5, 0, 0.5, 0)
+    loadContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+    loadContainer.ZIndex = 2
+
+    local loadTitle = Instance.new("TextLabel")
+    loadTitle.Parent = loadContainer
+    loadTitle.BackgroundTransparency = 1
+    loadTitle.Size = UDim2.new(1, 0, 0, 30)
+    loadTitle.Position = UDim2.new(0, 0, 0, -40)
+    loadTitle.Font = Enum.Font.GothamBold
+    loadTitle.Text = "MANGA HUB LOADER"
+    loadTitle.TextColor3 = THEME_COLOR
+    loadTitle.TextSize = 24
+    loadTitle.ZIndex = 3
+
+    local loadStatus = Instance.new("TextLabel")
+    loadStatus.Parent = loadContainer
+    loadStatus.BackgroundTransparency = 1
+    loadStatus.Size = UDim2.new(1, 0, 0, 20)
+    loadStatus.Position = UDim2.new(0, 0, 1, 10)
+    loadStatus.Font = Enum.Font.Gotham
+    loadStatus.Text = "Connecting..."
+    loadStatus.TextColor3 = SUB_TEXT
+    loadStatus.TextSize = 14
+    loadStatus.ZIndex = 3
+
+    local progressBg = Instance.new("Frame")
+    progressBg.Parent = loadContainer
+    progressBg.BackgroundColor3 = Color3.fromRGB(40, 30, 60)
+    progressBg.BorderSizePixel = 0
+    progressBg.Size = UDim2.new(1, 0, 0, 6)
+    progressBg.Position = UDim2.new(0, 0, 0.5, 0)
+    progressBg.AnchorPoint = Vector2.new(0, 0.5)
+    progressBg.ZIndex = 2
+
+    local progressCorner = Instance.new("UICorner")
+    progressCorner.CornerRadius = UDim.new(1, 0)
+    progressCorner.Parent = progressBg
+
+    local progressBar = Instance.new("Frame")
+    progressBar.Parent = progressBg
+    progressBar.BackgroundColor3 = THEME_COLOR
+    progressBar.BorderSizePixel = 0
+    progressBar.Size = UDim2.new(0, 0, 1, 0)
+    progressBar.ZIndex = 3
+
+    local barCorner = Instance.new("UICorner")
+    barCorner.CornerRadius = UDim.new(1, 0)
+    barCorner.Parent = progressBar
+
+    local barGlow = Instance.new("UIStroke")
+    barGlow.Parent = progressBar
+    barGlow.Color = THEME_COLOR
+    barGlow.Thickness = 4
+    barGlow.Transparency = 0.5
+
+    loadingGui.Parent = playerGui
+
+    task.spawn(function()
+        local totalTime = 15
+        local steps = {
+            {t = 0.1, msg = "Verificando credenciais..."},
+            {t = 0.3, msg = "Analisando ambiente local..."},
+            {t = 0.5, msg = "Carregando módulos de memória..."},
+            {t = 0.7, msg = "Bypassing security protocols..."},
+            {t = 0.85, msg = "Injetando dependências..."},
+            {t = 0.95, msg = "Finalizando interface..."}
+        }
+
+        local startTime = tick()
+
+        while true do
+            local elapsed = tick() - startTime
+            local progress = math.min(elapsed / totalTime, 1)
+
+            progressBar.Size = UDim2.new(progress, 0, 1, 0)
+
+            for _, step in ipairs(steps) do
+                if progress >= step.t and progress < (step.t + 0.1) then
+                    loadStatus.Text = step.msg
+                end
+            end
+
+            if progress >= 1 then
+                loadStatus.Text = "ACCESS GRANTED"
+                task.wait(0.5)
+                break
+            end
+
+            RunService.RenderStepped:Wait()
+        end
+
+        TweenService:Create(loadingBg, TweenInfo.new(1, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(loadContainer, TweenInfo.new(1, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0.5, -100)}):Play()
+        TweenService:Create(logoImg, TweenInfo.new(1, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {ImageTransparency = 1}):Play()
+
+        task.wait(1)
+        loadingGui:Destroy()
+        onComplete()
+    end)
+end
+
+local function createBaseGui(titleText, isPremium)
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "MainHub"
+    gui.ResetOnSpawn = false
+    gui.DisplayOrder = 5000
+    gui.IgnoreGuiInset = true
+
+    local main = Instance.new("Frame")
+    main.Parent = gui
+    main.BackgroundColor3 = PANEL_BG
+    main.BorderSizePixel = 0
+    main.Size = UDim2.new(0.9, 0, 0.7, 0)
+    main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.Active = true
+    main.Draggable = true
+    main.ZIndex = 10
+    main.ClipsDescendants = true
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 16)
+    corner.Parent = main
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Parent = main
+    stroke.Color = isPremium and Color3.fromRGB(250, 204, 21) or THEME_COLOR
+    stroke.Thickness = 2
+
+    local mainGlow = Instance.new("UIStroke")
+    mainGlow.Parent = main
+    mainGlow.Color = isPremium and Color3.fromRGB(250, 204, 21) or Color3.fromRGB(168, 85, 247)
+    mainGlow.Thickness = 6
+    mainGlow.Transparency = 0.8
+
+    local header = Instance.new("Frame")
+    header.Parent = main
+    header.BackgroundColor3 = Color3.fromRGB(30, 20, 50)
+    header.BorderSizePixel = 0
+    header.Size = UDim2.new(1, 0, 0, 40)
+    header.ZIndex = 11
+
+    local hCorner = Instance.new("UICorner")
+    hCorner.CornerRadius = UDim.new(0, 16)
+    hCorner.Parent = header
+
+    local hFix = Instance.new("Frame")
+    hFix.Parent = header
+    hFix.BackgroundColor3 = Color3.fromRGB(30, 20, 50)
+    hFix.BorderSizePixel = 0
+    hFix.Size = UDim2.new(1, 0, 0.5, 0)
+    hFix.Position = UDim2.new(0, 0, 0.5, 0)
+    hFix.ZIndex = 11
+
+    local title = Instance.new("TextLabel")
+    title.Parent = header
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1, -80, 1, 0)
+    title.Font = Enum.Font.GothamBold
+    title.Text = titleText
+    title.TextColor3 = isPremium and Color3.fromRGB(250, 204, 21) or THEME_COLOR
+    title.TextSize = 14
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.ZIndex = 12
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Parent = header
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeBtn.BorderSizePixel = 0
+    closeBtn.Position = UDim2.new(1, -32, 0, 7)
+    closeBtn.Size = UDim2.new(0, 25, 0, 25)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.TextSize = 14
+    closeBtn.ZIndex = 12
+    closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
+
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 6)
+    closeCorner.Parent = closeBtn
+
+    local content = Instance.new("ScrollingFrame")
+    content.Parent = main
+    content.BackgroundTransparency = 1
+    content.Position = UDim2.new(0, 10, 0, 50)
+    content.Size = UDim2.new(1, -20, 1, -60)
+    content.ScrollBarThickness = 4
+    content.ScrollBarImageColor3 = THEME_COLOR
+    content.CanvasSize = UDim2.new(0, 0, 0, 500)
+    content.ZIndex = 11
+
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = content
+    layout.Padding = UDim.new(0, 10)
+
+    content.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        content.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+    end)
+
+    return gui, main, content
+end
+
+local function addToggle(parent, name, defaultVal)
+    local container = Instance.new("Frame")
+    container.Parent = parent
+    container.BackgroundColor3 = Color3.fromRGB(30, 22, 50)
+    container.BorderSizePixel = 0
+    container.Size = UDim2.new(1, 0, 0, 45)
+    container.ZIndex = 12
+
+    local cCorner = Instance.new("UICorner")
+    cCorner.CornerRadius = UDim.new(0, 8)
+    cCorner.Parent = container
+
+    local label = Instance.new("TextLabel")
+    label.Parent = container
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(0.35, 0, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.Font = Enum.Font.GothamBold
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(200, 200, 220)
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = 13
+
+    local box = Instance.new("TextBox")
+    box.Parent = container
+    box.BackgroundColor3 = Color3.fromRGB(40, 30, 60)
+    box.BorderSizePixel = 0
+    box.Position = UDim2.new(0.4, 0, 0.15, 0)
+    box.Size = UDim2.new(0.38, -10, 0.7, 0)
+    box.Font = Enum.Font.Gotham
+    box.Text = tostring(defaultVal)
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.TextSize = 13
+    box.PlaceholderText = "Value"
+    box.PlaceholderColor3 = Color3.fromRGB(100, 90, 120)
+    box.ClearTextOnFocus = false
+    box.ZIndex = 13
+
+    local bCorner = Instance.new("UICorner")
+    bCorner.CornerRadius = UDim.new(0, 6)
+    bCorner.Parent = box
+
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Parent = container
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    toggleBtn.BorderSizePixel = 0
+    toggleBtn.Position = UDim2.new(0.82, 0, 0.15, 0)
+    toggleBtn.Size = UDim2.new(0.16, 0, 0.7, 0)
+    toggleBtn.Text = "OFF"
+    toggleBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.TextSize = 12
+    toggleBtn.ZIndex = 13
+
+    local tCorner = Instance.new("UICorner")
+    tCorner.CornerRadius = UDim.new(0, 6)
+    tCorner.Parent = toggleBtn
+
+    local enabled = false
+    toggleBtn.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        if enabled then
+            TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME_COLOR, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+            toggleBtn.Text = "ON"
+        else
+            TweenService:Create(toggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 50, 50), TextColor3 = Color3.fromRGB(180, 180, 180)}):Play()
+            toggleBtn.Text = "OFF"
+        end
+    end)
+
+    return {box = box, enabled = function() return enabled end}
+end
+
+local function setupHooks(controls)
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if self == nyaRemote and method == "FireServer" then
+            local args = {...}
+            if type(args[1]) == "table" then
+                local m = args[1]
+                if m.t == "metrics" and type(m.token) == "number" then
+                    if controls.FPS.enabled() then
+                        local val = tonumber(controls.FPS.box.Text)
+                        if val then
+                            local delta = math.random(1, 15)
+                            if math.random(1, 2) == 1 then
+                                m.fps = val + delta
+                            else
+                                m.fps = val - delta
+                            end
+                        end
+                    end
+                    if controls.Mem.enabled() then
+                        local val = tonumber(controls.Mem.box.Text)
+                        if val then
+                            local delta = math.random(1, 25)
+                            if math.random(1, 2) == 1 then
+                                m.mem = val + delta
+                            else
+                                m.mem = val - delta
+                            end
+                        end
+                    end
+                    if controls.Res.enabled() then
+                        local text = controls.Res.box.Text
+                        local x, y = text:match("(%d+)x(%d+)")
+                        if x and y then m.res = Vector2.new(tonumber(x), tonumber(y)) end
+                    end
+                    if controls.GFX.enabled() then
+                        local val = tonumber(controls.GFX.box.Text)
+                        if val then
+                            local levels = {}
+                            for i = 1, 10 do
+                                levels[i] = Enum.SavedQualitySetting["QualityLevel" .. i]
+                            end
+                            m.gfx = levels[val] or m.gfx
+                        end
+                    end
+                end
+            end
+            return oldNamecall(self, unpack(args))
+        end
+        return oldNamecall(self, ...)
+    end)
+end
+
+local function setupFreeOscillatingBypass()
+    local bypassActive = true
+    local bypassState = true
+
+    task.spawn(function()
+        local startTime = tick()
+        local duration = 120
+        while tick() - startTime < duration do
+            bypassState = math.random(1, 100) > 30
+            task.wait(math.random(5, 15) / 10)
+        end
+        bypassActive = false
+    end)
+
+    local oldNamecallBypass
+    oldNamecallBypass = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if method == "Kick" and self ~= player then
+            if bypassActive and bypassState then
+                return nil
+            end
+        end
+        return oldNamecallBypass(self, ...)
+    end)
+end
+
+local function loadFreeVersion()
+    setupFreeOscillatingBypass()
+
+    local gui, main, content = createBaseGui("manga hub / flex you fps / V1.0/Brasil", false)
+
+    local warnFrame = Instance.new("Frame")
+    warnFrame.Parent = content
+    warnFrame.BackgroundColor3 = Color3.fromRGB(50, 15, 15)
+    warnFrame.BorderSizePixel = 0
+    warnFrame.Size = UDim2.new(1, 0, 0, 45)
+    warnFrame.ZIndex = 12
+
+    local wfCorner = Instance.new("UICorner")
+    wfCorner.CornerRadius = UDim.new(0, 8)
+    wfCorner.Parent = warnFrame
+
+    local wfStroke = Instance.new("UIStroke")
+    wfStroke.Parent = warnFrame
+    wfStroke.Color = Color3.fromRGB(200, 50, 50)
+    wfStroke.Thickness = 1
+
+    local wfText = Instance.new("TextLabel")
+    wfText.Parent = warnFrame
+    wfText.BackgroundTransparency = 1
+    wfText.Size = UDim2.new(1, -10, 1, 0)
+    wfText.Font = Enum.Font.GothamBold
+    wfText.Text = "⚠ BYPASS OSCILANDO — RISCO DE BAN"
+    wfText.TextColor3 = Color3.fromRGB(255, 80, 80)
+    wfText.TextSize = 12
+    wfText.ZIndex = 13
+
+    task.spawn(function()
+        while warnFrame.Parent do
+            TweenService:Create(wfStroke, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.3}):Play()
+            TweenService:Create(wfText, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {TextColor3 = Color3.fromRGB(255, 120, 120)}):Play()
+            task.wait(0.8)
+            TweenService:Create(wfStroke, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.8}):Play()
+            TweenService:Create(wfText, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {TextColor3 = Color3.fromRGB(255, 80, 80)}):Play()
+            task.wait(0.8)
+        end
+    end)
+
+    local controls = {}
+    controls.FPS = addToggle(content, "FPS", "500")
+    controls.Mem = addToggle(content, "Memory", "20000")
+    controls.Res = addToggle(content, "Resolution", "1920x1080")
+    controls.GFX = addToggle(content, "Graphics", "5")
+
+    setupHooks(controls)
+
+    gui.Parent = playerGui
+end
+
+local function loadAdminVersion()
+    local detectedFunc = nil
+    local killFunc = nil
+
+    for _, v in pairs(getgc(true)) do
+        if typeof(v) == "table" then
+            local detected = rawget(v, "Detected")
+            local kill = rawget(v, "Kill")
+            local variables = rawget(v, "Variables")
+            local process = rawget(v, "Process")
+            if typeof(detected) == "function" and not detectedFunc then
+                detectedFunc = detected
+                hookfunction(detected, function() return true end)
+            end
+            if variables and process and typeof(kill) == "function" and not killFunc then
+                killFunc = kill
+                hookfunction(kill, function() return nil end)
+            end
+        end
+    end
+
+    if getrenv and getrenv().debug and getrenv().debug.info then
+        local oldDebugInfo = getrenv().debug.info
+        hookfunction(getrenv().debug.info, function(...)
+            local firstArg = select(1, ...)
+            if detectedFunc and firstArg == detectedFunc then
+                return coroutine.yield(coroutine.running())
+            end
+            return oldDebugInfo(...)
+        end)
+    end
+
+    local oldNamecallBypass
+    oldNamecallBypass = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if method == "Kick" and self ~= player then
+            return nil
+        end
+        return oldNamecallBypass(self, ...)
+    end)
+
+    local gui, main, content = createBaseGui("manga hub / flex you fps / V1.0/Brasil", true)
+
+    local statusFrame = Instance.new("Frame")
+    statusFrame.Parent = content
+    statusFrame.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
+    statusFrame.BorderSizePixel = 0
+    statusFrame.Size = UDim2.new(1, 0, 0, 35)
+    statusFrame.ZIndex = 12
+
+    local sfCorner = Instance.new("UICorner")
+    sfCorner.CornerRadius = UDim.new(0, 8)
+    sfCorner.Parent = statusFrame
+
+    local sfText = Instance.new("TextLabel")
+    sfText.Parent = statusFrame
+    sfText.BackgroundTransparency = 1
+    sfText.Size = UDim2.new(1, 0, 1, 0)
+    sfText.Font = Enum.Font.GothamBold
+    sfText.Text = "✓  ADONIS BYPASS ACTIVE — STABLE"
+    sfText.TextColor3 = Color3.fromRGB(80, 255, 80)
+    sfText.TextSize = 13
+    sfText.ZIndex = 13
+
+    local controls = {}
+    controls.FPS = addToggle(content, "FPS", "500")
+    controls.Mem = addToggle(content, "Memory", "20000")
+    controls.Res = addToggle(content, "Resolution", "1920x1080")
+    controls.GFX = addToggle(content, "Graphics", "5")
+
+    setupHooks(controls)
+
+    gui.Parent = playerGui
+end
+
+local function handleLogin()
+    local u = userBox.Text:lower():gsub("%s+", "")
+    local p = passBox.Text:lower():gsub("%s+", "")
+
+    if u == "free" and p == "free" then
+        statusLbl.Text = "✓ Credentials verified"
+        statusLbl.TextColor3 = Color3.fromRGB(80, 255, 80)
+        loginBtn.Text = "VERIFYING..."
+        loginBtn.Active = false
+        task.wait(0.5)
+        showWarningScreen(function(confirmed)
+            if confirmed then
+                loginGui.Enabled = false
+                runLoadingSequence(function()
+                    loadFreeVersion()
+                end)
+            else
+                loginBtn.Text = "LOGIN"
+                loginBtn.Active = true
+                statusLbl.Text = ""
+            end
+        end)
+    elseif u == "admin" and p == "mangahub" then
+        statusLbl.Text = "✓ Access Granted — Premium"
+        statusLbl.TextColor3 = Color3.fromRGB(250, 204, 21)
+        TweenService:Create(loginBtn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(200, 160, 10)}):Play()
+        loginBtn.Text = "LOADING..."
+        loginGui.Enabled = false
+        runLoadingSequence(function()
+            loadAdminVersion()
+        end)
+    else
+        statusLbl.Text = "✗ Invalid credentials"
+        statusLbl.TextColor3 = Color3.fromRGB(239, 68, 68)
+        local origPos = loginPanel.Position
+        TweenService:Create(loginPanel, TweenInfo.new(0.08), {Position = UDim2.new(0.5, -15, 0.5, 0)}):Play()
+        task.wait(0.08)
+        TweenService:Create(loginPanel, TweenInfo.new(0.08), {Position = UDim2.new(0.5, 15, 0.5, 0)}):Play()
+        task.wait(0.08)
+        TweenService:Create(loginPanel, TweenInfo.new(0.08), {Position = UDim2.new(0.5, -8, 0.5, 0)}):Play()
+        task.wait(0.08)
+        TweenService:Create(loginPanel, TweenInfo.new(0.08), {Position = origPos}):Play()
+    end
+end
+
+loginBtn.MouseButton1Click:Connect(handleLogin)
+loginBtn.TouchTap:Connect(handleLogin)
+
+passBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        handleLogin()
+    end
+end)
+
+loginGui.Parent = playerGui
