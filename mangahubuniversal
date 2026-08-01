@@ -4,7 +4,8 @@ local scripts = {
     [1686885941] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/manga%20hub%20brookhaven",
     [372226183] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/fleethefacility",
     [10148749921] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/hospital%20de%20animais",
-    [4948814458] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/fortline%20manga%20hub"
+    [4948814458] = "https://raw.githubusercontent.com/scripts498/mangahub/refs/heads/main/fortline%20manga%20hub",
+    [] = ""
 }
 
 local url = scripts[game.GameId]
