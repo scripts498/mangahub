@@ -9,6 +9,14 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local nyaRemote = ReplicatedStorage:WaitForChild("nya")
 
+local viewport = workspace.CurrentCamera.ViewportSize
+local isMobile = UserInputService.TouchEnabled
+local screenW, screenH = viewport.X, viewport.Y
+
+local function clampSize(w, h, maxW, maxH)
+    return math.min(w, screenW * maxW), math.min(h, screenH * maxH)
+end
+
 local THEME = {
     Primary = Color3.fromRGB(139, 92, 246),
     PrimaryLight = Color3.fromRGB(167, 139, 250),
@@ -136,12 +144,17 @@ task.spawn(function()
     end
 end)
 
+local loginW, loginH = clampSize(380, 520, 0.82, 0.72)
+if isMobile then
+    loginW, loginH = clampSize(300, 440, 0.78, 0.65)
+end
+
 local loginPanel = Instance.new("Frame")
 loginPanel.Parent = loginBg
 loginPanel.BackgroundColor3 = THEME.Panel
 loginPanel.BackgroundTransparency = 0.05
 loginPanel.BorderSizePixel = 0
-loginPanel.Size = UDim2.new(0, 440, 0, 580)
+loginPanel.Size = UDim2.new(0, loginW, 0, loginH)
 loginPanel.Position = UDim2.new(0.5, 0, 0.5, 120)
 loginPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 loginPanel.Active = true
@@ -191,11 +204,12 @@ topBarGlow.Size = UDim2.new(1, 0, 0, 20)
 topBarGlow.Position = UDim2.new(0, 0, 0, 0)
 topBarGlow.ZIndex = 10
 
+local logoSize = isMobile and 70 or 90
 local logoContainer = Instance.new("Frame")
 logoContainer.Parent = loginPanel
 logoContainer.BackgroundTransparency = 1
-logoContainer.Size = UDim2.new(0, 90, 0, 90)
-logoContainer.Position = UDim2.new(0.5, -45, 0, 28)
+logoContainer.Size = UDim2.new(0, logoSize, 0, logoSize)
+logoContainer.Position = UDim2.new(0.5, -logoSize / 2, 0, 22)
 logoContainer.ZIndex = 11
 
 local logoBg = Instance.new("Frame")
@@ -205,7 +219,7 @@ logoBg.BorderSizePixel = 0
 logoBg.Size = UDim2.new(1, 0, 1, 0)
 logoBg.ZIndex = 11
 local lbc = Instance.new("UICorner")
-lbc.CornerRadius = UDim.new(0, 22)
+lbc.CornerRadius = UDim.new(0, isMobile and 18 or 22)
 lbc.Parent = logoBg
 
 local logoStroke = Instance.new("UIStroke")
@@ -227,7 +241,7 @@ logoIcon.Size = UDim2.new(1, 0, 1, 0)
 logoIcon.Font = Enum.Font.GothamBold
 logoIcon.Text = "M"
 logoIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
-logoIcon.TextSize = 40
+logoIcon.TextSize = isMobile and 32 or 40
 logoIcon.ZIndex = 12
 
 local logoShadow = Instance.new("TextLabel")
@@ -238,7 +252,7 @@ logoShadow.Size = UDim2.new(1, 0, 1, 0)
 logoShadow.Font = Enum.Font.GothamBold
 logoShadow.Text = "M"
 logoShadow.TextColor3 = Color3.fromRGB(0, 0, 0)
-logoShadow.TextSize = 40
+logoShadow.TextSize = isMobile and 32 or 40
 logoShadow.TextTransparency = 0.85
 logoShadow.ZIndex = 11
 
@@ -254,41 +268,51 @@ end)
 local titleLbl = Instance.new("TextLabel")
 titleLbl.Parent = loginPanel
 titleLbl.BackgroundTransparency = 1
-titleLbl.Size = UDim2.new(1, 0, 0, 32)
-titleLbl.Position = UDim2.new(0, 0, 0, 130)
+titleLbl.Size = UDim2.new(1, 0, 0, 30)
+titleLbl.Position = UDim2.new(0, 0, 0, isMobile and 100 or 120)
 titleLbl.Font = Enum.Font.GothamBold
 titleLbl.Text = "manga hub"
 titleLbl.TextColor3 = THEME.Text
-titleLbl.TextSize = 28
+titleLbl.TextSize = isMobile and 24 or 28
 titleLbl.ZIndex = 11
 
 local subtitleLbl = Instance.new("TextLabel")
 subtitleLbl.Parent = loginPanel
 subtitleLbl.BackgroundTransparency = 1
-subtitleLbl.Size = UDim2.new(1, 0, 0, 22)
-subtitleLbl.Position = UDim2.new(0, 0, 0, 162)
+subtitleLbl.Size = UDim2.new(1, 0, 0, 20)
+subtitleLbl.Position = UDim2.new(0, 0, 0, isMobile and 128 or 150)
 subtitleLbl.Font = Enum.Font.Gotham
 subtitleLbl.Text = "entre com suas credenciais"
 subtitleLbl.TextColor3 = THEME.TextSub
-subtitleLbl.TextSize = 14
+subtitleLbl.TextSize = isMobile and 12 or 14
 subtitleLbl.ZIndex = 11
+
+
+local padX = isMobile and 20 or 32
+local inputY1 = isMobile and 160 or 200
+local inputY2 = isMobile and 235 or 290
+local btnY = isMobile and 320 or 390
+local statusY = isMobile and 370 or 450
+local infoY = isMobile and 395 or 478
+local premY1 = isMobile and 470 or 572
+local premY2 = isMobile and 485 or 588
 
 local function createInput(parent, labelText, placeholder, yPos)
     local container = Instance.new("Frame")
     container.Parent = parent
     container.BackgroundTransparency = 1
-    container.Size = UDim2.new(1, -64, 0, 76)
-    container.Position = UDim2.new(0, 32, 0, yPos)
+    container.Size = UDim2.new(1, -padX * 2, 0, isMobile and 64 or 76)
+    container.Position = UDim2.new(0, padX, 0, yPos)
     container.ZIndex = 11
 
     local lbl = Instance.new("TextLabel")
     lbl.Parent = container
     lbl.BackgroundTransparency = 1
-    lbl.Size = UDim2.new(1, 0, 0, 20)
+    lbl.Size = UDim2.new(1, 0, 0, 18)
     lbl.Font = Enum.Font.GothamBold
     lbl.Text = labelText
     lbl.TextColor3 = THEME.TextSub
-    lbl.TextSize = 12
+    lbl.TextSize = isMobile and 11 or 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.ZIndex = 12
 
@@ -296,8 +320,8 @@ local function createInput(parent, labelText, placeholder, yPos)
     boxHolder.Parent = container
     boxHolder.BackgroundColor3 = THEME.Input
     boxHolder.BorderSizePixel = 0
-    boxHolder.Position = UDim2.new(0, 0, 0, 24)
-    boxHolder.Size = UDim2.new(1, 0, 0, 48)
+    boxHolder.Position = UDim2.new(0, 0, 0, 22)
+    boxHolder.Size = UDim2.new(1, 0, 0, isMobile and 40 or 48)
     boxHolder.ZIndex = 12
 
     local bhc = Instance.new("UICorner")
@@ -319,14 +343,14 @@ local function createInput(parent, labelText, placeholder, yPos)
     local box = Instance.new("TextBox")
     box.Parent = boxHolder
     box.BackgroundTransparency = 1
-    box.Position = UDim2.new(0, 16, 0, 0)
-    box.Size = UDim2.new(1, -32, 1, 0)
+    box.Position = UDim2.new(0, 14, 0, 0)
+    box.Size = UDim2.new(1, -28, 1, 0)
     box.Font = Enum.Font.Gotham
     box.PlaceholderText = placeholder
     box.PlaceholderColor3 = THEME.TextMuted
     box.Text = ""
     box.TextColor3 = THEME.Text
-    box.TextSize = 15
+    box.TextSize = isMobile and 13 or 15
     box.TextXAlignment = Enum.TextXAlignment.Left
     box.ClearTextOnFocus = false
     box.ZIndex = 13
@@ -348,19 +372,19 @@ local function createInput(parent, labelText, placeholder, yPos)
     return box
 end
 
-local userBox = createInput(loginPanel, "USUÁRIO", "Digite seu usuário...", 200)
-local passBox = createInput(loginPanel, "SENHA", "Digite sua senha...", 290)
+local userBox = createInput(loginPanel, "USUÁRIO", "Digite seu usuário...", inputY1)
+local passBox = createInput(loginPanel, "SENHA", "Digite sua senha...", inputY2)
 
 local loginBtn = Instance.new("TextButton")
 loginBtn.Parent = loginPanel
 loginBtn.BackgroundColor3 = THEME.Primary
 loginBtn.BorderSizePixel = 0
-loginBtn.Position = UDim2.new(0, 32, 0, 390)
-loginBtn.Size = UDim2.new(1, -64, 0, 52)
+loginBtn.Position = UDim2.new(0, padX, 0, btnY)
+loginBtn.Size = UDim2.new(1, -padX * 2, 0, isMobile and 44 or 52)
 loginBtn.Font = Enum.Font.GothamBold
 loginBtn.Text = "ENTRAR"
 loginBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-loginBtn.TextSize = 16
+loginBtn.TextSize = isMobile and 14 or 16
 loginBtn.ZIndex = 11
 loginBtn.AutoButtonColor = false
 
@@ -391,32 +415,32 @@ btnGlow.Transparency = 0.8
 
 loginBtn.MouseEnter:Connect(function()
     smooth(btnStroke, {Transparency = 0, Thickness = 2.5}, 0.25)
-    spring(loginBtn, {Size = UDim2.new(1, -56, 0, 56), Position = UDim2.new(0, 28, 0, 388)}, 0.35)
+    spring(loginBtn, {Size = UDim2.new(1, -(padX * 2 - 8), 0, isMobile and 48 or 56), Position = UDim2.new(0, padX - 4, 0, btnY - (isMobile and 2 or 2))}, 0.35)
     smooth(btnGlow, {Transparency = 0.7}, 0.3)
 end)
 
 loginBtn.MouseLeave:Connect(function()
     smooth(btnStroke, {Transparency = 0.25, Thickness = 2}, 0.25)
-    spring(loginBtn, {Size = UDim2.new(1, -64, 0, 52), Position = UDim2.new(0, 32, 0, 390)}, 0.35)
+    spring(loginBtn, {Size = UDim2.new(1, -padX * 2, 0, isMobile and 44 or 52), Position = UDim2.new(0, padX, 0, btnY)}, 0.35)
     smooth(btnGlow, {Transparency = 0.8}, 0.3)
 end)
 
 local statusLbl = Instance.new("TextLabel")
 statusLbl.Parent = loginPanel
 statusLbl.BackgroundTransparency = 1
-statusLbl.Position = UDim2.new(0, 32, 0, 450)
-statusLbl.Size = UDim2.new(1, -64, 0, 24)
+statusLbl.Position = UDim2.new(0, padX, 0, statusY)
+statusLbl.Size = UDim2.new(1, -padX * 2, 0, 22)
 statusLbl.Font = Enum.Font.Gotham
 statusLbl.Text = ""
 statusLbl.TextColor3 = THEME.Danger
-statusLbl.TextSize = 14
+statusLbl.TextSize = isMobile and 12 or 14
 statusLbl.ZIndex = 11
 
 local infoContainer = Instance.new("Frame")
 infoContainer.Parent = loginPanel
 infoContainer.BackgroundTransparency = 1
-infoContainer.Position = UDim2.new(0, 32, 0, 478)
-infoContainer.Size = UDim2.new(1, -64, 0, 85)
+infoContainer.Position = UDim2.new(0, padX, 0, infoY)
+infoContainer.Size = UDim2.new(1, -padX * 2, 0, isMobile and 72 or 85)
 infoContainer.ZIndex = 11
 
 local infoCard = Instance.new("Frame")
@@ -439,82 +463,82 @@ icStroke.Transparency = 0.35
 local infoIcon = Instance.new("TextLabel")
 infoIcon.Parent = infoCard
 infoIcon.BackgroundTransparency = 1
-infoIcon.Position = UDim2.new(0, 14, 0, 12)
-infoIcon.Size = UDim2.new(0, 22, 0, 22)
+infoIcon.Position = UDim2.new(0, 12, 0, 10)
+infoIcon.Size = UDim2.new(0, 20, 0, 20)
 infoIcon.Font = Enum.Font.GothamBold
 infoIcon.Text = "i"
 infoIcon.TextColor3 = THEME.PrimaryLight
-infoIcon.TextSize = 18
+infoIcon.TextSize = isMobile and 15 or 18
 infoIcon.ZIndex = 12
 
 local infoTitle = Instance.new("TextLabel")
 infoTitle.Parent = infoCard
 infoTitle.BackgroundTransparency = 1
-infoTitle.Position = UDim2.new(0, 40, 0, 14)
-infoTitle.Size = UDim2.new(1, -50, 0, 18)
+infoTitle.Position = UDim2.new(0, 36, 0, 12)
+infoTitle.Size = UDim2.new(1, -46, 0, 16)
 infoTitle.Font = Enum.Font.GothamBold
 infoTitle.Text = "acesso disponível"
 infoTitle.TextColor3 = THEME.Text
-infoTitle.TextSize = 12
+infoTitle.TextSize = isMobile and 10 or 12
 infoTitle.TextXAlignment = Enum.TextXAlignment.Left
 infoTitle.ZIndex = 12
 
 local infoLine1 = Instance.new("TextLabel")
 infoLine1.Parent = infoCard
 infoLine1.BackgroundTransparency = 1
-infoLine1.Position = UDim2.new(0, 40, 0, 32)
-infoLine1.Size = UDim2.new(1, -50, 0, 14)
+infoLine1.Position = UDim2.new(0, 36, 0, 28)
+infoLine1.Size = UDim2.new(1, -46, 0, 13)
 infoLine1.Font = Enum.Font.Gotham
 infoLine1.Text = "nome: free"
 infoLine1.TextColor3 = THEME.TextSub
-infoLine1.TextSize = 11
+infoLine1.TextSize = isMobile and 9 or 11
 infoLine1.TextXAlignment = Enum.TextXAlignment.Left
 infoLine1.ZIndex = 12
 
 local infoLine2 = Instance.new("TextLabel")
 infoLine2.Parent = infoCard
 infoLine2.BackgroundTransparency = 1
-infoLine2.Position = UDim2.new(0, 40, 0, 46)
-infoLine2.Size = UDim2.new(1, -50, 0, 14)
+infoLine2.Position = UDim2.new(0, 36, 0, 41)
+infoLine2.Size = UDim2.new(1, -46, 0, 13)
 infoLine2.Font = Enum.Font.Gotham
 infoLine2.Text = "senha: free"
 infoLine2.TextColor3 = THEME.TextSub
-infoLine2.TextSize = 11
+infoLine2.TextSize = isMobile and 9 or 11
 infoLine2.TextXAlignment = Enum.TextXAlignment.Left
 infoLine2.ZIndex = 12
 
 local infoLine3 = Instance.new("TextLabel")
 infoLine3.Parent = infoCard
 infoLine3.BackgroundTransparency = 1
-infoLine3.Position = UDim2.new(0, 40, 0, 62)
-infoLine3.Size = UDim2.new(1, -50, 0, 14)
+infoLine3.Position = UDim2.new(0, 36, 0, 54)
+infoLine3.Size = UDim2.new(1, -46, 0, 13)
 infoLine3.Font = Enum.Font.Gotham
 infoLine3.Text = "pode dar ban, bypass oscila."
 infoLine3.TextColor3 = THEME.Warning
-infoLine3.TextSize = 11
+infoLine3.TextSize = isMobile and 9 or 11
 infoLine3.TextXAlignment = Enum.TextXAlignment.Left
 infoLine3.ZIndex = 12
 
 local premiumInfo = Instance.new("TextLabel")
 premiumInfo.Parent = loginPanel
 premiumInfo.BackgroundTransparency = 1
-premiumInfo.Position = UDim2.new(0, 32, 0, 572)
-premiumInfo.Size = UDim2.new(1, -64, 0, 18)
+premiumInfo.Position = UDim2.new(0, padX, 0, premY1)
+premiumInfo.Size = UDim2.new(1, -padX * 2, 0, 16)
 premiumInfo.Font = Enum.Font.Gotham
 premiumInfo.Text = "tem uma versão privada, premium, que o bypass não oscila."
 premiumInfo.TextColor3 = THEME.TextMuted
-premiumInfo.TextSize = 10
+premiumInfo.TextSize = isMobile and 9 or 10
 premiumInfo.ZIndex = 11
 
 local premiumInfo2 = Instance.new("TextLabel")
 premiumInfo2.Parent = loginPanel
 premiumInfo2.BackgroundTransparency = 1
-premiumInfo2.Position = UDim2.new(0, 32, 0, 588)
-premiumInfo2.Size = UDim2.new(1, -64, 0, 18)
+premiumInfo2.Position = UDim2.new(0, padX, 0, premY2)
+premiumInfo2.Size = UDim2.new(1, -padX * 2, 0, 16)
 premiumInfo2.Font = Enum.Font.Gotham
 premiumInfo2.Text = "fale com o dono do script para conceder."
 premiumInfo2.TextColor3 = THEME.TextMuted
-premiumInfo2.TextSize = 10
+premiumInfo2.TextSize = isMobile and 9 or 10
 premiumInfo2.ZIndex = 11
 
 loginPanel.BackgroundTransparency = 1
@@ -594,11 +618,16 @@ local function showWarningScreen(callback)
         end)
     end
 
+    local warnW, warnH = clampSize(380, 420, 0.78, 0.58)
+    if isMobile then
+        warnW, warnH = clampSize(280, 380, 0.72, 0.52)
+    end
+
     local warnPanel = Instance.new("Frame")
     warnPanel.Parent = warnBg
     warnPanel.BackgroundColor3 = Color3.fromRGB(30, 10, 10)
     warnPanel.BorderSizePixel = 0
-    warnPanel.Size = UDim2.new(0, 420, 0, 460)
+    warnPanel.Size = UDim2.new(0, warnW, 0, warnH)
     warnPanel.Position = UDim2.new(0.5, 0, 0.5, 100)
     warnPanel.AnchorPoint = Vector2.new(0.5, 0.5)
     warnPanel.ZIndex = 10
@@ -629,11 +658,12 @@ local function showWarningScreen(callback)
     topBarWarn.Size = UDim2.new(1, 0, 0, 3)
     topBarWarn.ZIndex = 11
 
+    local iconSize = isMobile and 60 or 80
     local warnIconContainer = Instance.new("Frame")
     warnIconContainer.Parent = warnPanel
     warnIconContainer.BackgroundTransparency = 1
-    warnIconContainer.Size = UDim2.new(0, 80, 0, 80)
-    warnIconContainer.Position = UDim2.new(0.5, -40, 0, 28)
+    warnIconContainer.Size = UDim2.new(0, iconSize, 0, iconSize)
+    warnIconContainer.Position = UDim2.new(0.5, -iconSize / 2, 0, isMobile and 18 or 28)
     warnIconContainer.ZIndex = 11
 
     local wicBg = Instance.new("Frame")
@@ -666,38 +696,39 @@ local function showWarningScreen(callback)
     wicIcon.Font = Enum.Font.GothamBold
     wicIcon.Text = "!"
     wicIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
-    wicIcon.TextSize = 40
+    wicIcon.TextSize = isMobile and 30 or 40
     wicIcon.ZIndex = 12
 
     local warnTitle = Instance.new("TextLabel")
     warnTitle.Parent = warnPanel
     warnTitle.BackgroundTransparency = 1
-    warnTitle.Size = UDim2.new(1, 0, 0, 32)
-    warnTitle.Position = UDim2.new(0, 0, 0, 125)
+    warnTitle.Size = UDim2.new(1, 0, 0, 28)
+    warnTitle.Position = UDim2.new(0, 0, 0, isMobile and 90 or 125)
     warnTitle.Font = Enum.Font.GothamBold
     warnTitle.Text = "AVISO DE RISCO"
     warnTitle.TextColor3 = Color3.fromRGB(255, 80, 80)
-    warnTitle.TextSize = 22
+    warnTitle.TextSize = isMobile and 18 or 22
     warnTitle.ZIndex = 11
 
     local warnText1 = Instance.new("TextLabel")
     warnText1.Parent = warnPanel
     warnText1.BackgroundTransparency = 1
-    warnText1.Size = UDim2.new(1, -50, 0, 44)
-    warnText1.Position = UDim2.new(0, 25, 0, 165)
+    warnText1.Size = UDim2.new(1, -40, 0, 40)
+    warnText1.Position = UDim2.new(0, 20, 0, isMobile and 118 or 165)
     warnText1.Font = Enum.Font.Gotham
     warnText1.Text = "O Free tem o bypass oscilando.\nSe usar, pode tomar BAN."
     warnText1.TextColor3 = Color3.fromRGB(255, 140, 140)
-    warnText1.TextSize = 15
+    warnText1.TextSize = isMobile and 12 or 15
     warnText1.TextWrapped = true
     warnText1.ZIndex = 11
 
+    local cardH = isMobile and 60 or 78
     local warnCard = Instance.new("Frame")
     warnCard.Parent = warnPanel
     warnCard.BackgroundColor3 = Color3.fromRGB(42, 15, 15)
     warnCard.BorderSizePixel = 0
-    warnCard.Position = UDim2.new(0, 25, 0, 218)
-    warnCard.Size = UDim2.new(1, -50, 0, 78)
+    warnCard.Position = UDim2.new(0, 20, 0, isMobile and 160 or 218)
+    warnCard.Size = UDim2.new(1, -40, 0, cardH)
     warnCard.ZIndex = 11
     local wcc = Instance.new("UICorner")
     wcc.CornerRadius = UDim.new(0, 12)
@@ -711,24 +742,24 @@ local function showWarningScreen(callback)
     local warnText2 = Instance.new("TextLabel")
     warnText2.Parent = warnCard
     warnText2.BackgroundTransparency = 1
-    warnText2.Size = UDim2.new(1, -20, 0, 22)
-    warnText2.Position = UDim2.new(0, 12, 0, 10)
+    warnText2.Size = UDim2.new(1, -16, 0, 18)
+    warnText2.Position = UDim2.new(0, 10, 0, 8)
     warnText2.Font = Enum.Font.GothamBold
     warnText2.Text = "APENAS O PREMIUM NÃO OSCILA."
     warnText2.TextColor3 = THEME.Warning
-    warnText2.TextSize = 13
+    warnText2.TextSize = isMobile and 10 or 13
     warnText2.TextXAlignment = Enum.TextXAlignment.Left
     warnText2.ZIndex = 12
 
     local warnText3 = Instance.new("TextLabel")
     warnText3.Parent = warnCard
     warnText3.BackgroundTransparency = 1
-    warnText3.Size = UDim2.new(1, -20, 0, 38)
-    warnText3.Position = UDim2.new(0, 12, 0, 32)
+    warnText3.Size = UDim2.new(1, -16, 0, 32)
+    warnText3.Position = UDim2.new(0, 10, 0, 26)
     warnText3.Font = Enum.Font.Gotham
     warnText3.Text = "Use o Free com sua responsabilidade.\nRealmente deseja iniciar o Free?"
     warnText3.TextColor3 = Color3.fromRGB(220, 180, 180)
-    warnText3.TextSize = 12
+    warnText3.TextSize = isMobile and 10 or 12
     warnText3.TextWrapped = true
     warnText3.TextXAlignment = Enum.TextXAlignment.Left
     warnText3.ZIndex = 12
@@ -737,12 +768,12 @@ local function showWarningScreen(callback)
     confirmBtn.Parent = warnPanel
     confirmBtn.BackgroundColor3 = Color3.fromRGB(180, 35, 35)
     confirmBtn.BorderSizePixel = 0
-    confirmBtn.Position = UDim2.new(0, 25, 0, 310)
-    confirmBtn.Size = UDim2.new(1, -50, 0, 58)
+    confirmBtn.Position = UDim2.new(0, 20, 0, isMobile and 230 or 310)
+    confirmBtn.Size = UDim2.new(1, -40, 0, isMobile and 48 or 58)
     confirmBtn.Font = Enum.Font.GothamBold
     confirmBtn.Text = "Desejo, e eu me responsabilizo\na quaisquer Ban."
     confirmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    confirmBtn.TextSize = 13
+    confirmBtn.TextSize = isMobile and 11 or 13
     confirmBtn.TextWrapped = true
     confirmBtn.ZIndex = 11
     confirmBtn.AutoButtonColor = false
@@ -775,12 +806,12 @@ local function showWarningScreen(callback)
     local cancelBtn = Instance.new("TextButton")
     cancelBtn.Parent = warnPanel
     cancelBtn.BackgroundTransparency = 1
-    cancelBtn.Position = UDim2.new(0, 25, 0, 382)
-    cancelBtn.Size = UDim2.new(1, -50, 0, 38)
+    cancelBtn.Position = UDim2.new(0, 20, 0, isMobile and 285 or 382)
+    cancelBtn.Size = UDim2.new(1, -40, 0, isMobile and 30 or 38)
     cancelBtn.Font = Enum.Font.Gotham
     cancelBtn.Text = "Cancelar"
     cancelBtn.TextColor3 = Color3.fromRGB(180, 140, 140)
-    cancelBtn.TextSize = 14
+    cancelBtn.TextSize = isMobile and 12 or 14
     cancelBtn.ZIndex = 11
 
     confirmBtn.MouseEnter:Connect(function()
@@ -883,11 +914,12 @@ local function runLoadingSequence(onComplete)
         end
     end)
 
+    local logoSize2 = isMobile and 90 or 130
     local logoContainer2 = Instance.new("Frame")
     logoContainer2.Parent = loadingBg
     logoContainer2.BackgroundTransparency = 1
-    logoContainer2.Size = UDim2.new(0, 130, 0, 130)
-    logoContainer2.Position = UDim2.new(0.5, -65, 0.5, -140)
+    logoContainer2.Size = UDim2.new(0, logoSize2, 0, logoSize2)
+    logoContainer2.Position = UDim2.new(0.5, -logoSize2 / 2, 0.5, isMobile and -100 or -140)
     logoContainer2.ZIndex = 2
 
     local logoBg2 = Instance.new("Frame")
@@ -897,7 +929,7 @@ local function runLoadingSequence(onComplete)
     logoBg2.Size = UDim2.new(1, 0, 1, 0)
     logoBg2.ZIndex = 2
     local lb2c = Instance.new("UICorner")
-    lb2c.CornerRadius = UDim.new(0, 26)
+    lb2c.CornerRadius = UDim.new(0, isMobile and 20 or 26)
     lb2c.Parent = logoBg2
 
     local logoStroke2 = Instance.new("UIStroke")
@@ -919,7 +951,7 @@ local function runLoadingSequence(onComplete)
     logoIcon2.Font = Enum.Font.GothamBold
     logoIcon2.Text = "M"
     logoIcon2.TextColor3 = Color3.fromRGB(255, 255, 255)
-    logoIcon2.TextSize = 60
+    logoIcon2.TextSize = isMobile and 40 or 60
     logoIcon2.ZIndex = 3
 
     task.spawn(function()
@@ -931,10 +963,15 @@ local function runLoadingSequence(onComplete)
         end
     end)
 
+    local contW, contH = clampSize(380, 200, 0.72, 0.35)
+    if isMobile then
+        contW, contH = clampSize(280, 160, 0.68, 0.3)
+    end
+
     local loadContainer = Instance.new("Frame")
     loadContainer.Parent = loadingBg
     loadContainer.BackgroundTransparency = 1
-    loadContainer.Size = UDim2.new(0, 420, 0, 220)
+    loadContainer.Size = UDim2.new(0, contW, 0, contH)
     loadContainer.Position = UDim2.new(0.5, 0, 0.5, 0)
     loadContainer.AnchorPoint = Vector2.new(0.5, 0.5)
     loadContainer.ZIndex = 2
@@ -942,40 +979,40 @@ local function runLoadingSequence(onComplete)
     local loadTitle = Instance.new("TextLabel")
     loadTitle.Parent = loadContainer
     loadTitle.BackgroundTransparency = 1
-    loadTitle.Size = UDim2.new(1, 0, 0, 34)
-    loadTitle.Position = UDim2.new(0, 0, 0, -70)
+    loadTitle.Size = UDim2.new(1, 0, 0, 30)
+    loadTitle.Position = UDim2.new(0, 0, 0, isMobile and -50 or -70)
     loadTitle.Font = Enum.Font.GothamBold
     loadTitle.Text = "MANGA HUB LOADER"
     loadTitle.TextColor3 = THEME.Text
-    loadTitle.TextSize = 24
+    loadTitle.TextSize = isMobile and 18 or 24
     loadTitle.ZIndex = 3
 
     local loadSubtitle = Instance.new("TextLabel")
     loadSubtitle.Parent = loadContainer
     loadSubtitle.BackgroundTransparency = 1
-    loadSubtitle.Size = UDim2.new(1, 0, 0, 22)
-    loadSubtitle.Position = UDim2.new(0, 0, 0, -36)
+    loadSubtitle.Size = UDim2.new(1, 0, 0, 18)
+    loadSubtitle.Position = UDim2.new(0, 0, 0, isMobile and -24 or -36)
     loadSubtitle.Font = Enum.Font.Gotham
     loadSubtitle.Text = ""
     loadSubtitle.TextColor3 = THEME.TextSub
-    loadSubtitle.TextSize = 13
+    loadSubtitle.TextSize = isMobile and 11 or 13
     loadSubtitle.ZIndex = 3
 
     local loadStatus = Instance.new("TextLabel")
     loadStatus.Parent = loadContainer
     loadStatus.BackgroundTransparency = 1
-    loadStatus.Size = UDim2.new(1, 0, 0, 22)
-    loadStatus.Position = UDim2.new(0, 0, 1, 18)
+    loadStatus.Size = UDim2.new(1, 0, 0, 18)
+    loadStatus.Position = UDim2.new(0, 0, 1, 14)
     loadStatus.Font = Enum.Font.Gotham
     loadStatus.Text = ""
     loadStatus.TextColor3 = THEME.PrimaryLight
-    loadStatus.TextSize = 14
+    loadStatus.TextSize = isMobile and 12 or 14
     loadStatus.ZIndex = 3
 
     local progressContainer = Instance.new("Frame")
     progressContainer.Parent = loadContainer
     progressContainer.BackgroundTransparency = 1
-    progressContainer.Size = UDim2.new(1, 0, 0, 12)
+    progressContainer.Size = UDim2.new(1, 0, 0, 10)
     progressContainer.Position = UDim2.new(0, 0, 0.5, 0)
     progressContainer.AnchorPoint = Vector2.new(0, 0.5)
     progressContainer.ZIndex = 2
@@ -1046,12 +1083,12 @@ local function runLoadingSequence(onComplete)
     local percentText = Instance.new("TextLabel")
     percentText.Parent = progressContainer
     percentText.BackgroundTransparency = 1
-    percentText.Size = UDim2.new(0, 60, 0, 18)
-    percentText.Position = UDim2.new(1, -60, 0, -24)
+    percentText.Size = UDim2.new(0, 50, 0, 16)
+    percentText.Position = UDim2.new(1, -50, 0, -22)
     percentText.Font = Enum.Font.GothamBold
     percentText.Text = "0%"
     percentText.TextColor3 = THEME.PrimaryLight
-    percentText.TextSize = 13
+    percentText.TextSize = isMobile and 11 or 13
     percentText.TextXAlignment = Enum.TextXAlignment.Right
     percentText.ZIndex = 3
 
@@ -1109,8 +1146,8 @@ local function runLoadingSequence(onComplete)
         end
 
         smooth(loadingBg, {BackgroundTransparency = 1}, 1.2)
-        smooth(loadContainer, {Position = UDim2.new(0.5, 0, 0.5, -80), Size = UDim2.new(0, 320, 0, 160)}, 1.2)
-        smooth(logoContainer2, {Size = UDim2.new(0, 90, 0, 90)}, 1.2)
+        smooth(loadContainer, {Position = UDim2.new(0.5, 0, 0.5, -80), Size = UDim2.new(0, contW * 0.75, 0, contH * 0.75)}, 1.2)
+        smooth(logoContainer2, {Size = UDim2.new(0, logoSize2 * 0.7, 0, logoSize2 * 0.7)}, 1.2)
 
         for _, desc in ipairs(loadingBg:GetDescendants()) do
             if desc:IsA("TextLabel") then
@@ -1143,11 +1180,16 @@ local function createBaseGui(titleText, isPremium)
     gui.DisplayOrder = 5000
     gui.IgnoreGuiInset = true
 
+    local mainW, mainH = clampSize(500, 600, 0.82, 0.75)
+    if isMobile then
+        mainW, mainH = clampSize(300, 460, 0.78, 0.62)
+    end
+
     local main = Instance.new("Frame")
     main.Parent = gui
     main.BackgroundColor3 = THEME.Panel
     main.BorderSizePixel = 0
-    main.Size = UDim2.new(0, 540, 0, 640)
+    main.Size = UDim2.new(0, mainW, 0, mainH)
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.Active = true
@@ -1185,7 +1227,7 @@ local function createBaseGui(titleText, isPremium)
     header.Parent = main
     header.BackgroundColor3 = Color3.fromRGB(15, 10, 28)
     header.BorderSizePixel = 0
-    header.Size = UDim2.new(1, 0, 0, 54)
+    header.Size = UDim2.new(1, 0, 0, isMobile and 44 or 54)
     header.ZIndex = 11
 
     local hCorner = Instance.new("UICorner")
@@ -1222,15 +1264,16 @@ local function createBaseGui(titleText, isPremium)
     headerTopBar.Size = UDim2.new(1, 0, 0, 2.5)
     headerTopBar.ZIndex = 12
 
+    local iconSize = isMobile and 22 or 30
     local headerIcon = Instance.new("Frame")
     headerIcon.Parent = header
     headerIcon.BackgroundColor3 = isPremium and THEME.Premium or THEME.Primary
     headerIcon.BorderSizePixel = 0
-    headerIcon.Size = UDim2.new(0, 30, 0, 30)
-    headerIcon.Position = UDim2.new(0, 16, 0.5, -15)
+    headerIcon.Size = UDim2.new(0, iconSize, 0, iconSize)
+    headerIcon.Position = UDim2.new(0, 14, 0.5, -iconSize / 2)
     headerIcon.ZIndex = 12
     local hic = Instance.new("UICorner")
-    hic.CornerRadius = UDim.new(0, 8)
+    hic.CornerRadius = UDim.new(0, isMobile and 6 or 8)
     hic.Parent = headerIcon
 
     local headerIconText = Instance.new("TextLabel")
@@ -1240,19 +1283,19 @@ local function createBaseGui(titleText, isPremium)
     headerIconText.Font = Enum.Font.GothamBold
     headerIconText.Text = "M"
     headerIconText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    headerIconText.TextSize = 17
+    headerIconText.TextSize = isMobile and 13 or 17
     headerIconText.ZIndex = 13
 
     local title = Instance.new("TextLabel")
     title.Parent = header
     title.BackgroundTransparency = 1
-    title.Size = UDim2.new(1, -130, 1, 0)
+    title.Size = UDim2.new(1, -120, 1, 0)
     title.Font = Enum.Font.GothamBold
     title.Text = titleText
     title.TextColor3 = THEME.Text
-    title.TextSize = 14
+    title.TextSize = isMobile and 11 or 14
     title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Position = UDim2.new(0, 54, 0, 0)
+    title.Position = UDim2.new(0, isMobile and 42 or 54, 0, 0)
     title.ZIndex = 12
 
     local closeBtn = Instance.new("TextButton")
@@ -1260,22 +1303,22 @@ local function createBaseGui(titleText, isPremium)
     closeBtn.BackgroundColor3 = THEME.Danger
     closeBtn.BackgroundTransparency = 0.1
     closeBtn.BorderSizePixel = 0
-    closeBtn.Position = UDim2.new(1, -44, 0, 13)
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -38, 0, isMobile and 10 or 13)
+    closeBtn.Size = UDim2.new(0, isMobile and 24 or 30, 0, isMobile and 24 or 30)
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.Text = "X"
     closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeBtn.TextSize = 14
+    closeBtn.TextSize = isMobile and 11 or 14
     closeBtn.ZIndex = 12
     closeBtn.AutoButtonColor = false
     closeBtn.MouseButton1Click:Connect(function()
-        spring(main, {Size = UDim2.new(0, 420, 0, 520), BackgroundTransparency = 1}, 0.5)
+        spring(main, {Size = UDim2.new(0, mainW * 0.8, 0, mainH * 0.8), BackgroundTransparency = 1}, 0.5)
         task.wait(0.5)
         gui:Destroy()
     end)
 
     local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 9)
+    closeCorner.CornerRadius = UDim.new(0, isMobile and 7 or 9)
     closeCorner.Parent = closeBtn
 
     local closeStroke = Instance.new("UIStroke")
@@ -1297,9 +1340,9 @@ local function createBaseGui(titleText, isPremium)
     local content = Instance.new("ScrollingFrame")
     content.Parent = main
     content.BackgroundTransparency = 1
-    content.Position = UDim2.new(0, 16, 0, 64)
-    content.Size = UDim2.new(1, -32, 1, -80)
-    content.ScrollBarThickness = 4
+    content.Position = UDim2.new(0, 14, 0, isMobile and 52 or 64)
+    content.Size = UDim2.new(1, -28, 1, isMobile and -60 or -80)
+    content.ScrollBarThickness = isMobile and 2 or 4
     content.ScrollBarImageColor3 = isPremium and THEME.Premium or THEME.Primary
     content.CanvasSize = UDim2.new(0, 0, 0, 500)
     content.ZIndex = 11
@@ -1307,7 +1350,7 @@ local function createBaseGui(titleText, isPremium)
 
     local layout = Instance.new("UIListLayout")
     layout.Parent = content
-    layout.Padding = UDim.new(0, 10)
+    layout.Padding = UDim.new(0, isMobile and 6 or 10)
 
     content.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 24)
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -1328,7 +1371,7 @@ local function addToggle(parent, name, defaultVal, isPremium)
     container.Parent = parent
     container.BackgroundColor3 = THEME.PanelLight
     container.BorderSizePixel = 0
-    container.Size = UDim2.new(1, 0, 0, 68)
+    container.Size = UDim2.new(1, 0, 0, isMobile and 54 or 68)
     container.ZIndex = 12
 
     local cCorner = Instance.new("UICorner")
@@ -1349,16 +1392,17 @@ local function addToggle(parent, name, defaultVal, isPremium)
     cGradient.Rotation = 90
     cGradient.Parent = container
 
+    local iconSize = isMobile and 20 or 26
     local iconFrame = Instance.new("Frame")
     iconFrame.Parent = container
     iconFrame.BackgroundColor3 = themeColor
     iconFrame.BackgroundTransparency = 0.7
     iconFrame.BorderSizePixel = 0
-    iconFrame.Position = UDim2.new(0, 12, 0.5, -13)
-    iconFrame.Size = UDim2.new(0, 26, 0, 26)
+    iconFrame.Position = UDim2.new(0, 10, 0.5, -iconSize / 2)
+    iconFrame.Size = UDim2.new(0, iconSize, 0, iconSize)
     iconFrame.ZIndex = 13
     local ifc = Instance.new("UICorner")
-    ifc.CornerRadius = UDim.new(0, 7)
+    ifc.CornerRadius = UDim.new(0, isMobile and 5 or 7)
     ifc.Parent = iconFrame
 
     local iconText = Instance.new("TextLabel")
@@ -1368,18 +1412,18 @@ local function addToggle(parent, name, defaultVal, isPremium)
     iconText.Font = Enum.Font.GothamBold
     iconText.Text = string.sub(name, 1, 1)
     iconText.TextColor3 = themeColorLight
-    iconText.TextSize = 12
+    iconText.TextSize = isMobile and 9 or 12
     iconText.ZIndex = 14
 
     local label = Instance.new("TextLabel")
     label.Parent = container
     label.BackgroundTransparency = 1
-    label.Size = UDim2.new(0.25, 0, 1, 0)
-    label.Position = UDim2.new(0, 44, 0, 0)
+    label.Size = UDim2.new(0.22, 0, 1, 0)
+    label.Position = UDim2.new(0, isMobile and 34 or 44, 0, 0)
     label.Font = Enum.Font.GothamBold
     label.Text = name
     label.TextColor3 = THEME.Text
-    label.TextSize = 13
+    label.TextSize = isMobile and 11 or 13
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.ZIndex = 13
 
@@ -1387,12 +1431,12 @@ local function addToggle(parent, name, defaultVal, isPremium)
     box.Parent = container
     box.BackgroundColor3 = THEME.Input
     box.BorderSizePixel = 0
-    box.Position = UDim2.new(0.32, 0, 0.18, 0)
-    box.Size = UDim2.new(0.38, 0, 0.64, 0)
+    box.Position = UDim2.new(0.3, 0, 0.18, 0)
+    box.Size = UDim2.new(0.36, 0, 0.64, 0)
     box.Font = Enum.Font.Gotham
     box.Text = tostring(defaultVal)
     box.TextColor3 = THEME.Text
-    box.TextSize = 12
+    box.TextSize = isMobile and 10 or 12
     box.PlaceholderText = "Value"
     box.PlaceholderColor3 = THEME.TextMuted
     box.ClearTextOnFocus = false
@@ -1422,8 +1466,8 @@ local function addToggle(parent, name, defaultVal, isPremium)
     toggleHolder.Parent = container
     toggleHolder.BackgroundColor3 = Color3.fromRGB(40, 30, 60)
     toggleHolder.BorderSizePixel = 0
-    toggleHolder.Position = UDim2.new(1, -58, 0.5, -13)
-    toggleHolder.Size = UDim2.new(0, 50, 0, 26)
+    toggleHolder.Position = UDim2.new(1, -50, 0.5, -13)
+    toggleHolder.Size = UDim2.new(0, 44, 0, 24)
     toggleHolder.ZIndex = 13
 
     local thc = Instance.new("UICorner")
@@ -1440,8 +1484,8 @@ local function addToggle(parent, name, defaultVal, isPremium)
     toggleCircle.Parent = toggleHolder
     toggleCircle.BackgroundColor3 = THEME.TextMuted
     toggleCircle.BorderSizePixel = 0
-    toggleCircle.Position = UDim2.new(0, 2, 0.5, -10)
-    toggleCircle.Size = UDim2.new(0, 20, 0, 20)
+    toggleCircle.Position = UDim2.new(0, 2, 0.5, -9)
+    toggleCircle.Size = UDim2.new(0, 18, 0, 18)
     toggleCircle.ZIndex = 14
     local tcc = Instance.new("UICorner")
     tcc.CornerRadius = UDim.new(1, 0)
@@ -1457,12 +1501,12 @@ local function addToggle(parent, name, defaultVal, isPremium)
     local statusText = Instance.new("TextLabel")
     statusText.Parent = container
     statusText.BackgroundTransparency = 1
-    statusText.Position = UDim2.new(1, -62, 0.5, -8)
+    statusText.Position = UDim2.new(1, -54, 0.5, -8)
     statusText.Size = UDim2.new(0, 0, 0, 16)
     statusText.Font = Enum.Font.GothamBold
     statusText.Text = ""
     statusText.TextColor3 = THEME.TextMuted
-    statusText.TextSize = 10
+    statusText.TextSize = isMobile and 9 or 10
     statusText.TextXAlignment = Enum.TextXAlignment.Right
     statusText.ZIndex = 13
 
@@ -1471,20 +1515,20 @@ local function addToggle(parent, name, defaultVal, isPremium)
         enabled = not enabled
         if enabled then
             spring(toggleHolder, {BackgroundColor3 = themeColor}, 0.35)
-            spring(toggleCircle, {Position = UDim2.new(1, -22, 0.5, -10), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.35)
+            spring(toggleCircle, {Position = UDim2.new(1, -20, 0.5, -9), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.35)
             smooth(thStroke, {Color = themeColorLight, Transparency = 0}, 0.3)
             smooth(cStroke, {Color = themeColor, Transparency = 0}, 0.3)
             smooth(iconFrame, {BackgroundTransparency = 0.2}, 0.3)
             statusText.Text = "ATIVO"
-            spring(statusText, {TextColor3 = themeColorLight, Position = UDim2.new(1, -110, 0.5, -8)}, 0.35)
+            spring(statusText, {TextColor3 = themeColorLight, Position = UDim2.new(1, -100, 0.5, -8)}, 0.35)
         else
             spring(toggleHolder, {BackgroundColor3 = Color3.fromRGB(40, 30, 60)}, 0.35)
-            spring(toggleCircle, {Position = UDim2.new(0, 2, 0.5, -10), BackgroundColor3 = THEME.TextMuted}, 0.35)
+            spring(toggleCircle, {Position = UDim2.new(0, 2, 0.5, -9), BackgroundColor3 = THEME.TextMuted}, 0.35)
             smooth(thStroke, {Color = THEME.Border, Transparency = 0.35}, 0.3)
             smooth(cStroke, {Color = THEME.Border, Transparency = 0.35}, 0.3)
             smooth(iconFrame, {BackgroundTransparency = 0.7}, 0.3)
             statusText.Text = ""
-            spring(statusText, {TextColor3 = THEME.TextMuted, Position = UDim2.new(1, -62, 0.5, -8)}, 0.35)
+            spring(statusText, {TextColor3 = THEME.TextMuted, Position = UDim2.new(1, -54, 0.5, -8)}, 0.35)
         end
     end)
 
@@ -1581,7 +1625,7 @@ local function loadFreeVersion()
     warnFrame.Parent = content
     warnFrame.BackgroundColor3 = Color3.fromRGB(40, 12, 12)
     warnFrame.BorderSizePixel = 0
-    warnFrame.Size = UDim2.new(1, 0, 0, 54)
+    warnFrame.Size = UDim2.new(1, 0, 0, isMobile and 42 or 54)
     warnFrame.ZIndex = 12
 
     local wfCorner = Instance.new("UICorner")
@@ -1607,11 +1651,11 @@ local function loadFreeVersion()
     warnIconFrame.BackgroundColor3 = THEME.Danger
     warnIconFrame.BackgroundTransparency = 0.2
     warnIconFrame.BorderSizePixel = 0
-    warnIconFrame.Size = UDim2.new(0, 24, 0, 24)
-    warnIconFrame.Position = UDim2.new(0, 12, 0.5, -12)
+    warnIconFrame.Size = UDim2.new(0, isMobile and 18 or 24, 0, isMobile and 18 or 24)
+    warnIconFrame.Position = UDim2.new(0, 10, 0.5, isMobile and -9 or -12)
     warnIconFrame.ZIndex = 13
     local wifc = Instance.new("UICorner")
-    wifc.CornerRadius = UDim.new(0, 6)
+    wifc.CornerRadius = UDim.new(0, isMobile and 4 or 6)
     wifc.Parent = warnIconFrame
 
     local warnIconText = Instance.new("TextLabel")
@@ -1621,18 +1665,18 @@ local function loadFreeVersion()
     warnIconText.Font = Enum.Font.GothamBold
     warnIconText.Text = "!"
     warnIconText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    warnIconText.TextSize = 15
+    warnIconText.TextSize = isMobile and 12 or 15
     warnIconText.ZIndex = 14
 
     local wfText = Instance.new("TextLabel")
     wfText.Parent = warnFrame
     wfText.BackgroundTransparency = 1
-    wfText.Size = UDim2.new(1, -44, 1, 0)
-    wfText.Position = UDim2.new(0, 44, 0, 0)
+    wfText.Size = UDim2.new(1, -40, 1, 0)
+    wfText.Position = UDim2.new(0, isMobile and 34 or 44, 0, 0)
     wfText.Font = Enum.Font.GothamBold
     wfText.Text = "BYPASS OSCILANDO — RISCO DE BAN"
     wfText.TextColor3 = Color3.fromRGB(255, 100, 100)
-    wfText.TextSize = 13
+    wfText.TextSize = isMobile and 10 or 13
     wfText.TextXAlignment = Enum.TextXAlignment.Left
     wfText.ZIndex = 13
 
@@ -1705,7 +1749,7 @@ local function loadAdminVersion()
     statusFrame.Parent = content
     statusFrame.BackgroundColor3 = Color3.fromRGB(15, 35, 15)
     statusFrame.BorderSizePixel = 0
-    statusFrame.Size = UDim2.new(1, 0, 0, 48)
+    statusFrame.Size = UDim2.new(1, 0, 0, isMobile and 40 or 48)
     statusFrame.ZIndex = 12
 
     local sfCorner = Instance.new("UICorner")
@@ -1731,11 +1775,11 @@ local function loadAdminVersion()
     statusIconFrame.BackgroundColor3 = THEME.Success
     statusIconFrame.BackgroundTransparency = 0.2
     statusIconFrame.BorderSizePixel = 0
-    statusIconFrame.Size = UDim2.new(0, 24, 0, 24)
-    statusIconFrame.Position = UDim2.new(0, 12, 0.5, -12)
+    statusIconFrame.Size = UDim2.new(0, isMobile and 18 or 24, 0, isMobile and 18 or 24)
+    statusIconFrame.Position = UDim2.new(0, 10, 0.5, isMobile and -9 or -12)
     statusIconFrame.ZIndex = 13
     local sifc = Instance.new("UICorner")
-    sifc.CornerRadius = UDim.new(0, 6)
+    sifc.CornerRadius = UDim.new(0, isMobile and 4 or 6)
     sifc.Parent = statusIconFrame
 
     local statusIconText = Instance.new("TextLabel")
@@ -1745,18 +1789,18 @@ local function loadAdminVersion()
     statusIconText.Font = Enum.Font.GothamBold
     statusIconText.Text = "✓"
     statusIconText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    statusIconText.TextSize = 15
+    statusIconText.TextSize = isMobile and 12 or 15
     statusIconText.ZIndex = 14
 
     local sfText = Instance.new("TextLabel")
     sfText.Parent = statusFrame
     sfText.BackgroundTransparency = 1
-    sfText.Size = UDim2.new(1, -44, 1, 0)
-    sfText.Position = UDim2.new(0, 44, 0, 0)
+    sfText.Size = UDim2.new(1, -40, 1, 0)
+    sfText.Position = UDim2.new(0, isMobile and 34 or 44, 0, 0)
     sfText.Font = Enum.Font.GothamBold
     sfText.Text = "PREMIUM BYPASS ACTIVE — STABLE"
     sfText.TextColor3 = THEME.Success
-    sfText.TextSize = 13
+    sfText.TextSize = isMobile and 10 or 13
     sfText.TextXAlignment = Enum.TextXAlignment.Left
     sfText.ZIndex = 13
 
