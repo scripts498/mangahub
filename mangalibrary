@@ -1,32 +1,3 @@
---[[
-	PrettyUI - Library de interface para Roblox (LuaU)
-	Estilo Orion/Fluent, com foco em visual bonito, animações e suporte mobile.
-
-	USO BÁSICO:
-		local PrettyUI = loadstring(game:HttpGet("URL_DO_SEU_RAW"))()
-		local Window = PrettyUI:CreateWindow({
-			Title = "Meu Hub",
-			SubTitle = "by você",
-			Theme = "Dark",
-			ConfigFolder = "MeuHub",
-		})
-
-		local Tab = Window:CreateTab("Main", "home")
-		local Section = Tab:CreateSection("Combate")
-
-		Section:CreateButton({Text = "Executar", Callback = function() print("clicou") end})
-		Section:CreateToggle({Text = "ESP", Default = false, Callback = function(v) end})
-		Section:CreateSlider({Text = "WalkSpeed", Min = 16, Max = 200, Default = 16, Callback = function(v) end})
-		Section:CreateDropdown({Text = "Modo", List = {"A","B"}, Callback = function(v) end})
-		Section:CreateKeybind({Text = "Abrir Menu", Default = Enum.KeyCode.RightShift, Callback = function() end})
-		Section:CreateTextbox({Text = "Nome", Placeholder = "digite...", Callback = function(v) end})
-
-		Window:Notify({Title = "Hub", Text = "ESP ativado!", Duration = 3})
-]]
-
---============================================================
--- SERVICES
---============================================================
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -41,9 +12,6 @@ local Mouse = LocalPlayer:GetMouse()
 local IS_MOBILE = UserInputService.TouchEnabled and not UserInputService.MouseEnabled and not UserInputService.KeyboardEnabled
 	or UserInputService.TouchEnabled and UserInputService.MouseEnabled == false
 
---============================================================
--- UTIL
---============================================================
 local function New(class, props, children)
 	local inst = Instance.new(class)
 	if props then
@@ -112,9 +80,6 @@ local function Gradient(inst, colorSeq, rotation, transparencySeq)
 	})
 end
 
---============================================================
--- THEMES
---============================================================
 local Themes = {
 	Dark = {
 		Background   = Color3.fromRGB(24, 24, 30),
@@ -142,15 +107,12 @@ local Themes = {
 	},
 }
 
---============================================================
--- LIBRARY ROOT
---============================================================
-local PrettyUI = {}
-PrettyUI.__index = PrettyUI
-PrettyUI.Version = "1.0.0"
+local MangaUI = {}
+MangaUI.__index = MangaUI
+MangaUI.Version = "1.0.0"
 
 local ScreenGui = New("ScreenGui", {
-	Name = "PrettyUI_" .. tostring(math.random(1, 999999)),
+	Name = "MangaUI_" .. tostring(math.random(1, 999999)),
 	ResetOnSpawn = false,
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	DisplayOrder = 999,
@@ -163,9 +125,6 @@ if not ok then
 	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
---============================================================
--- NOTIFICATIONS
---============================================================
 local NotifyHolder = New("Frame", {
 	Name = "Notifications",
 	BackgroundTransparency = 1,
@@ -176,7 +135,7 @@ local NotifyHolder = New("Frame", {
 })
 ListLayout(NotifyHolder, Enum.FillDirection.Vertical, 10, Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Bottom)
 
-function PrettyUI:Notify(opts)
+function MangaUI:Notify(opts)
 	opts = opts or {}
 	local theme = (self and self.Theme) or Themes.Dark
 	local title = opts.Title or "Notificação"
@@ -238,9 +197,6 @@ function PrettyUI:Notify(opts)
 	end)
 end
 
---============================================================
--- CONFIG SYSTEM (save/load via writefile/readfile do executor)
---============================================================
 local ConfigSystem = {}
 ConfigSystem.__index = ConfigSystem
 
@@ -250,8 +206,8 @@ end
 
 function ConfigSystem.new(folder)
 	local self = setmetatable({}, ConfigSystem)
-	self.Folder = folder or "PrettyUI"
-	self.Flags = {} -- flagName -> { Get, Set } (fornecido pelos elementos)
+	self.Folder = folder or "MangaUI"
+	self.Flags = {}
 	if fileFunctionsExist() and typeof(makefolder) == "function" and not isfolder(self.Folder) then
 		makefolder(self.Folder)
 	end
@@ -303,43 +259,26 @@ function ConfigSystem:List()
 	return names
 end
 
---============================================================
--- CREATE WINDOW
---============================================================
-function PrettyUI:CreateWindow(opts)
+function MangaUI:CreateWindow(opts)
 	opts = opts or {}
-	local self = setmetatable({}, PrettyUI)
+	local self = setmetatable({}, MangaUI)
 
-	self.Title = opts.Title or "PrettyUI"
+	self.Title = opts.Title or "MangaUI"
 	self.SubTitle = opts.SubTitle or ""
 	self.Icon = opts.Icon or nil
 	self.Theme = Themes[opts.Theme] or Themes.Dark
 	self.ThemeName = opts.Theme or "Dark"
-	self.Config = ConfigSystem.new(opts.ConfigFolder or "PrettyUI")
+	self.Config = ConfigSystem.new(opts.ConfigFolder or "MangaUI")
 	self.Tabs = {}
 	self.Open = true
 	self.Connections = {}
 
 	local theme = self.Theme
 
-	------------------------------------------------------------
-	-- Root
-	------------------------------------------------------------
 	local baseWidth, baseHeight = 560, 380
 	if IS_MOBILE then
 		baseWidth, baseHeight = 340, 460
 	end
-
-	-- sombra "falsa" feita com frame preto suave (sem depender de asset externo)
-	local ShadowFrame = New("Frame", {
-		Name = "Shadow",
-		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.55,
-		BorderSizePixel = 0,
-		ZIndex = 1,
-		Parent = ScreenGui,
-	})
-	Round(ShadowFrame, 14)
 
 	local Main = New("Frame", {
 		Name = "Main",
@@ -347,15 +286,14 @@ function PrettyUI:CreateWindow(opts)
 		Size = UDim2.new(0, baseWidth, 0, baseHeight),
 		Position = UDim2.new(0.5, -baseWidth / 2, 0.5, -baseHeight / 2),
 		ClipsDescendants = true,
-		ZIndex = 2,
 		Parent = ScreenGui,
 	})
 	Round(Main, 12)
 	Stroke(Main, theme.Stroke, 1, 0.2)
+	Gradient(Main, ColorSequence.new(theme.Background, theme.Secondary), 90)
 
 	New("UIScale", {Scale = 1, Name = "Scale", Parent = Main})
 
-	-- entrada animada
 	Main.Size = UDim2.new(0, baseWidth, 0, 0)
 	Main.BackgroundTransparency = 1
 	Tween(Main, EASE, {Size = UDim2.new(0, baseWidth, 0, baseHeight), BackgroundTransparency = 0})
@@ -363,17 +301,6 @@ function PrettyUI:CreateWindow(opts)
 	self.Main = Main
 	self.Size = Vector2.new(baseWidth, baseHeight)
 
-	-- sombra acompanha a janela (posição/tamanho/visibilidade) em tempo real
-	local shadowConn = RunService.RenderStepped:Connect(function()
-		ShadowFrame.Position = Main.Position + UDim2.new(0, 5, 0, 7)
-		ShadowFrame.Size = Main.Size + UDim2.new(0, 8, 0, 8)
-		ShadowFrame.Visible = Main.Visible
-	end)
-	table.insert(self.Connections, shadowConn)
-
-	------------------------------------------------------------
-	-- Topbar
-	------------------------------------------------------------
 	local TopBar = New("Frame", {
 		Name = "TopBar",
 		BackgroundColor3 = theme.Secondary,
@@ -381,7 +308,7 @@ function PrettyUI:CreateWindow(opts)
 		Parent = Main,
 	})
 	Round(TopBar, 12)
-	New("Frame", { -- corta o arredondado de baixo do topbar
+	New("Frame", {
 		BackgroundColor3 = theme.Secondary,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0, 0, 1, -12),
@@ -435,8 +362,6 @@ function PrettyUI:CreateWindow(opts)
 	})
 	self.TitleLabel, self.SubLabel = TitleLabel, SubLabel
 
-	-- Botões de controle (close / minimize) — ícones desenhados com Frames,
-	-- não usam glifos de fonte (evita o quadradinho de "caractere faltando")
 	local ControlHolder = New("Frame", {
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 0.5),
@@ -479,18 +404,13 @@ function PrettyUI:CreateWindow(opts)
 		return bar
 	end
 
-	-- Minimize: uma linha (traço)
 	local MinimizeBtn = ControlButton(1, theme.Tertiary)
 	local MinimizeIcon = IconBar(MinimizeBtn, 11, 2, 0, theme.Text)
 
-	-- Close: X feito com duas barras cruzadas
 	local CloseBtn = ControlButton(2, theme.Error)
 	local CloseBar1 = IconBar(CloseBtn, 12, 2, 45, theme.Text)
 	local CloseBar2 = IconBar(CloseBtn, 12, 2, -45, theme.Text)
 
-	------------------------------------------------------------
-	-- Sidebar (Tabs) + Content
-	------------------------------------------------------------
 	local sidebarWidth = IS_MOBILE and 90 or 140
 
 	local Sidebar = New("Frame", {
@@ -515,9 +435,6 @@ function PrettyUI:CreateWindow(opts)
 	self.Sidebar = Sidebar
 	self.ContentHolder = ContentHolder
 
-	------------------------------------------------------------
-	-- Toggle UI (show/hide) + floating button (mobile)
-	------------------------------------------------------------
 	function self:ToggleUI()
 		self.Open = not self.Open
 		if self.Open then
@@ -562,7 +479,6 @@ function PrettyUI:CreateWindow(opts)
 			})
 		end
 
-		-- drag do botão flutuante
 		do
 			local dragging, dragStart, startPos = false, nil, nil
 			FloatBtn.InputBegan:Connect(function(input)
@@ -589,9 +505,6 @@ function PrettyUI:CreateWindow(opts)
 		end
 	end
 
-	------------------------------------------------------------
-	-- Minimize real (colapsa pra barra de título, não depende do Ctrl)
-	------------------------------------------------------------
 	self.Minimized = false
 	function self:ToggleMinimize()
 		self.Minimized = not self.Minimized
@@ -616,12 +529,12 @@ function PrettyUI:CreateWindow(opts)
 		self:ToggleMinimize()
 	end)
 	CloseBtn.MouseButton1Click:Connect(function()
-		self:ToggleUI()
+		local t = Tween(Main, EASE, {Size = UDim2.new(0, self.Size.X, 0, 0), BackgroundTransparency = 1})
+		t.Completed:Connect(function()
+			self:Destroy()
+		end)
 	end)
 
-	------------------------------------------------------------
-	-- Drag (mouse e touch)
-	------------------------------------------------------------
 	do
 		local dragging = false
 		local dragStart, startPos
@@ -660,9 +573,6 @@ function PrettyUI:CreateWindow(opts)
 		end)
 	end
 
-	------------------------------------------------------------
-	-- Resize (apenas PC), pega o canto inferior direito
-	------------------------------------------------------------
 	if not IS_MOBILE then
 		local ResizeHandle = New("Frame", {
 			BackgroundTransparency = 1,
@@ -695,9 +605,6 @@ function PrettyUI:CreateWindow(opts)
 		end)
 	end
 
-	------------------------------------------------------------
-	-- Keybind global pra abrir/fechar (default: RightControl)
-	------------------------------------------------------------
 	self.ToggleKey = opts.ToggleKey or Enum.KeyCode.RightControl
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
@@ -706,9 +613,6 @@ function PrettyUI:CreateWindow(opts)
 		end
 	end)
 
-	------------------------------------------------------------
-	-- Status bar (FPS / Ping / Player) - opcional, embaixo
-	------------------------------------------------------------
 	if opts.ShowStatus ~= false then
 		local StatusBar = New("Frame", {
 			BackgroundTransparency = 1,
@@ -718,14 +622,10 @@ function PrettyUI:CreateWindow(opts)
 			ZIndex = 5,
 			Parent = TopBar,
 		})
-		-- fica escondido dentro do topbar por padrão; deixamos como propriedade caso queira mover
 		StatusBar.Visible = false
 		self.StatusBar = StatusBar
 	end
 
-	------------------------------------------------------------
-	-- SetTitle / SetIcon / SetTheme / Destroy
-	------------------------------------------------------------
 	function self:SetTitle(text)
 		self.Title = text
 		TitleLabel.Text = text
@@ -755,7 +655,6 @@ function PrettyUI:CreateWindow(opts)
 		if not newTheme then return end
 		self.Theme = newTheme
 		self.ThemeName = name
-		-- reaplica cores nos elementos-base; elementos criados depois já usam a nova theme
 		Main.BackgroundColor3 = newTheme.Background
 		TopBar.BackgroundColor3 = newTheme.Secondary
 		Sidebar.BackgroundColor3 = newTheme.Secondary
@@ -763,9 +662,6 @@ function PrettyUI:CreateWindow(opts)
 		SubLabel.TextColor3 = newTheme.SubText
 	end
 
-	------------------------------------------------------------
-	-- Config helpers expostos na Window
-	------------------------------------------------------------
 	function self:SaveConfig(name)
 		return self.Config:Save(name)
 	end
@@ -780,10 +676,7 @@ function PrettyUI:CreateWindow(opts)
 	return self
 end
 
---============================================================
--- TABS
---============================================================
-function PrettyUI:CreateTab(name, iconText)
+function MangaUI:CreateTab(name, iconText)
 	local theme = self.Theme
 	self._tabCount = self._tabCount + 1
 	local order = self._tabCount
@@ -849,9 +742,6 @@ function PrettyUI:CreateTab(name, iconText)
 		self.CurrentTab = Tab
 	end
 
-	----------------------------------------------------------------
-	-- SECTIONS
-	----------------------------------------------------------------
 	function Tab:CreateSection(sectionName)
 		local win = self.Window
 		local th = win.Theme
@@ -908,9 +798,6 @@ function PrettyUI:CreateTab(name, iconText)
 			return Section._elCount
 		end
 
-		--------------------------------------------------------
-		-- BUTTON
-		--------------------------------------------------------
 		function Section:CreateButton(o)
 			o = o or {}
 			local th2 = win.Theme
@@ -954,7 +841,6 @@ function PrettyUI:CreateTab(name, iconText)
 				Tween(Btn, EASE_FAST, {BackgroundColor3 = th2.Tertiary})
 			end)
 			Btn.MouseButton1Click:Connect(function()
-				-- animação de clique
 				Tween(Btn, EASE_FAST, {Size = UDim2.new(1, -6, 0, 32)})
 				task.delay(0.1, function()
 					Tween(Btn, EASE_FAST, {Size = UDim2.new(1, 0, 0, 34)})
@@ -967,9 +853,6 @@ function PrettyUI:CreateTab(name, iconText)
 			return {Instance = Btn}
 		end
 
-		--------------------------------------------------------
-		-- TOGGLE
-		--------------------------------------------------------
 		function Section:CreateToggle(o)
 			o = o or {}
 			local th2 = win.Theme
@@ -1048,9 +931,6 @@ function PrettyUI:CreateTab(name, iconText)
 			return Toggle
 		end
 
-		--------------------------------------------------------
-		-- SLIDER
-		--------------------------------------------------------
 		function Section:CreateSlider(o)
 			o = o or {}
 			local th2 = win.Theme
@@ -1182,9 +1062,6 @@ function PrettyUI:CreateTab(name, iconText)
 			return Slider
 		end
 
-		--------------------------------------------------------
-		-- DROPDOWN
-		--------------------------------------------------------
 		function Section:CreateDropdown(o)
 			o = o or {}
 			local th2 = win.Theme
@@ -1350,9 +1227,6 @@ function PrettyUI:CreateTab(name, iconText)
 			return Dropdown
 		end
 
-		--------------------------------------------------------
-		-- KEYBIND
-		--------------------------------------------------------
 		function Section:CreateKeybind(o)
 			o = o or {}
 			local th2 = win.Theme
@@ -1435,9 +1309,6 @@ function PrettyUI:CreateTab(name, iconText)
 			return Keybind
 		end
 
-		--------------------------------------------------------
-		-- TEXTBOX
-		--------------------------------------------------------
 		function Section:CreateTextbox(o)
 			o = o or {}
 			local th2 = win.Theme
@@ -1498,9 +1369,6 @@ function PrettyUI:CreateTab(name, iconText)
 			return Textbox
 		end
 
-		--------------------------------------------------------
-		-- LABEL / PARAGRAPH (extra útil)
-		--------------------------------------------------------
 		function Section:CreateLabel(text)
 			local th2 = win.Theme
 			local Lbl = New("TextLabel", {
@@ -1525,10 +1393,7 @@ function PrettyUI:CreateTab(name, iconText)
 	return Tab
 end
 
---============================================================
--- SEARCH BAR (busca elementos por nome dentro da janela)
---============================================================
-function PrettyUI:CreateSearchBar(parent)
+function MangaUI:CreateSearchBar(parent)
 	local theme = self.Theme
 	local target = parent or self.ContentHolder
 
@@ -1559,7 +1424,6 @@ function PrettyUI:CreateSearchBar(parent)
 			for _, section in ipairs(tab.Page:GetChildren()) do
 				if section:IsA("Frame") then
 					local visible = query == "" or section.Name:lower():find(query, 1, true)
-					-- procura também nos labels internos
 					if not visible then
 						for _, desc in ipairs(section:GetDescendants()) do
 							if desc:IsA("TextLabel") and desc.Text:lower():find(query, 1, true) then
@@ -1577,10 +1441,7 @@ function PrettyUI:CreateSearchBar(parent)
 	return Box
 end
 
---============================================================
--- PLAYER LIST
---============================================================
-function PrettyUI:CreatePlayerList(section, opts)
+function MangaUI:CreatePlayerList(section, opts)
 	opts = opts or {}
 	local theme = self.Theme
 	local Dropdown = section:CreateDropdown({
@@ -1606,10 +1467,7 @@ function PrettyUI:CreatePlayerList(section, opts)
 	return Dropdown
 end
 
---============================================================
--- STATUS (FPS / Ping)
---============================================================
-function PrettyUI:CreateStatusLabel(parentFrame)
+function MangaUI:CreateStatusLabel(parentFrame)
 	local theme = self.Theme
 	local Label = New("TextLabel", {
 		BackgroundTransparency = 1,
@@ -1642,10 +1500,7 @@ function PrettyUI:CreateStatusLabel(parentFrame)
 	return Label
 end
 
---============================================================
--- ABOUT / CREDITS PAGE (helper)
---============================================================
-function PrettyUI:CreateAboutSection(tab, opts)
+function MangaUI:CreateAboutSection(tab, opts)
 	opts = opts or {}
 	local section = tab:CreateSection(opts.Title or "About")
 	section:CreateLabel(opts.Description or "")
@@ -1665,4 +1520,4 @@ function PrettyUI:CreateAboutSection(tab, opts)
 	return section
 end
 
-return PrettyUI
+return MangaUI
