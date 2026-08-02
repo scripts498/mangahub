@@ -420,11 +420,17 @@ function MangaUI:CreateWindow(opts)
 
 	local sidebarWidth = IS_MOBILE and 92 or 140
 
-	local Sidebar = New("Frame", {
+	local Sidebar = New("ScrollingFrame", {
 		Name = "Sidebar",
 		BackgroundColor3 = theme.Secondary,
 		Position = UDim2.new(0, 0, 0, topBarHeight),
 		Size = UDim2.new(0, sidebarWidth, 1, -topBarHeight),
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = theme.Accent,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		VerticalScrollBarInset = Enum.ScrollBarInset.Always,
 		Parent = Main,
 	})
 	Pad(Sidebar, IS_MOBILE and 6 or 8, IS_MOBILE and 6 or 8, IS_MOBILE and 6 or 8, IS_MOBILE and 6 or 8)
@@ -623,6 +629,48 @@ function MangaUI:CreateWindow(opts)
 		end)
 	end
 
+
+	do
+		local ResizeHandleLeft = New("Frame", {
+			Name = "ResizeHandleLeft",
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, sidebarWidth, 1, 0),
+			Size = UDim2.new(0, 12, 0, 18),
+			ZIndex = 10,
+			Parent = Main,
+		})
+		local resizingLeft, startMouseLeft, startWidthLeft = false, nil, nil
+		ResizeHandleLeft.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+				resizingLeft = true
+				startMouseLeft = input.Position
+				startWidthLeft = Sidebar.AbsoluteSize.X
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if resizingLeft and (
+				input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch
+			) then
+				local delta = input.Position - startMouseLeft
+				local newW = math.max(IS_MOBILE and 80 or 100, startWidthLeft + delta.X)
+				local maxW = math.floor(Main.AbsoluteSize.X * 0.5)
+				newW = math.min(newW, maxW)
+				Sidebar.Size = UDim2.new(0, newW, 1, -topBarHeight)
+				ContentHolder.Position = UDim2.new(0, newW, 0, topBarHeight)
+				ContentHolder.Size = UDim2.new(1, -newW, 1, -topBarHeight)
+				ResizeHandleLeft.Position = UDim2.new(0, newW, 1, 0)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+				resizingLeft = false
+			end
+		end)
+	end
 	self.ToggleKey = opts.ToggleKey or Enum.KeyCode.RightControl
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
