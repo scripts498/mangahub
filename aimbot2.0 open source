@@ -5,6 +5,56 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
+
+local g = getinfo or debug.getinfo
+local h = {}
+local x, y
+
+pcall(function()
+    if setthreadidentity then
+        setthreadidentity(2)
+    end
+end)
+
+pcall(function()
+    if getgc and hookfunction then
+        for i, v in ipairs(getgc(true)) do
+            if typeof(v) == "table" then
+                local a = rawget(v, "Detected")
+                local b = rawget(v, "Kill")
+                if typeof(a) == "function" and not x then
+                    x = a
+                    local o
+                    o = hookfunction(x, function(c, f, n)
+                        return true
+                    end)
+                    table.insert(h, x)
+                end
+                if rawget(v, "Variables") and rawget(v, "Process") and typeof(b) == "function" and not y then
+                    y = b
+                    local o
+                    o = hookfunction(y, function(f)
+                    end)
+                    table.insert(h, y)
+                end
+            end
+        end
+    end
+end)
+
+pcall(function()
+    if getrenv and newcclosure and hookfunction then
+        local o
+        o = hookfunction(getrenv().debug.info, newcclosure(function(...)
+            local a, f = ...
+            if x and a == x then
+                return coroutine.yield(coroutine.running())
+            end
+            return o(...)
+        end))
+    end
+end)
+
 local playerGui = player:WaitForChild("PlayerGui")
 local camera = Workspace.CurrentCamera
 
@@ -12,12 +62,15 @@ local isMobile = UserInputService.TouchEnabled and not UserInputService.Keyboard
 
 local Drawing = Drawing or {}
 if not Drawing.new then
+    warn("Drawing API não suportada")
     return
 end
 
 local drawings = {}
 local espDrawings = {}
 local anticheatActiveChars = {}
+
+local viewportSize = camera.ViewportSize or Vector2.new(1920, 1080)
 
 local fovCircle = Drawing.new("Circle")
 fovCircle.Visible = false
@@ -27,7 +80,7 @@ fovCircle.Radius = 200
 fovCircle.Filled = false
 fovCircle.Color = Color3.fromRGB(0, 255, 128)
 fovCircle.Transparency = 0.7
-fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+fovCircle.Position = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
 table.insert(drawings, fovCircle)
 
 local function getOrCreateEsp(plr)
@@ -109,18 +162,23 @@ local function startAnticheatLoop(char)
     anticheatActiveChars[char] = true
     task.spawn(function()
         while char and char.Parent do
-            local folder = char:FindFirstChild("FJsMovementAnticheat")
-            if folder then
-                for _, child in pairs(folder:GetChildren()) do
-                    if child:IsA("NumberValue") then
-                        child.Value = 0
+            pcall(function()
+                local folder = char:FindFirstChild("FJsMovementAnticheat")
+                if folder then
+                    for _, child in pairs(folder:GetChildren()) do
+                        if child:IsA("NumberValue") then
+                            child.Value = 0
+                        end
+                    end
+                    local punish = folder:FindFirstChild("OnPunishment")
+                    if punish and punish:IsA("RemoteEvent") then
+                        pcall(function()
+                            local oldFire = punish.FireServer
+                            hookfunction(oldFire, function() end)
+                        end)
                     end
                 end
-                local punish = folder:FindFirstChild("OnPunishment")
-                if punish and punish:IsA("RemoteEvent") then
-                    punish:Destroy()
-                end
-            end
+            end)
             task.wait(0.05)
         end
         anticheatActiveChars[char] = nil
@@ -129,14 +187,16 @@ end
 
 task.spawn(function()
     task.wait(3)
-    for _, obj in pairs(player:GetDescendants()) do
-        if obj:IsA("LocalScript") then
-            local name = obj.Name:lower()
-            if name:match("ac") or name:match("anticheat") or name:match("anti") or name:match("cheat") or name:match("detect") or name:match("fly") or name:match("speed") then
-                pcall(function() obj:Destroy() end)
+    pcall(function()
+        for _, obj in pairs(player:GetDescendants()) do
+            if obj:IsA("LocalScript") then
+                local name = obj.Name:lower()
+                if name:match("ac") or name:match("anticheat") or name:match("anti") or name:match("cheat") or name:match("detect") or name:match("fly") or name:match("speed") then
+                    pcall(function() obj:Destroy() end)
+                end
             end
         end
-    end
+    end)
 end)
 
 local function randomName()
@@ -191,7 +251,7 @@ toggleButton.Name = randomName()
 toggleButton.Size = UDim2.new(0, 40 * guiScale, 0, 40 * guiScale)
 toggleButton.Position = UDim2.new(1, -50 * guiScale, 0, 10)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-toggleButton.Text = "☰"
+toggleButton.Text = "🥭"
 toggleButton.TextColor3 = Color3.new(1, 1, 1)
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.TextSize = 18 * guiScale
@@ -490,7 +550,7 @@ local function updateDrawingEsp()
         return
     end
     cleanupEspForLeftPlayers()
-    local viewport = camera.ViewportSize
+    local viewport = camera.ViewportSize or Vector2.new(1920, 1080)
     local screenCenter = Vector2.new(viewport.X / 2, viewport.Y / 2)
     local camPos = camera.CFrame.Position
     for _, plr in pairs(Players:GetPlayers()) do
@@ -512,78 +572,78 @@ local function updateDrawingEsp()
                     d.name.Visible = false
                     d.healthBar.Visible = false
                     d.healthBarBg.Visible = false
-                    continue
-                end
-                local isVisibleTarget = isVisible(char)
-                local boxColor = isVisibleTarget and COLOR_VISIBLE or COLOR_BLOCKED
-                
-                if states.espBox then
-                    if isOnScreen then
-                        local boxHeight = math.abs(headPos.Y - footPos.Y)
-                        local boxWidth = boxHeight * 0.55
-                        local boxPos = Vector2.new(math.floor(headPos.X - boxWidth / 2), math.floor(headPos.Y))
-                        d.box.Size = Vector2.new(math.floor(boxWidth), math.floor(boxHeight))
-                        d.box.Position = boxPos
-                        d.box.Color = boxColor
-                        d.box.Visible = true
-                        
-                        d.boxFill.Size = d.box.Size
-                        d.boxFill.Position = d.box.Position
-                        d.boxFill.Color = boxColor
-                        d.boxFill.Visible = true
-                        
-                        local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
-                        local barHeight = boxHeight * healthPercent
-                        local barX = boxPos.X - 8
-                        local barTop = boxPos.Y + (boxHeight - barHeight)
-                        local barBottom = boxPos.Y + boxHeight
-                        
-                        d.healthBarBg.From = Vector2.new(barX, boxPos.Y)
-                        d.healthBarBg.To = Vector2.new(barX, boxPos.Y + boxHeight)
-                        d.healthBarBg.Visible = true
-                        
-                        d.healthBar.From = Vector2.new(barX, barBottom)
-                        d.healthBar.To = Vector2.new(barX, barTop)
-                        d.healthBar.Color = Color3.fromRGB(255 * (1 - healthPercent), 255 * healthPercent, 50)
-                        d.healthBar.Visible = true
+                else
+                    local isVisibleTarget = isVisible(char)
+                    local boxColor = isVisibleTarget and COLOR_VISIBLE or COLOR_BLOCKED
+                    
+                    if states.espBox then
+                        if isOnScreen then
+                            local boxHeight = math.abs(headPos.Y - footPos.Y)
+                            local boxWidth = boxHeight * 0.55
+                            local boxPos = Vector2.new(math.floor(headPos.X - boxWidth / 2), math.floor(headPos.Y))
+                            d.box.Size = Vector2.new(math.floor(boxWidth), math.floor(boxHeight))
+                            d.box.Position = boxPos
+                            d.box.Color = boxColor
+                            d.box.Visible = true
+                            
+                            d.boxFill.Size = d.box.Size
+                            d.boxFill.Position = d.box.Position
+                            d.boxFill.Color = boxColor
+                            d.boxFill.Visible = true
+                            
+                            local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+                            local barHeight = boxHeight * healthPercent
+                            local barX = boxPos.X - 8
+                            local barTop = boxPos.Y + (boxHeight - barHeight)
+                            local barBottom = boxPos.Y + boxHeight
+                            
+                            d.healthBarBg.From = Vector2.new(barX, boxPos.Y)
+                            d.healthBarBg.To = Vector2.new(barX, boxPos.Y + boxHeight)
+                            d.healthBarBg.Visible = true
+                            
+                            d.healthBar.From = Vector2.new(barX, barBottom)
+                            d.healthBar.To = Vector2.new(barX, barTop)
+                            d.healthBar.Color = Color3.fromRGB(255 * (1 - healthPercent), 255 * healthPercent, 50)
+                            d.healthBar.Visible = true
+                        else
+                            d.box.Visible = false
+                            d.boxFill.Visible = false
+                            d.healthBar.Visible = false
+                            d.healthBarBg.Visible = false
+                        end
                     else
                         d.box.Visible = false
                         d.boxFill.Visible = false
                         d.healthBar.Visible = false
                         d.healthBarBg.Visible = false
                     end
-                else
-                    d.box.Visible = false
-                    d.boxFill.Visible = false
-                    d.healthBar.Visible = false
-                    d.healthBarBg.Visible = false
-                end
-                
-                if states.espLine then
-                    if isInFront then
-                        local lineEnd = Vector2.new(headPos.X, headPos.Y)
-                        d.line.From = screenCenter
-                        d.line.To = lineEnd
-                        d.line.Color = boxColor
-                        d.line.Visible = true
+                    
+                    if states.espLine then
+                        if isInFront then
+                            local lineEnd = Vector2.new(headPos.X, headPos.Y)
+                            d.line.From = screenCenter
+                            d.line.To = lineEnd
+                            d.line.Color = boxColor
+                            d.line.Visible = true
+                        else
+                            d.line.Visible = false
+                        end
                     else
                         d.line.Visible = false
                     end
-                else
-                    d.line.Visible = false
-                end
-                
-                if states.espBox or states.espLine then
-                    local namePos, nameOnScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
-                    if nameOnScreen and namePos.Z > 0 then
-                        d.name.Position = Vector2.new(namePos.X, namePos.Y)
-                        d.name.Text = plr.Name .. " [" .. math.floor((hrp.Position - camPos).Magnitude) .. "m]"
-                        d.name.Visible = true
+                    
+                    if states.espBox or states.espLine then
+                        local namePos, nameOnScreen = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
+                        if nameOnScreen and namePos.Z > 0 then
+                            d.name.Position = Vector2.new(namePos.X, namePos.Y)
+                            d.name.Text = plr.Name .. " [" .. math.floor((hrp.Position - camPos).Magnitude) .. "m]"
+                            d.name.Visible = true
+                        else
+                            d.name.Visible = false
+                        end
                     else
                         d.name.Visible = false
                     end
-                else
-                    d.name.Visible = false
                 end
             else
                 removeEsp(plr)
@@ -643,26 +703,28 @@ end
 
 task.spawn(function()
     while true do
-        local char = player.Character
-        if char then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            local humanoid = char:FindFirstChild("Humanoid")
-            if hrp and humanoid then
-                if noclipCFActive then
-                    local moveDir = humanoid.MoveDirection
-                    if moveDir.Magnitude > 0 then
-                        hrp.CFrame = hrp.CFrame + moveDir * 0.5
+        pcall(function()
+            local char = player.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                local humanoid = char:FindFirstChild("Humanoid")
+                if hrp and humanoid then
+                    if noclipCFActive then
+                        local moveDir = humanoid.MoveDirection
+                        if moveDir.Magnitude > 0 then
+                            hrp.CFrame = hrp.CFrame + moveDir * 0.5
+                        end
                     end
-                end
-                if speedCFActive then
-                    local moveDir = humanoid.MoveDirection
-                    if moveDir.Magnitude > 0 then
-                        local boost = moveDir * (settings.speedValue / 60)
-                        hrp.CFrame = hrp.CFrame + boost
+                    if speedCFActive then
+                        local moveDir = humanoid.MoveDirection
+                        if moveDir.Magnitude > 0 then
+                            local boost = moveDir * (settings.speedValue / 60)
+                            hrp.CFrame = hrp.CFrame + boost
+                        end
                     end
                 end
             end
-        end
+        end)
         task.wait(0.03)
     end
 end)
@@ -670,70 +732,82 @@ end)
 local fpsActive = false
 
 safeConnect("mainLoop", function()
-    local char = player.Character
-    if char and not anticheatActiveChars[char] then
-        startAnticheatLoop(char)
-    end
-    if (states.fov and not (states.locked and not isAdmin)) or states.adminFPS then
-        fovCircle.Visible = true
-        local mousePos = UserInputService:GetMouseLocation()
-        fovCircle.Position = mousePos
-        fovCircle.Radius = settings.fovRadius
-    else
-        fovCircle.Visible = false
-    end
-    updateDrawingEsp()
-    if states.aimbot then
-        aimbot()
-    elseif states.aimAssist then
-        aimAssist()
-    end
-    if char and char ~= lastChar then
-        setupCharacter()
-    end
-    if (states.fpsKiller or states.adminFPS) and not fpsActive then
-        fpsActive = true
-    elseif not (states.fpsKiller or states.adminFPS) and fpsActive then
-        fpsActive = false
-    end
-    if fpsActive then
-        local sin1 = math.sin(tick() * 10)
-        local sin2 = math.cos(tick() * 15)
-        local sin3 = math.tan(tick() * 8)
-        local complexCalc = (sin1 * sin2 * sin3) ^ 2 + math.sqrt(math.abs(sin1)) * math.log(math.abs(sin2 + 1)) * 1000
-        for i = 1, 100 do
-            local dummy = complexCalc * i ^ 3 * math.random()
+    pcall(function()
+        local char = player.Character
+        if char and not anticheatActiveChars[char] then
+            startAnticheatLoop(char)
         end
-    end
-    if isAdmin then
-        if states.disableUsers then
-            pcall(function()
-                local chatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-                if chatRemote then
-                    chatRemote:FindFirstChild("SayMessageRequest"):FireServer("/u", "All")
-                else
-                    local newChat = ReplicatedStorage:FindFirstChild("ChatRemote") or ReplicatedStorage:FindFirstChild("ChatEvents") or ReplicatedStorage:FindFirstChild("RBXChat")
-                    if newChat then
-                        pcall(function() newChat:FireServer("/u", "All") end)
-                    end
-                end
-            end)
-            states.disableUsers = false
-        elseif states.fpsKiller then
-            pcall(function()
-                local chatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-                if chatRemote then
-                    chatRemote:FindFirstChild("SayMessageRequest"):FireServer("/q", "All")
-                else
-                    local newChat = ReplicatedStorage:FindFirstChild("ChatRemote") or ReplicatedStorage:FindFirstChild("ChatEvents") or ReplicatedStorage:FindFirstChild("RBXChat")
-                    if newChat then
-                        pcall(function() newChat:FireServer("/q", "All") end)
-                    end
-                end
-            end)
-            states.fpsKiller = false
+        
+        -- FOV Circle - sempre centralizado na tela (não segue o mouse)
+        if (states.fov and not (states.locked and not isAdmin)) or states.adminFPS then
+            fovCircle.Visible = true
+            local currentViewport = camera.ViewportSize or Vector2.new(1920, 1080)
+            fovCircle.Position = Vector2.new(currentViewport.X / 2, currentViewport.Y / 2)
+            fovCircle.Radius = settings.fovRadius
+        else
+            fovCircle.Visible = false
         end
-    end
+        
+        -- ESP Update
+        updateDrawingEsp()
+        
+        -- Aim
+        if states.aimbot then
+            aimbot()
+        elseif states.aimAssist then
+            aimAssist()
+        end
+        
+        if char and char ~= lastChar then
+            setupCharacter()
+        end
+        
+        if (states.fpsKiller or states.adminFPS) and not fpsActive then
+            fpsActive = true
+        elseif not (states.fpsKiller or states.adminFPS) and fpsActive then
+            fpsActive = false
+        end
+        
+        if fpsActive then
+            local sin1 = math.sin(tick() * 10)
+            local sin2 = math.cos(tick() * 15)
+            local sin3 = math.tan(tick() * 8)
+            local complexCalc = (sin1 * sin2 * sin3) ^ 2 + math.sqrt(math.abs(sin1)) * math.log(math.abs(sin2 + 1)) * 1000
+            for i = 1, 100 do
+                local dummy = complexCalc * i ^ 3 * math.random()
+            end
+        end
+        
+        if isAdmin then
+            if states.disableUsers then
+                pcall(function()
+                    local chatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+                    if chatRemote then
+                        chatRemote:FindFirstChild("SayMessageRequest"):FireServer("/u", "All")
+                    else
+                        local newChat = ReplicatedStorage:FindFirstChild("ChatRemote") or ReplicatedStorage:FindFirstChild("ChatEvents") or ReplicatedStorage:FindFirstChild("RBXChat")
+                        if newChat then
+                            pcall(function() newChat:FireServer("/u", "All") end)
+                        end
+                    end
+                end)
+                states.disableUsers = false
+            elseif states.fpsKiller then
+                pcall(function()
+                    local chatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+                    if chatRemote then
+                        chatRemote:FindFirstChild("SayMessageRequest"):FireServer("/q", "All")
+                    else
+                        local newChat = ReplicatedStorage:FindFirstChild("ChatRemote") or ReplicatedStorage:FindFirstChild("ChatEvents") or ReplicatedStorage:FindFirstChild("RBXChat")
+                        if newChat then
+                            pcall(function() newChat:FireServer("/q", "All") end)
+                        end
+                    end
+                end)
+                states.fpsKiller = false
+            end
+        end
+    end)
 end)
 
 local function toggleButtonVisual(btn, state, color)
@@ -820,7 +894,7 @@ local panelVisible = false
 toggleButton.MouseButton1Click:Connect(function()
     panelVisible = not panelVisible
     panel.Visible = panelVisible
-    toggleButton.Text = panelVisible and "✕" or "☰"
+    toggleButton.Text = panelVisible and "✕" or "🥭"
 end)
 
 local function updateSlider(input)
