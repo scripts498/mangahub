@@ -169,7 +169,6 @@ function MangaUI:Notify(opts)
 		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-
 		Font = Enum.Font.Gotham,
 		TextSize = IS_MOBILE and 12 or 13,
 		TextColor3 = theme.SubText,
@@ -304,7 +303,6 @@ function MangaUI:CreateWindow(opts)
 	self.Main = Main
 	self.Size = Vector2.new(baseWidth, baseHeight)
 
-
 	local topBarHeight = IS_MOBILE and 48 or 46
 	local TopBar = New("Frame", {
 		Name = "TopBar",
@@ -347,7 +345,6 @@ function MangaUI:CreateWindow(opts)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, titleX, 0, IS_MOBILE and 8 or 6),
 		Size = UDim2.new(1, -140, 0, 18),
-
 		Font = Enum.Font.GothamBold,
 		TextSize = IS_MOBILE and 14 or 15,
 		TextColor3 = theme.Text,
@@ -359,7 +356,6 @@ function MangaUI:CreateWindow(opts)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, titleX, 0, IS_MOBILE and 26 or 24),
 		Size = UDim2.new(1, -140, 0, 14),
-
 		Font = Enum.Font.Gotham,
 		TextSize = IS_MOBILE and 11 or 11,
 		TextColor3 = theme.SubText,
@@ -431,6 +427,9 @@ function MangaUI:CreateWindow(opts)
 		ScrollBarImageColor3 = theme.Accent,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		VerticalScrollBarInset = Enum.ScrollBarInset.Always,
+		Active = true,
+		ScrollingEnabled = true,
+		ElasticBehavior = Enum.ElasticBehavior.Always,
 		Parent = Main,
 	})
 	Pad(Sidebar, IS_MOBILE and 6 or 8, IS_MOBILE and 6 or 8, IS_MOBILE and 6 or 8, IS_MOBILE and 6 or 8)
@@ -580,11 +579,6 @@ function MangaUI:CreateWindow(opts)
 				beginDrag(input)
 			end
 		end)
-		TopBar.InputChanged:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-				updateDrag(input)
-			end
-		end)
 		UserInputService.InputChanged:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				updateDrag(input)
@@ -629,6 +623,45 @@ function MangaUI:CreateWindow(opts)
 		end)
 	end
 
+	do
+		local ResizeHandleBL = New("Frame", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 0, 1, 0),
+			Size = UDim2.new(0, 18, 0, 18),
+			Parent = Main,
+		})
+		local resizingBL, startMouseBL, startPosBL, startSizeBL = false, nil, nil, nil
+		ResizeHandleBL.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+				resizingBL = true
+				startMouseBL = input.Position
+				startPosBL = Main.Position
+				startSizeBL = Main.AbsoluteSize
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if resizingBL and (
+				input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch
+			) then
+				local delta = input.Position - startMouseBL
+				local newW = math.max(IS_MOBILE and 280 or 420, startSizeBL.X - delta.X)
+				local newH = math.max(IS_MOBILE and 200 or 280, startSizeBL.Y + delta.Y)
+				local offsetX = startPosBL.X.Offset + (startSizeBL.X - newW)
+				Main.Position = UDim2.new(startPosBL.X.Scale, offsetX, startPosBL.Y.Scale, startPosBL.Y.Offset)
+				Main.Size = UDim2.fromOffset(newW, newH)
+				self.Size = Vector2.new(newW, newH)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+				resizingBL = false
+			end
+		end)
+	end
 
 	do
 		local ResizeHandleLeft = New("Frame", {
@@ -671,6 +704,7 @@ function MangaUI:CreateWindow(opts)
 			end
 		end)
 	end
+
 	self.ToggleKey = opts.ToggleKey or Enum.KeyCode.RightControl
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
@@ -747,7 +781,6 @@ function MangaUI:CreateTab(name, iconText)
 	self._tabCount = self._tabCount + 1
 	local order = self._tabCount
 
-
 	local TabButton = New("TextButton", {
 		BackgroundColor3 = theme.Tertiary,
 		BackgroundTransparency = order == 1 and 0 or 1,
@@ -808,6 +841,9 @@ function MangaUI:CreateTab(name, iconText)
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 4,
 		ScrollBarImageColor3 = theme.Accent,
+		Active = true,
+		ScrollingEnabled = true,
+		ElasticBehavior = Enum.ElasticBehavior.Always,
 		Visible = order == 1,
 		Parent = self.ContentHolder,
 	})
@@ -1521,7 +1557,6 @@ function MangaUI:CreateSearchBar(parent)
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, IS_MOBILE and 10 or 12, 0, 0),
 		Size = UDim2.new(1, IS_MOBILE and -20 or -24, 1, 0),
-
 		Font = Enum.Font.Gotham,
 		TextSize = IS_MOBILE and 12 or 13,
 		TextColor3 = theme.Text,
