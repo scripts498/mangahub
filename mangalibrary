@@ -82,14 +82,14 @@ end
 
 local Themes = {
 	Dark = {
-		Background   = Color3.fromRGB(24, 24, 30),
-		Secondary    = Color3.fromRGB(32, 32, 40),
-		Tertiary     = Color3.fromRGB(40, 40, 50),
-		Stroke       = Color3.fromRGB(58, 58, 70),
-		Text         = Color3.fromRGB(240, 240, 245),
-		SubText      = Color3.fromRGB(160, 160, 175),
-		Accent       = Color3.fromRGB(140, 100, 255),
-		AccentDark   = Color3.fromRGB(100, 70, 200),
+		Background   = Color3.fromRGB(14, 10, 22),
+		Secondary    = Color3.fromRGB(20, 14, 32),
+		Tertiary     = Color3.fromRGB(28, 18, 44),
+		Stroke       = Color3.fromRGB(70, 30, 120),
+		Text         = Color3.fromRGB(245, 240, 255),
+		SubText      = Color3.fromRGB(170, 150, 200),
+		Accent       = Color3.fromRGB(191, 62, 255),
+		AccentDark   = Color3.fromRGB(120, 20, 220),
 		Success      = Color3.fromRGB(90, 220, 140),
 		Error        = Color3.fromRGB(240, 90, 90),
 	},
@@ -151,7 +151,7 @@ function MangaUI:Notify(opts)
 		Parent = NotifyHolder,
 	})
 	Round(frame, 10)
-	Stroke(frame, theme.Stroke, 1, 0.4)
+	Stroke(frame, theme.Accent, 1, 0.35)
 	Pad(frame, IS_MOBILE and 10 or 14, IS_MOBILE and 10 or 12, IS_MOBILE and 10 or 14, IS_MOBILE and 10 or 12)
 	ListLayout(frame, Enum.FillDirection.Vertical, IS_MOBILE and 3 or 4)
 
@@ -187,6 +187,7 @@ function MangaUI:Notify(opts)
 		Parent = frame,
 	})
 	Round(bar, 2)
+	Gradient(bar, ColorSequence.new(theme.Accent, theme.AccentDark), 0)
 
 	Tween(frame, EASE, {Position = UDim2.new(0, 0, 0, 0)})
 	Tween(bar, TweenInfo.new(duration, Enum.EasingStyle.Linear), {Size = UDim2.new(0, 0, 0, 3)})
@@ -278,7 +279,7 @@ function MangaUI:CreateWindow(opts)
 
 	local baseWidth, baseHeight = 560, 380
 	if IS_MOBILE then
-		baseWidth, baseHeight = 340, 460
+		baseWidth, baseHeight = 380, 400
 	end
 
 	local Main = New("Frame", {
@@ -289,8 +290,9 @@ function MangaUI:CreateWindow(opts)
 		ClipsDescendants = true,
 		Parent = ScreenGui,
 	})
-	Round(Main, 12)
-	Stroke(Main, theme.Stroke, 1, 0.2)
+	Round(Main, 14)
+	local MainStroke = Stroke(Main, theme.Accent, 1.5, 0.15)
+	Gradient(MainStroke, ColorSequence.new(theme.Accent, theme.AccentDark), 90)
 	Gradient(Main, ColorSequence.new(theme.Background, theme.Secondary), 90)
 
 	New("UIScale", {Scale = 1, Name = "Scale", Parent = Main})
@@ -303,24 +305,25 @@ function MangaUI:CreateWindow(opts)
 	self.Size = Vector2.new(baseWidth, baseHeight)
 
 
+	local topBarHeight = IS_MOBILE and 48 or 46
 	local TopBar = New("Frame", {
 		Name = "TopBar",
 		BackgroundColor3 = theme.Secondary,
-		Size = UDim2.new(1, 0, 0, IS_MOBILE and 40 or 46),
+		Size = UDim2.new(1, 0, 0, topBarHeight),
 		Parent = Main,
 	})
-	Round(TopBar, 12)
+	Round(TopBar, 14)
 	New("Frame", {
 		BackgroundColor3 = theme.Secondary,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0, 0, 1, -12),
-		Size = UDim2.new(1, 0, 0, 12),
+		Position = UDim2.new(0, 0, 1, -14),
+		Size = UDim2.new(1, 0, 0, 14),
 		Parent = TopBar,
 	})
 	local AccentLine = New("Frame", {
 		BackgroundColor3 = theme.Accent,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0, 0, 1, -1),
+		Position = UDim2.new(0, 0, 1, -2),
 		Size = UDim2.new(1, 0, 0, 2),
 		ZIndex = 3,
 		Parent = TopBar,
@@ -342,11 +345,11 @@ function MangaUI:CreateWindow(opts)
 
 	local TitleLabel = New("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, titleX, 0, 6),
+		Position = UDim2.new(0, titleX, 0, IS_MOBILE and 8 or 6),
 		Size = UDim2.new(1, -140, 0, 18),
 
 		Font = Enum.Font.GothamBold,
-		TextSize = IS_MOBILE and 13 or 15,
+		TextSize = IS_MOBILE and 14 or 15,
 		TextColor3 = theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Text = self.Title,
@@ -354,11 +357,11 @@ function MangaUI:CreateWindow(opts)
 	})
 	local SubLabel = New("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.new(0, titleX, 0, 24),
+		Position = UDim2.new(0, titleX, 0, IS_MOBILE and 26 or 24),
 		Size = UDim2.new(1, -140, 0, 14),
 
 		Font = Enum.Font.Gotham,
-		TextSize = IS_MOBILE and 10 or 11,
+		TextSize = IS_MOBILE and 11 or 11,
 		TextColor3 = theme.SubText,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Text = self.SubTitle,
@@ -370,7 +373,7 @@ function MangaUI:CreateWindow(opts)
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -8, 0.5, 0),
-		Size = UDim2.new(0, IS_MOBILE and 54 or 62, 0, IS_MOBILE and 22 or 26),
+		Size = UDim2.new(0, IS_MOBILE and 58 or 62, 0, IS_MOBILE and 26 or 26),
 		Parent = TopBar,
 	})
 	ListLayout(ControlHolder, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Right)
@@ -378,7 +381,7 @@ function MangaUI:CreateWindow(opts)
 	local function ControlButton(order, hoverColor)
 		local btn = New("TextButton", {
 			BackgroundColor3 = theme.Tertiary,
-			Size = UDim2.new(0, IS_MOBILE and 22 or 26, 0, IS_MOBILE and 22 or 26),
+			Size = UDim2.new(0, IS_MOBILE and 26 or 26, 0, IS_MOBILE and 26 or 26),
 			Text = "",
 			AutoButtonColor = false,
 			LayoutOrder = order,
@@ -415,9 +418,8 @@ function MangaUI:CreateWindow(opts)
 	local CloseBar1 = IconBar(CloseBtn, 12, 2, 45, theme.Text)
 	local CloseBar2 = IconBar(CloseBtn, 12, 2, -45, theme.Text)
 
-	local sidebarWidth = IS_MOBILE and 80 or 140
+	local sidebarWidth = IS_MOBILE and 92 or 140
 
-	local topBarHeight = IS_MOBILE and 40 or 46
 	local Sidebar = New("Frame", {
 		Name = "Sidebar",
 		BackgroundColor3 = theme.Secondary,
@@ -426,7 +428,7 @@ function MangaUI:CreateWindow(opts)
 		Parent = Main,
 	})
 	Pad(Sidebar, IS_MOBILE and 6 or 8, IS_MOBILE and 6 or 8, IS_MOBILE and 6 or 8, IS_MOBILE and 6 or 8)
-	local TabListLayout = ListLayout(Sidebar, Enum.FillDirection.Vertical, IS_MOBILE and 4 or 6)
+	local TabListLayout = ListLayout(Sidebar, Enum.FillDirection.Vertical, IS_MOBILE and 5 or 6)
 
 	local ContentHolder = New("Frame", {
 		Name = "ContentHolder",
@@ -454,18 +456,21 @@ function MangaUI:CreateWindow(opts)
 		end
 	end
 
-	if IS_MOBILE then
+	do
+		local floatSize = IS_MOBILE and 55 or 50
 		local FloatBtn = New("ImageButton", {
 			Name = "FloatButton",
 			BackgroundColor3 = theme.Accent,
-			Size = UDim2.new(0, 55, 0, 55),
-			Position = UDim2.new(0, 16, 0, 16),
+			Size = UDim2.new(0, floatSize, 0, floatSize),
+			Position = IS_MOBILE and UDim2.new(0, 16, 0, 16) or UDim2.new(0, 24, 0, 24),
 			Image = "",
 			AutoButtonColor = false,
 			Parent = ScreenGui,
 		})
-		Round(FloatBtn, 25)
-		Stroke(FloatBtn, theme.Stroke, 1, 0.3)
+		Round(FloatBtn, floatSize / 2)
+		local FloatStroke = Stroke(FloatBtn, theme.AccentDark, 2, 0.1)
+		Gradient(FloatBtn, ColorSequence.new(theme.Accent, theme.AccentDark), 45)
+
 		local HamburgerHolder = New("Frame", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -475,39 +480,42 @@ function MangaUI:CreateWindow(opts)
 		})
 		ListLayout(HamburgerHolder, Enum.FillDirection.Vertical, 4, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
 		for i = 1, 3 do
-			New("Frame", {
+			local hbar = New("Frame", {
 				BackgroundColor3 = Color3.new(1, 1, 1),
 				BorderSizePixel = 0,
 				Size = UDim2.new(1, 0, 0, 2),
 				LayoutOrder = i,
 				Parent = HamburgerHolder,
 			})
+			Round(hbar, 1)
 		end
 
-		do
-			local dragging, dragStart, startPos = false, nil, nil
-			FloatBtn.InputBegan:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-					dragging = true
-					dragStart = input.Position
-					startPos = FloatBtn.Position
-				end
-			end)
-			UserInputService.InputChanged:Connect(function(input)
-				if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-					local delta = input.Position - dragStart
-					FloatBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-				end
-			end)
-			UserInputService.InputEnded:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-					dragging = false
-				end
-			end)
-			FloatBtn.MouseButton1Click:Connect(function()
+		local dragging, dragStart, startPos, moved = false, nil, nil, false
+		FloatBtn.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+				dragging = true
+				moved = false
+				dragStart = input.Position
+				startPos = FloatBtn.Position
+			end
+		end)
+		UserInputService.InputChanged:Connect(function(input)
+			if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+				local delta = input.Position - dragStart
+				if delta.Magnitude > 4 then moved = true end
+				FloatBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+				dragging = false
+			end
+		end)
+		FloatBtn.MouseButton1Click:Connect(function()
+			if not moved then
 				self:ToggleUI()
-			end)
-		end
+			end
+		end)
 	end
 
 	self.Minimized = false
@@ -516,7 +524,7 @@ function MangaUI:CreateWindow(opts)
 		if self.Minimized then
 			Sidebar.Visible = false
 			ContentHolder.Visible = false
-			Tween(Main, EASE, {Size = UDim2.new(0, self.Size.X, 0, 46)})
+			Tween(Main, EASE, {Size = UDim2.new(0, self.Size.X, 0, topBarHeight)})
 			Tween(MinimizeIcon, EASE_FAST, {Rotation = 180})
 		else
 			Tween(Main, EASE, {Size = UDim2.new(0, self.Size.X, 0, self.Size.Y)})
@@ -690,7 +698,7 @@ function MangaUI:CreateTab(name, iconText)
 	local TabButton = New("TextButton", {
 		BackgroundColor3 = theme.Tertiary,
 		BackgroundTransparency = order == 1 and 0 or 1,
-		Size = UDim2.new(1, 0, 0, IS_MOBILE and 32 or 36),
+		Size = UDim2.new(1, 0, 0, IS_MOBILE and 34 or 36),
 		Text = "",
 		AutoButtonColor = false,
 		LayoutOrder = order,
@@ -701,8 +709,8 @@ function MangaUI:CreateTab(name, iconText)
 	local tabLabelX = 10
 	local tabIconSize = 16
 	if IS_MOBILE then
-		tabLabelX = 6
-		tabIconSize = 14
+		tabLabelX = 8
+		tabIconSize = 15
 	end
 	if iconText then
 		local iconIds = {
@@ -733,7 +741,7 @@ function MangaUI:CreateTab(name, iconText)
 		Size = UDim2.new(1, -tabLabelX - 2, 1, 0),
 		Position = UDim2.new(0, tabLabelX, 0, 0),
 		Font = Enum.Font.GothamMedium,
-		TextSize = IS_MOBILE and 11 or 13,
+		TextSize = IS_MOBILE and 12 or 13,
 		TextColor3 = order == 1 and theme.Text or theme.SubText,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Text = name,
@@ -790,7 +798,7 @@ function MangaUI:CreateTab(name, iconText)
 			Parent = self.Page,
 		})
 		Round(SectionFrame, 10)
-		Stroke(SectionFrame, th.Stroke, 1, 0.5)
+		Stroke(SectionFrame, th.Stroke, 1, 0.4)
 		Pad(SectionFrame, IS_MOBILE and 10 or 12, IS_MOBILE and 8 or 10, IS_MOBILE and 10 or 12, IS_MOBILE and 10 or 12)
 
 		local AccentDash = New("Frame", {
@@ -1021,6 +1029,7 @@ function MangaUI:CreateTab(name, iconText)
 				Parent = Track,
 			})
 			Round(Fill, 3)
+			Gradient(Fill, ColorSequence.new(th2.Accent, th2.AccentDark), 0)
 
 			local Knob = New("Frame", {
 				BackgroundColor3 = Color3.new(1, 1, 1),
@@ -1229,7 +1238,8 @@ function MangaUI:CreateTab(name, iconText)
 						SelectedLabel.Text = tostring(item)
 						if o.Callback then task.spawn(o.Callback, item) end
 						expanded = false
-						Tween(Arrow, EASE_FAST, {Rotation = 0})
+						Tween(Arrow, EASE_FAST, {Rotation = 45})
+						Tween(Arrow2, EASE_FAST, {Rotation = -45})
 						refreshHolderHeight()
 					end)
 					table.insert(optionButtons, OptBtn)
