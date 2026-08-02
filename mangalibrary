@@ -664,24 +664,55 @@ function MangaUI:CreateWindow(opts)
 	end
 
 	do
+		local handleW = IS_MOBILE and 22 or 16
+		local handleH = IS_MOBILE and 74 or 60
 		local ResizeHandleLeft = New("Frame", {
 			Name = "ResizeHandleLeft",
 			BackgroundTransparency = 1,
-			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, sidebarWidth, 1, 0),
-			Size = UDim2.new(0, 12, 0, 18),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0, sidebarWidth, 0.5, topBarHeight / 2),
+			Size = UDim2.new(0, handleW, 0, handleH),
 			ZIndex = 10,
 			Parent = Main,
 		})
+
+		local GripIndicator = New("Frame", {
+			BackgroundColor3 = theme.Accent,
+			BackgroundTransparency = 0.35,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.new(0, 4, 0, IS_MOBILE and 44 or 34),
+			BorderSizePixel = 0,
+			ZIndex = 10,
+			Parent = ResizeHandleLeft,
+		})
+		Round(GripIndicator, 2)
+
 		local resizingLeft, startMouseLeft, startWidthLeft = false, nil, nil
+
 		ResizeHandleLeft.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch then
 				resizingLeft = true
 				startMouseLeft = input.Position
 				startWidthLeft = Sidebar.AbsoluteSize.X
+				Tween(GripIndicator, EASE_FAST, {BackgroundTransparency = 0, Size = UDim2.new(0, 6, 0, IS_MOBILE and 50 or 40)})
 			end
 		end)
+
+		if not IS_MOBILE then
+			ResizeHandleLeft.MouseEnter:Connect(function()
+				if not resizingLeft then
+					Tween(GripIndicator, EASE_FAST, {BackgroundTransparency = 0})
+				end
+			end)
+			ResizeHandleLeft.MouseLeave:Connect(function()
+				if not resizingLeft then
+					Tween(GripIndicator, EASE_FAST, {BackgroundTransparency = 0.35})
+				end
+			end)
+		end
+
 		UserInputService.InputChanged:Connect(function(input)
 			if resizingLeft and (
 				input.UserInputType == Enum.UserInputType.MouseMovement
@@ -689,18 +720,21 @@ function MangaUI:CreateWindow(opts)
 			) then
 				local delta = input.Position - startMouseLeft
 				local newW = math.max(IS_MOBILE and 80 or 100, startWidthLeft + delta.X)
-				local maxW = math.floor(Main.AbsoluteSize.X * 0.5)
+				local maxW = math.floor(Main.AbsoluteSize.X * 0.6)
 				newW = math.min(newW, maxW)
 				Sidebar.Size = UDim2.new(0, newW, 1, -topBarHeight)
 				ContentHolder.Position = UDim2.new(0, newW, 0, topBarHeight)
 				ContentHolder.Size = UDim2.new(1, -newW, 1, -topBarHeight)
-				ResizeHandleLeft.Position = UDim2.new(0, newW, 1, 0)
+				ResizeHandleLeft.Position = UDim2.new(0, newW, 0.5, topBarHeight / 2)
 			end
 		end)
 		UserInputService.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch then
-				resizingLeft = false
+				if resizingLeft then
+					resizingLeft = false
+					Tween(GripIndicator, EASE_FAST, {BackgroundTransparency = 0.35, Size = UDim2.new(0, 4, 0, IS_MOBILE and 44 or 34)})
+				end
 			end
 		end)
 	end
