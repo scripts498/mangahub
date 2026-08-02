@@ -586,7 +586,7 @@ function MangaUI:CreateWindow(opts)
 		end)
 	end
 
-	if not IS_MOBILE then
+	do
 		local ResizeHandle = New("Frame", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(1, 1),
@@ -596,23 +596,28 @@ function MangaUI:CreateWindow(opts)
 		})
 		local resizing, startMouse, startSize = false, nil, nil
 		ResizeHandle.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
 				resizing = true
 				startMouse = input.Position
-				startSize = Main.Size
+				startSize = Main.AbsoluteSize
 			end
 		end)
 		UserInputService.InputChanged:Connect(function(input)
-			if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+			if resizing and (
+				input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch
+			) then
 				local delta = input.Position - startMouse
-				local newW = math.max(IS_MOBILE and 280 or 420, startSize.X.Offset + delta.X)
-				local newH = math.max(IS_MOBILE and 200 or 280, startSize.Y.Offset + delta.Y)
-				Main.Size = UDim2.new(0, newW, 0, newH)
+				local newW = math.max(IS_MOBILE and 280 or 420, startSize.X + delta.X)
+				local newH = math.max(IS_MOBILE and 200 or 280, startSize.Y + delta.Y)
+				Main.Size = UDim2.fromOffset(newW, newH)
 				self.Size = Vector2.new(newW, newH)
 			end
 		end)
 		UserInputService.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
 				resizing = false
 			end
 		end)
