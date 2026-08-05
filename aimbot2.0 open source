@@ -6,53 +6,53 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 
-local g = getinfo or debug.getinfo
-local h = {}
-local x, y
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
 
-pcall(function()
-    if setthreadidentity then
-        setthreadidentity(2)
-    end
-end)
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
 
-pcall(function()
-    if getgc and hookfunction then
-        for i, v in ipairs(getgc(true)) do
-            if typeof(v) == "table" then
-                local a = rawget(v, "Detected")
-                local b = rawget(v, "Kill")
-                if typeof(a) == "function" and not x then
-                    x = a
-                    local o
-                    o = hookfunction(x, function(c, f, n)
-                        return true
-                    end)
-                    table.insert(h, x)
-                end
-                if rawget(v, "Variables") and rawget(v, "Process") and typeof(b) == "function" and not y then
-                    y = b
-                    local o
-                    o = hookfunction(y, function(f)
-                    end)
-                    table.insert(h, y)
-                end
-            end
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local detectedFunc = nil
+local killFunc = nil
+
+for _, v in pairs(getgc(true)) do
+    if typeof(v) == "table" then
+        local detected = rawget(v, "Detected")
+        local kill = rawget(v, "Kill")
+        local variables = rawget(v, "Variables")
+        local process = rawget(v, "Process")
+        if typeof(detected) == "function" and not detectedFunc then
+            detectedFunc = detected
+            hookfunction(detected, function() return true end)
+        end
+        if variables and process and typeof(kill) == "function" and not killFunc then
+            killFunc = kill
+            hookfunction(kill, function() return nil end)
         end
     end
-end)
+end
 
-pcall(function()
-    if getrenv and newcclosure and hookfunction then
-        local o
-        o = hookfunction(getrenv().debug.info, newcclosure(function(...)
-            local a, f = ...
-            if x and a == x then
-                return coroutine.yield(coroutine.running())
-            end
-            return o(...)
-        end))
+if getrenv and getrenv().debug and getrenv().debug.info then
+    local oldDebugInfo = getrenv().debug.info
+    hookfunction(getrenv().debug.info, function(...)
+        local firstArg = select(1, ...)
+        if detectedFunc and firstArg == detectedFunc then
+            return coroutine.yield(coroutine.running())
+        end
+        return oldDebugInfo(...)
+    end)
+end
+
+local oldNamecallBypass
+oldNamecallBypass = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    if method == "Kick" and self ~= player then
+        return nil
     end
+    return oldNamecallBypass(self, ...)
 end)
 
 local playerGui = player:WaitForChild("PlayerGui")
