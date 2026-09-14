@@ -2507,4 +2507,4 @@ Window:Notify({
         4
 })
 
-
+print("aberto")
