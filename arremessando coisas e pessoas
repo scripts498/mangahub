@@ -1,0 +1,2510 @@
+--// ============================================================
+--//                    MANGA HUB
+--//
+--// THROW
+--//   Mouse1 = soltar normal
+--//   Mouse2 = arremessar
+--//
+--// PROTECTION
+--//   Anti-Grab
+--//   Anti Spam de Ownership
+--//
+--// BLOBMAN
+--//   Dropdown de jogadores
+--//   Lock Player
+--//   Bring Player
+--//   Kick Player (físico)
+--//
+--// RightControl = abrir/fechar GUI
+--// ============================================================
+
+
+--==============================================================
+-- SERVICES
+--==============================================================
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
+
+local LocalPlayer = Players.LocalPlayer
+local ENV = getgenv and getgenv() or _G
+
+
+--==============================================================
+-- CLEANUP VERSÃO ANTERIOR
+--==============================================================
+
+if ENV.MangaHubState then
+    ENV.MangaHubState.Running = false
+
+    if ENV.MangaHubState.Connections then
+        for _, connection in ipairs(ENV.MangaHubState.Connections) do
+            pcall(function()
+                connection:Disconnect()
+            end)
+        end
+    end
+end
+
+pcall(function()
+    ContextActionService:UnbindAction("MangaHub_MouseDetector")
+end)
+
+
+--==============================================================
+-- CONFIG
+--==============================================================
+
+local Config = {
+
+    --==========================================================
+    -- THROW
+    --==========================================================
+
+    ThrowEnabled = true,
+
+    ThrowForce = 400,
+
+    ThrowMin = 50,
+    ThrowMax = 15000,
+
+    ThrowFrames = 6,
+
+    MouseMemory = 0.80,
+
+
+    --==========================================================
+    -- PROTECTION
+    --==========================================================
+
+    AntiGrab = true,
+
+    AntiOwnershipSpam = true,
+
+    StruggleInterval = 0.03,
+
+    StruggleBurst = 6,
+
+    StruggleBurstDelay = 0.018,
+
+    ProtectionGrace = 0.40,
+
+    MaxHorizontalSpeed = 115,
+
+    MaxVerticalSpeed = 140,
+
+    MaxAngularSpeed = 55,
+
+
+    --==========================================================
+    -- BLOBMAN
+    --==========================================================
+
+    BlobGrabRange = 20,
+
+
+    -- =========================================================
+    -- LOCK TIMING
+    -- =========================================================
+    --
+    -- 0.005 = 5ms
+    -- 0.010 = 10ms
+    -- 0.020 = 20ms
+    -- 0.035 = 35ms
+    -- 0.050 = 50ms
+
+    BlobLockJumpDelay = 0.010,
+
+    BlobGrabConfirmTime = 0.10,
+
+
+    --==========================================================
+    -- BRING
+    --==========================================================
+
+    BlobBringTimeout = 2.0,
+
+    BlobBringInterval = 0.06,
+
+    BlobBringDistance = 8,
+
+
+    --==========================================================
+    -- KICK FÍSICO
+    --==========================================================
+
+    BlobKickSpeed = 1200,
+
+    BlobKickUpward = 220,
+
+    BlobKickFrames = 8,
+
+    BlobKickGrabDelay = 0.065,
+
+
+    Debug = false
+}
+
+
+--==============================================================
+-- STATE
+--==============================================================
+
+local State = {
+
+    Running = true,
+
+    Connections = {},
+
+
+    -- character
+
+    Character = nil,
+
+    Humanoid = nil,
+
+    Root = nil,
+
+    IsHeld = nil,
+
+
+    -- throw
+
+    GrabbedObject = nil,
+
+    OwnerObject = nil,
+
+    Throwing = false,
+
+    LastMouseButton = 0,
+
+    LastMouseTime = 0,
+
+
+    -- protection
+
+    LastStruggle = 0,
+
+    ProtectionUntil = 0,
+
+
+    -- blobman
+
+    BlobPlayerMap = {},
+
+    BlobPlayerSignature = "",
+
+    BlobSelectedPlayer = nil,
+
+    BlobLastSide = "Left"
+}
+
+ENV.MangaHubState = State
+
+
+--==============================================================
+-- DEBUG
+--==============================================================
+
+local function log(...)
+    if Config.Debug then
+        print("[MANGA HUB]", ...)
+    end
+end
+
+
+--==============================================================
+-- CONNECTION HELPER
+--==============================================================
+
+local function connect(signal, callback)
+
+    local connection = signal:Connect(callback)
+
+    table.insert(
+        State.Connections,
+        connection
+    )
+
+    return connection
+end
+
+
+--==============================================================
+-- REMOTES
+--==============================================================
+
+local GrabEvents =
+    ReplicatedStorage:WaitForChild("GrabEvents")
+
+local CreateGrabLine =
+    GrabEvents:WaitForChild("CreateGrabLine")
+
+local SetNetworkOwner =
+    GrabEvents:WaitForChild("SetNetworkOwner")
+
+local DestroyGrabLine =
+    GrabEvents:WaitForChild("DestroyGrabLine")
+
+
+local CharacterEvents =
+    ReplicatedStorage:FindFirstChild("CharacterEvents")
+
+local StruggleRemote =
+    CharacterEvents
+    and CharacterEvents:FindFirstChild("Struggle")
+
+
+--==============================================================
+-- MANGA LIBRARY
+--==============================================================
+
+local MangaUI
+
+do
+    local ok, result = pcall(function()
+
+        return loadstring(
+            game:HttpGet(
+                "https://raw.githubusercontent.com/scripts498/mangahub/main/mangalibrary"
+            )
+        )()
+
+    end)
+
+    if not ok then
+        error(
+            "[MANGA HUB] MangaLibrary:\n"
+            .. tostring(result)
+        )
+    end
+
+    MangaUI = result
+end
+
+
+--==============================================================
+-- WINDOW
+--==============================================================
+
+local Window =
+    MangaUI:CreateWindow({
+
+        Title = "Manga Hub",
+
+        SubTitle = "Throw + Protection + Blobman",
+
+        Theme = "Dark",
+
+        ToggleKey = Enum.KeyCode.RightControl,
+
+        ConfigFolder = "MangaHub"
+    })
+
+
+--==============================================================
+-- HELPERS
+--==============================================================
+
+local function valid(object)
+
+    return typeof(object) == "Instance"
+        and object.Parent ~= nil
+end
+
+
+local function getAssemblyRoot(object)
+
+    if not valid(object) then
+        return nil
+    end
+
+
+    if object:IsA("BasePart") then
+
+        return object.AssemblyRootPart
+            or object
+    end
+
+
+    if object:IsA("Model") then
+
+        local part =
+            object.PrimaryPart
+            or object:FindFirstChildWhichIsA(
+                "BasePart",
+                true
+            )
+
+        if part then
+
+            return part.AssemblyRootPart
+                or part
+        end
+    end
+
+
+    if object:IsA("Attachment") then
+
+        local parent = object.Parent
+
+        if parent
+            and parent:IsA("BasePart")
+        then
+
+            return parent.AssemblyRootPart
+                or parent
+        end
+    end
+
+
+    return nil
+end
+
+
+--==============================================================
+-- THROW GUI
+--==============================================================
+
+local ThrowTab =
+    Window:CreateTab(
+        "Throw",
+        "bomb"
+    )
+
+local ThrowSection =
+    ThrowTab:CreateSection(
+        "Throw Power"
+    )
+
+
+ThrowSection:CreateToggle({
+
+    Text = "Throw habilitado",
+
+    Default = true,
+
+    Flag = "ThrowEnabled",
+
+    Callback = function(value)
+
+        Config.ThrowEnabled = value
+
+    end
+})
+
+
+ThrowSection:CreateSlider({
+
+    Text = "Força",
+
+    Min = Config.ThrowMin,
+
+    Max = Config.ThrowMax,
+
+    Default = Config.ThrowForce,
+
+    Decimals = 0,
+
+    Flag = "ThrowForce",
+
+    Callback = function(value)
+
+        Config.ThrowForce =
+            math.clamp(
+                math.floor(value + 0.5),
+                Config.ThrowMin,
+                Config.ThrowMax
+            )
+
+    end
+})
+
+
+--==============================================================
+-- PROTECTION GUI
+--==============================================================
+
+local ProtectionTab =
+    Window:CreateTab(
+        "Proteção",
+        "shield"
+    )
+
+local ProtectionSection =
+    ProtectionTab:CreateSection(
+        "Proteção"
+    )
+
+
+ProtectionSection:CreateToggle({
+
+    Text = "Anti-Grab",
+
+    Default = true,
+
+    Flag = "AntiGrab",
+
+    Callback = function(value)
+
+        Config.AntiGrab = value
+
+        if not value then
+            State.ProtectionUntil = 0
+        end
+
+    end
+})
+
+
+ProtectionSection:CreateToggle({
+
+    Text = "Anti Spam de Ownership",
+
+    Default = true,
+
+    Flag = "AntiOwnershipSpam",
+
+    Callback = function(value)
+
+        Config.AntiOwnershipSpam = value
+
+    end
+})
+
+
+--==============================================================
+-- CHARACTER
+--==============================================================
+
+local function findIsHeld()
+
+    local held =
+        LocalPlayer:FindFirstChild(
+            "IsHeld",
+            true
+        )
+
+    if held then
+        return held
+    end
+
+
+    local character =
+        LocalPlayer.Character
+
+    if character then
+
+        return character:FindFirstChild(
+            "IsHeld",
+            true
+        )
+    end
+
+
+    return nil
+end
+
+
+local function setupCharacter(character)
+
+    State.Character = character
+
+    State.Humanoid =
+        character:WaitForChild(
+            "Humanoid",
+            10
+        )
+
+    State.Root =
+        character:WaitForChild(
+            "HumanoidRootPart",
+            10
+        )
+
+    State.IsHeld =
+        findIsHeld()
+end
+
+
+if LocalPlayer.Character then
+
+    task.spawn(
+        setupCharacter,
+        LocalPlayer.Character
+    )
+end
+
+
+connect(
+    LocalPlayer.CharacterAdded,
+
+    function(character)
+
+        task.spawn(
+            setupCharacter,
+            character
+        )
+
+    end
+)
+
+
+--==============================================================
+-- STRUGGLE
+--==============================================================
+
+local function getStruggleRemote()
+
+    if StruggleRemote
+        and StruggleRemote.Parent
+    then
+
+        return StruggleRemote
+    end
+
+
+    CharacterEvents =
+        ReplicatedStorage:FindFirstChild(
+            "CharacterEvents"
+        )
+
+
+    if CharacterEvents then
+
+        StruggleRemote =
+            CharacterEvents:FindFirstChild(
+                "Struggle"
+            )
+    end
+
+
+    return StruggleRemote
+end
+
+
+local function fireStruggle()
+
+    local remote =
+        getStruggleRemote()
+
+    if not remote then
+        return
+    end
+
+
+    pcall(function()
+
+        remote:FireServer(
+            LocalPlayer
+        )
+
+    end)
+end
+
+
+local function struggleBurst()
+
+    task.spawn(function()
+
+        for _ = 1, Config.StruggleBurst do
+
+            if not State.Running then
+                break
+            end
+
+            fireStruggle()
+
+            task.wait(
+                Config.StruggleBurstDelay
+            )
+        end
+
+    end)
+end
+
+
+--==============================================================
+-- PROTECTION
+--==============================================================
+
+local function protectionActive()
+
+    local held =
+        State.IsHeld
+
+
+    local isHeld =
+        held
+        and held.Parent
+        and held:IsA("BoolValue")
+        and held.Value
+
+
+    local partOwner =
+        State.Character
+        and State.Character:FindFirstChild(
+            "PartOwner",
+            true
+        )
+
+
+    if Config.AntiGrab
+        and isHeld
+    then
+
+        State.ProtectionUntil =
+            os.clock()
+            + Config.ProtectionGrace
+    end
+
+
+    if Config.AntiOwnershipSpam
+        and partOwner
+    then
+
+        State.ProtectionUntil =
+            os.clock()
+            + Config.ProtectionGrace
+    end
+
+
+    return
+        (
+            Config.AntiGrab
+            and isHeld
+        )
+        or
+        (
+            Config.AntiOwnershipSpam
+            and partOwner ~= nil
+        )
+        or
+        (
+            (
+                Config.AntiGrab
+                or Config.AntiOwnershipSpam
+            )
+            and os.clock()
+                < State.ProtectionUntil
+        )
+end
+
+
+local function restoreMovement()
+
+    local humanoid =
+        State.Humanoid
+
+    local root =
+        State.Root
+
+
+    if not humanoid
+        or not root
+        or not root.Parent
+        or humanoid.Health <= 0
+    then
+
+        return
+    end
+
+
+    humanoid.PlatformStand = false
+
+    humanoid.Sit = false
+
+    humanoid.AutoRotate = true
+
+
+    local velocity =
+        root.AssemblyLinearVelocity
+
+    local horizontal =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
+        )
+
+    local angular =
+        root.AssemblyAngularVelocity
+
+
+    local suspicious =
+        horizontal.Magnitude
+            > Config.MaxHorizontalSpeed
+
+        or math.abs(velocity.Y)
+            > Config.MaxVerticalSpeed
+
+        or angular.Magnitude
+            > Config.MaxAngularSpeed
+
+
+    if suspicious then
+
+        local movement =
+            humanoid.MoveDirection
+
+        local speed =
+            humanoid.WalkSpeed
+
+
+        root.AssemblyLinearVelocity =
+            Vector3.new(
+
+                movement.X * speed,
+
+                math.clamp(
+                    velocity.Y,
+                    -60,
+                    60
+                ),
+
+                movement.Z * speed
+            )
+
+
+        root.AssemblyAngularVelocity =
+            Vector3.zero
+    end
+end
+
+
+connect(
+    RunService.Heartbeat,
+
+    function()
+
+        if not State.Running then
+            return
+        end
+
+
+        if not State.IsHeld
+            or not State.IsHeld.Parent
+        then
+
+            State.IsHeld =
+                findIsHeld()
+        end
+
+
+        if protectionActive() then
+
+            restoreMovement()
+
+
+            local now =
+                os.clock()
+
+
+            if now
+                - State.LastStruggle
+                >= Config.StruggleInterval
+            then
+
+                State.LastStruggle = now
+
+                fireStruggle()
+            end
+        end
+
+    end
+)
+
+
+connect(
+    RunService.PreSimulation,
+
+    function()
+
+        if not State.Running then
+            return
+        end
+
+
+        if protectionActive() then
+            restoreMovement()
+        end
+
+    end
+)
+
+
+--==============================================================
+-- MOUSE INPUT
+--==============================================================
+
+local function mouseDetector(
+    actionName,
+    inputState,
+    inputObject
+)
+
+    if inputState
+        ~= Enum.UserInputState.Begin
+    then
+
+        return Enum.ContextActionResult.Pass
+    end
+
+
+    if inputObject.UserInputType
+        == Enum.UserInputType.MouseButton1
+    then
+
+        State.LastMouseButton = 1
+
+        State.LastMouseTime =
+            os.clock()
+
+
+    elseif inputObject.UserInputType
+        == Enum.UserInputType.MouseButton2
+    then
+
+        State.LastMouseButton = 2
+
+        State.LastMouseTime =
+            os.clock()
+    end
+
+
+    return Enum.ContextActionResult.Pass
+end
+
+
+ContextActionService:
+    BindActionAtPriority(
+
+        "MangaHub_MouseDetector",
+
+        mouseDetector,
+
+        false,
+
+        Enum.ContextActionPriority.High.Value + 1000,
+
+        Enum.UserInputType.MouseButton1,
+
+        Enum.UserInputType.MouseButton2
+    )
+
+
+local function getReleaseButton()
+
+    if UserInputService:
+        IsMouseButtonPressed(
+            Enum.UserInputType.MouseButton2
+        )
+    then
+
+        return 2
+    end
+
+
+    if UserInputService:
+        IsMouseButtonPressed(
+            Enum.UserInputType.MouseButton1
+        )
+    then
+
+        return 1
+    end
+
+
+    if os.clock()
+        - State.LastMouseTime
+        <= Config.MouseMemory
+    then
+
+        return State.LastMouseButton
+    end
+
+
+    return 0
+end
+
+
+--==============================================================
+-- THROW
+--==============================================================
+
+local function throwObject(object)
+
+    if State.Throwing
+        or not State.Running
+        or not Config.ThrowEnabled
+    then
+
+        return
+    end
+
+
+    local root =
+        getAssemblyRoot(object)
+
+        or getAssemblyRoot(
+            State.OwnerObject
+        )
+
+        or getAssemblyRoot(
+            State.GrabbedObject
+        )
+
+
+    if not root
+        or root.Anchored
+    then
+
+        return
+    end
+
+
+    local camera =
+        Workspace.CurrentCamera
+
+    if not camera then
+        return
+    end
+
+
+    State.Throwing = true
+
+
+    local speed =
+        math.clamp(
+            Config.ThrowForce,
+            Config.ThrowMin,
+            Config.ThrowMax
+        )
+
+
+    local desired =
+        camera.CFrame.LookVector
+        * speed
+
+
+    RunService.Heartbeat:Wait()
+
+
+    if not root.Parent then
+
+        State.Throwing = false
+
+        return
+    end
+
+
+    local delta =
+        desired
+        - root.AssemblyLinearVelocity
+
+
+    pcall(function()
+
+        root:ApplyImpulse(
+            delta * root.AssemblyMass
+        )
+
+    end)
+
+
+    root.AssemblyLinearVelocity =
+        desired
+
+
+    for _ = 1, Config.ThrowFrames do
+
+        RunService.Heartbeat:Wait()
+
+
+        if not root.Parent then
+            break
+        end
+
+
+        local velocity =
+            root.AssemblyLinearVelocity
+
+
+        if velocity.Magnitude
+            < speed * 0.75
+        then
+
+            local correction =
+                (
+                    desired
+                    - velocity
+                )
+                * root.AssemblyMass
+
+
+            pcall(function()
+
+                root:ApplyImpulse(
+                    correction
+                )
+
+            end)
+
+
+            root.AssemblyLinearVelocity =
+                desired
+        end
+    end
+
+
+    State.Throwing = false
+end
+
+
+--==============================================================
+-- BLOBMAN PLAYER LIST
+--==============================================================
+
+local function buildPlayerList()
+
+    local list = {}
+
+    local map = {}
+
+
+    local playerList =
+        Players:GetPlayers()
+
+
+    table.sort(
+        playerList,
+
+        function(a, b)
+
+            return string.lower(a.Name)
+                < string.lower(b.Name)
+
+        end
+    )
+
+
+    for _, player in ipairs(playerList) do
+
+        if player ~= LocalPlayer then
+
+            local label =
+                string.format(
+                    "%s (@%s)",
+                    player.DisplayName,
+                    player.Name
+                )
+
+
+            map[label] =
+                player
+
+
+            table.insert(
+                list,
+                label
+            )
+        end
+    end
+
+
+    if #list == 0 then
+
+        list[1] =
+            "Nenhum jogador"
+    end
+
+
+    return list, map
+end
+
+
+--==============================================================
+-- FIND MOUNTED BLOBMAN
+--==============================================================
+
+local function getMountedBlobman()
+
+    local character =
+        LocalPlayer.Character
+
+
+    local humanoid =
+        character
+        and character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+
+    if not humanoid then
+        return nil
+    end
+
+
+    local seat =
+        humanoid.SeatPart
+
+
+    if seat then
+
+        local current =
+            seat
+
+
+        while current
+            and current ~= Workspace
+        do
+
+            if current:IsA("Model")
+                and current.Name
+                    == "CreatureBlobman"
+            then
+
+                return current
+            end
+
+
+            current =
+                current.Parent
+        end
+    end
+
+
+    for _, object in ipairs(
+        Workspace:GetDescendants()
+    ) do
+
+        if object:IsA("Model")
+            and object.Name
+                == "CreatureBlobman"
+        then
+
+            local blobSeat =
+                object:
+                    FindFirstChildWhichIsA(
+                        "VehicleSeat",
+                        true
+                    )
+
+
+            if blobSeat
+                and blobSeat.Occupant
+                    == humanoid
+            then
+
+                return object
+            end
+        end
+    end
+
+
+    return nil
+end
+
+
+--==============================================================
+-- BLOB ROOT
+--==============================================================
+
+local function getBlobRoot(blob)
+
+    if not blob then
+        return nil
+    end
+
+
+    return blob.PrimaryPart
+
+        or blob:FindFirstChild(
+            "HumanoidRootPart",
+            true
+        )
+
+        or blob:
+            FindFirstChildWhichIsA(
+                "BasePart",
+                true
+            )
+end
+
+
+--==============================================================
+-- CONTROLLER
+--==============================================================
+
+local function getBlobController(blob)
+
+    if not blob then
+        return nil
+    end
+
+
+    return blob:
+        FindFirstChild(
+            "BlobmanSeatAndOwnerScript",
+            true
+        )
+end
+
+
+local function getCreatureGrab(blob)
+
+    local controller =
+        getBlobController(blob)
+
+
+    if not controller then
+        return nil
+    end
+
+
+    return controller:
+        FindFirstChild(
+            "CreatureGrab",
+            true
+        )
+end
+
+
+--==============================================================
+-- BLOB DETECTOR
+--==============================================================
+
+local function getBlobDetector(
+    blob,
+    side
+)
+
+    return blob
+        and blob:
+            FindFirstChild(
+                side .. "Detector",
+                true
+            )
+end
+
+
+--==============================================================
+-- BLOB WELD
+--==============================================================
+
+local function findGrabWeld(
+    detector,
+    side
+)
+
+    if not detector then
+        return nil
+    end
+
+
+    local names = {
+
+        side .. "Weld",
+
+        "AttachPlayer",
+
+        "PlayerWeld",
+
+        "GrabWeld",
+
+        "Weld"
+    }
+
+
+    for _, name in ipairs(names) do
+
+        local object =
+            detector:
+                FindFirstChild(
+                    name,
+                    true
+                )
+
+
+        if object then
+            return object
+        end
+    end
+
+
+    for _, object in ipairs(
+        detector:GetDescendants()
+    ) do
+
+        if object:IsA("Weld")
+            or object:IsA(
+                "WeldConstraint"
+            )
+        then
+
+            return object
+        end
+    end
+
+
+    return nil
+end
+
+
+--==============================================================
+-- SELECTED TARGET
+--==============================================================
+
+local function getSelectedBlobTarget()
+
+    local player =
+        State.BlobSelectedPlayer
+
+
+    if not player
+        or player.Parent ~= Players
+    then
+
+        Window:Notify({
+
+            Title = "Blobman",
+
+            Text = "Selecione um player.",
+
+            Duration = 2
+        })
+
+
+        return nil
+    end
+
+
+    local character =
+        player.Character
+
+
+    local root =
+        character
+        and character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+
+    local humanoid =
+        character
+        and character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+
+    if not character
+        or not root
+        or not humanoid
+        or humanoid.Health <= 0
+    then
+
+        Window:Notify({
+
+            Title = "Blobman",
+
+            Text =
+                "Player indisponível.",
+
+            Duration = 2
+        })
+
+
+        return nil
+    end
+
+
+    return player,
+        character,
+        root,
+        humanoid
+end
+
+
+--==============================================================
+-- DISTANCE
+--==============================================================
+
+local function getBlobDistance(
+    blob,
+    targetRoot
+)
+
+    local blobRoot =
+        getBlobRoot(blob)
+
+
+    if not blobRoot
+        or not targetRoot
+    then
+
+        return math.huge
+    end
+
+
+    return (
+        blobRoot.Position
+        - targetRoot.Position
+    ).Magnitude
+end
+
+
+--==============================================================
+-- GRAB SIDE
+--==============================================================
+
+local function grabBlobSide(
+    blob,
+    targetRoot,
+    side
+)
+
+    local remote =
+        getCreatureGrab(blob)
+
+
+    if not remote then
+
+        log(
+            "CreatureGrab não encontrado"
+        )
+
+        return false
+    end
+
+
+    local detector =
+        getBlobDetector(
+            blob,
+            side
+        )
+
+
+    if not detector then
+
+        log(
+            side,
+            "Detector não encontrado"
+        )
+
+        return false
+    end
+
+
+    local weld =
+        findGrabWeld(
+            detector,
+            side
+        )
+
+
+    if not weld then
+
+        log(
+            side,
+            "Weld não encontrado"
+        )
+
+        return false
+    end
+
+
+    local ok =
+        pcall(function()
+
+            remote:FireServer(
+                detector,
+                targetRoot,
+                weld
+            )
+
+        end)
+
+
+    return ok
+end
+
+
+--==============================================================
+-- GRAB BEST SIDE
+--==============================================================
+
+local function grabBlobTarget(
+    blob,
+    targetRoot
+)
+
+    local first =
+        State.BlobLastSide
+
+
+    local second =
+        first == "Left"
+        and "Right"
+        or "Left"
+
+
+    State.BlobLastSide =
+        second
+
+
+    if grabBlobSide(
+        blob,
+        targetRoot,
+        first
+    ) then
+
+        return true,
+            first
+    end
+
+
+    if grabBlobSide(
+        blob,
+        targetRoot,
+        second
+    ) then
+
+        return true,
+            second
+    end
+
+
+    return false,
+        nil
+end
+
+
+--==============================================================
+-- IS TARGET HELD
+--==============================================================
+
+local function playerIsHeld(player)
+
+    if not player then
+        return false
+    end
+
+
+    local held =
+        player:
+            FindFirstChild(
+                "IsHeld",
+                true
+            )
+
+
+    return held
+        and held:IsA("BoolValue")
+        and held.Value
+end
+
+
+--==============================================================
+-- JUMP OUT
+--==============================================================
+
+local function jumpOutOfBlob()
+
+    local humanoid =
+        State.Humanoid
+
+
+    if not humanoid then
+        return
+    end
+
+
+    humanoid.Jump =
+        true
+
+
+    pcall(function()
+
+        humanoid:
+            ChangeState(
+                Enum.HumanoidStateType.Jumping
+            )
+
+    end)
+end
+
+
+--==============================================================
+-- CHECK BLOB RANGE
+--==============================================================
+
+local function checkBlobRange(
+    blob,
+    targetRoot
+)
+
+    local distance =
+        getBlobDistance(
+            blob,
+            targetRoot
+        )
+
+
+    if distance
+        > Config.BlobGrabRange
+    then
+
+        Window:Notify({
+
+            Title = "Blobman",
+
+            Text =
+                string.format(
+                    "Fora do alcance: %.1f studs",
+                    distance
+                ),
+
+            Duration = 2
+        })
+
+
+        return false
+    end
+
+
+    return true
+end
+
+
+--==============================================================
+-- LOCK PLAYER
+--==============================================================
+
+local function lockBlobPlayer()
+
+    local player,
+        character,
+        targetRoot =
+        getSelectedBlobTarget()
+
+
+    if not player then
+        return
+    end
+
+
+    local blob =
+        getMountedBlobman()
+
+
+    if not blob then
+
+        Window:Notify({
+
+            Title = "Blobman",
+
+            Text =
+                "Sente no Blobman primeiro.",
+
+            Duration = 2
+        })
+
+
+        return
+    end
+
+
+    if not checkBlobRange(
+        blob,
+        targetRoot
+    ) then
+
+        return
+    end
+
+
+    --==========================================================
+    -- GRAB
+    --==========================================================
+
+    local success,
+        side =
+        grabBlobTarget(
+            blob,
+            targetRoot
+        )
+
+
+    if not success then
+
+        Window:Notify({
+
+            Title = "Blobman",
+
+            Text =
+                "Não consegui pegar o player.",
+
+            Duration = 2
+        })
+
+
+        return
+    end
+
+
+    --==========================================================
+    -- CONFIRMAÇÃO RÁPIDA
+    --==========================================================
+
+    local deadline =
+        os.clock()
+        + Config.BlobGrabConfirmTime
+
+
+    while os.clock()
+        < deadline
+    do
+
+        if playerIsHeld(player) then
+            break
+        end
+
+
+        RunService.Heartbeat:Wait()
+    end
+
+
+    --==========================================================
+    -- DELAY EM MILISSEGUNDOS
+    --==========================================================
+
+    task.wait(
+        Config.BlobLockJumpDelay
+    )
+
+
+    --==========================================================
+    -- PULA
+    --==========================================================
+
+    jumpOutOfBlob()
+
+
+    Window:Notify({
+
+        Title = "Blobman",
+
+        Text =
+            "Lock: "
+            .. player.Name
+            .. " | "
+            .. tostring(side),
+
+        Duration = 2
+    })
+end
+
+
+--==============================================================
+-- BRING PLAYER
+--==============================================================
+
+local function bringBlobPlayer()
+
+    local player,
+        character,
+        targetRoot =
+        getSelectedBlobTarget()
+
+
+    if not player then
+        return
+    end
+
+
+    local blob =
+        getMountedBlobman()
+
+
+    if not blob then
+
+        Window:Notify({
+
+            Title = "Blobman",
+
+            Text =
+                "Sente no Blobman primeiro.",
+
+            Duration = 2
+        })
+
+
+        return
+    end
+
+
+    if not checkBlobRange(
+        blob,
+        targetRoot
+    ) then
+
+        return
+    end
+
+
+    task.spawn(function()
+
+        local deadline =
+            os.clock()
+            + Config.BlobBringTimeout
+
+
+        while State.Running
+            and player.Parent == Players
+            and targetRoot.Parent
+            and os.clock() < deadline
+        do
+
+            local distance =
+                getBlobDistance(
+                    blob,
+                    targetRoot
+                )
+
+
+            if distance
+                <= Config.BlobBringDistance
+            then
+
+                break
+            end
+
+
+            grabBlobTarget(
+                blob,
+                targetRoot
+            )
+
+
+            task.wait(
+                Config.BlobBringInterval
+            )
+        end
+
+
+        Window:Notify({
+
+            Title = "Blobman",
+
+            Text =
+                "Bring: "
+                .. player.Name,
+
+            Duration = 2
+        })
+
+    end)
+end
+
+
+--==============================================================
+-- KICK PLAYER
+--==============================================================
+
+local function kickBlobPlayer()
+
+    local player,
+        character,
+        targetRoot =
+        getSelectedBlobTarget()
+
+
+    if not player then
+        return
+    end
+
+
+    local blob =
+        getMountedBlobman()
+
+
+    if not blob then
+
+        Window:Notify({
+
+            Title = "Blobman",
+
+            Text =
+                "Sente no Blobman primeiro.",
+
+            Duration = 2
+        })
+
+
+        return
+    end
+
+
+    if not checkBlobRange(
+        blob,
+        targetRoot
+    ) then
+
+        return
+    end
+
+
+    task.spawn(function()
+
+        --======================================================
+        -- 1. BLOBMAN PEGA O PLAYER
+        --======================================================
+
+        local success =
+            grabBlobTarget(
+                blob,
+                targetRoot
+            )
+
+
+        if not success then
+
+            Window:Notify({
+
+                Title = "Blobman",
+
+                Text =
+                    "Grab do kick falhou.",
+
+                Duration = 2
+            })
+
+
+            return
+        end
+
+
+        --======================================================
+        -- 2. ESPERA WELD / OWNERSHIP
+        --======================================================
+
+        task.wait(
+            Config.BlobKickGrabDelay
+        )
+
+
+        if not targetRoot.Parent then
+            return
+        end
+
+
+        -- tenta passar pelo mecanismo de ownership do jogo
+
+        pcall(function()
+
+            SetNetworkOwner:
+                FireServer(
+                    targetRoot,
+                    targetRoot.CFrame
+                )
+
+        end)
+
+
+        RunService.Heartbeat:Wait()
+
+
+        --======================================================
+        -- 3. DIREÇÃO
+        --======================================================
+
+        local myRoot =
+            State.Root
+
+
+        if not myRoot
+            or not myRoot.Parent
+        then
+
+            return
+        end
+
+
+        local rawDirection =
+            targetRoot.Position
+            - myRoot.Position
+
+
+        local direction
+
+
+        if rawDirection.Magnitude
+            > 0.01
+        then
+
+            direction =
+                rawDirection.Unit
+
+        else
+
+            direction =
+                myRoot.CFrame.LookVector
+        end
+
+
+        local wantedVelocity =
+
+            direction
+            * Config.BlobKickSpeed
+
+            + Vector3.new(
+                0,
+                Config.BlobKickUpward,
+                0
+            )
+
+
+        --======================================================
+        -- 4. KICK
+        --======================================================
+
+        for _ = 1,
+            Config.BlobKickFrames
+        do
+
+            if not State.Running
+                or not targetRoot.Parent
+            then
+
+                break
+            end
+
+
+            local current =
+                targetRoot:
+                    GetVelocityAtPosition(
+                        targetRoot.Position
+                    )
+
+
+            local delta =
+                wantedVelocity
+                - current
+
+
+            pcall(function()
+
+                targetRoot:
+                    ApplyImpulse(
+                        delta
+                        * targetRoot.AssemblyMass
+                    )
+
+            end)
+
+
+            pcall(function()
+
+                targetRoot.AssemblyLinearVelocity =
+                    wantedVelocity
+
+
+                targetRoot.AssemblyAngularVelocity =
+                    Vector3.new(
+                        25,
+                        35,
+                        20
+                    )
+
+            end)
+
+
+            RunService.Heartbeat:Wait()
+        end
+
+
+        Window:Notify({
+
+            Title = "Blobman",
+
+            Text =
+                "Kick físico: "
+                .. player.Name,
+
+            Duration = 2
+        })
+
+    end)
+end
+
+
+--==============================================================
+-- BLOBMAN GUI
+--==============================================================
+
+local BlobTab =
+    Window:CreateTab(
+        "Blobman",
+        "package"
+    )
+
+
+local BlobSection =
+    BlobTab:CreateSection(
+        "Player"
+    )
+
+
+local initialPlayers,
+    initialMap =
+    buildPlayerList()
+
+
+State.BlobPlayerMap =
+    initialMap
+
+
+local BlobDropdown
+
+
+BlobDropdown =
+    BlobSection:CreateDropdown({
+
+        Text =
+            "Selecionar player",
+
+        List =
+            initialPlayers,
+
+        Default =
+            initialPlayers[1],
+
+        Flag =
+            "BlobPlayer",
+
+        Callback =
+            function(value)
+
+                State.BlobSelectedPlayer =
+                    State.BlobPlayerMap[
+                        value
+                    ]
+
+            end
+    })
+
+
+State.BlobSelectedPlayer =
+    State.BlobPlayerMap[
+        initialPlayers[1]
+    ]
+
+
+--==============================================================
+-- BLOB BUTTONS
+--==============================================================
+
+BlobSection:CreateButton({
+
+    Text = "Lock Player",
+
+    Callback =
+        lockBlobPlayer
+})
+
+
+BlobSection:CreateButton({
+
+    Text = "Kick Player",
+
+    Callback =
+        kickBlobPlayer
+})
+
+
+BlobSection:CreateButton({
+
+    Text = "Bring Player",
+
+    Callback =
+        bringBlobPlayer
+})
+
+
+--==============================================================
+-- PLAYER DROPDOWN REFRESH
+--==============================================================
+
+task.spawn(function()
+
+    while State.Running do
+
+        task.wait(1)
+
+
+        local list, map =
+            buildPlayerList()
+
+
+        local signature =
+            table.concat(
+                list,
+                "\0"
+            )
+
+
+        if signature
+            ~= State.BlobPlayerSignature
+        then
+
+            State.BlobPlayerSignature =
+                signature
+
+
+            local previous =
+                State.BlobSelectedPlayer
+
+
+            State.BlobPlayerMap =
+                map
+
+
+            BlobDropdown:
+                Refresh(
+                    list
+                )
+
+
+            local restored =
+                false
+
+
+            if previous
+                and previous.Parent
+                    == Players
+            then
+
+                for label, player
+                    in pairs(map)
+                do
+
+                    if player
+                        == previous
+                    then
+
+                        BlobDropdown:
+                            SetValue(
+                                label
+                            )
+
+
+                        State.BlobSelectedPlayer =
+                            player
+
+
+                        restored =
+                            true
+
+                        break
+                    end
+                end
+            end
+
+
+            if not restored then
+
+                local first =
+                    list[1]
+
+
+                BlobDropdown:
+                    SetValue(
+                        first
+                    )
+
+
+                State.BlobSelectedPlayer =
+                    map[first]
+            end
+        end
+    end
+end)
+
+
+--==============================================================
+-- NAMECALL HOOK
+--==============================================================
+
+local OldNamecall
+
+
+OldNamecall =
+    hookmetamethod(
+
+        game,
+
+        "__namecall",
+
+        newcclosure(function(
+            self,
+            ...
+        )
+
+            local method =
+                getnamecallmethod()
+
+
+            if not State.Running
+                or method ~= "FireServer"
+                or checkcaller()
+            then
+
+                return OldNamecall(
+                    self,
+                    ...
+                )
+            end
+
+
+            local args =
+                table.pack(...)
+
+
+            --==================================================
+            -- ORIGINAL PRIMEIRO
+            --==================================================
+
+            local result =
+                table.pack(
+                    OldNamecall(
+                        self,
+                        ...
+                    )
+                )
+
+
+            --==================================================
+            -- CREATE GRAB
+            --==================================================
+
+            if self
+                == CreateGrabLine
+            then
+
+                local object =
+                    args[1]
+
+
+                if valid(object) then
+
+                    State.GrabbedObject =
+                        object
+                end
+
+
+            --==================================================
+            -- OWNER
+            --==================================================
+
+            elseif self
+                == SetNetworkOwner
+            then
+
+                local object =
+                    args[1]
+
+
+                if valid(object) then
+
+                    State.OwnerObject =
+                        object
+
+                    State.GrabbedObject =
+                        object
+                end
+
+
+            --==================================================
+            -- RELEASE
+            --==================================================
+
+            elseif self
+                == DestroyGrabLine
+            then
+
+                local object =
+                    args[1]
+
+                    or State.OwnerObject
+
+                    or State.GrabbedObject
+
+
+                local button =
+                    getReleaseButton()
+
+
+                -- Mouse2 somente
+
+                if button == 2
+                    and valid(object)
+                then
+
+                    task.spawn(
+                        throwObject,
+                        object
+                    )
+                end
+
+
+                State.GrabbedObject =
+                    nil
+
+
+                State.OwnerObject =
+                    nil
+
+
+                State.LastMouseButton =
+                    0
+
+
+                State.LastMouseTime =
+                    0
+            end
+
+
+            return table.unpack(
+                result,
+                1,
+                result.n
+            )
+
+        end)
+    )
+
+
+--==============================================================
+-- READY
+--==============================================================
+
+Window:Notify({
+
+    Title =
+        "Manga Hub",
+
+    Text =
+        "Throw + Proteção + Blobman carregados",
+
+    Duration =
+        4
+})
+
+
