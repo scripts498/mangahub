@@ -4047,39 +4047,48 @@ OldNamecall =
 
     RunService.RenderStepped:Connect(updateTarget)
 
-    local SilentAimTab = Window:Tab({ Title = "silent aim", Icon = "crosshair" })
+    local SilentAimTab =
+        Window:CreateTab(
+            "Silent Aim",
+            "🎯"
+        )
 
-    SilentAimTab:Section({ Title = "Silent Aim Settings" })
+    local SilentAimSection =
+        SilentAimTab:
+            CreateSection(
+                "Silent Aim Settings"
+            )
 
-    SilentAimTab:Toggle({
-        Title = "Silent Aim",
-        Desc = "pega a pessoa mais perto do cursor/centro da tela",
-        Value = false,
+    SilentAimSection:CreateToggle({
+        Text = "Silent Aim",
+        Default = false,
+        Flag = "SilentAimEnabled",
         Callback = function(state)
             SilentAim.Enabled = state
             if not state then
                 SilentAim.TargetPosition = nil
             end
-        end,
+        end
     })
 
-    SilentAimTab:Dropdown({
-        Title = "Target Mode",
-        Desc = "cursor = mais perto do mouse / center = mais perto do centro da tela",
-        Values = { "cursor", "center" },
-        Value = "cursor",
+    SilentAimSection:CreateDropdown({
+        Text = "Target Mode",
+        List = { "cursor", "center" },
+        Default = "cursor",
+        Flag = "SilentAimTargetMode",
         Callback = function(selected)
             SilentAim.TargetMode = selected
-        end,
+        end
     })
 
-    SilentAimTab:Slider({
-        Title = "Max Distance",
-        Desc = "Distância máxima que o silent aim funciona",
+    SilentAimSection:CreateSlider({
+        Text = "Max Distance",
         Min = 5,
         Max = 100,
-        Value = 28,
+        Default = 28,
+        Decimals = 0,
+        Flag = "SilentAimDistance",
         Callback = function(val)
             SilentAim.Distance = val
-        end,
+        end
     })
