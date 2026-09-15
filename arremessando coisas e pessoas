@@ -34,6 +34,20 @@ if ENV.MangaHubState then
             end)
         end
     end
+
+    if ENV.MangaHubState.FreezeActive
+        and ENV.MangaHubState.FreezeStates
+    then
+        for part, anchored in pairs(ENV.MangaHubState.FreezeStates) do
+            if part
+                and part.Parent
+            then
+                pcall(function()
+                    part.Anchored = anchored
+                end)
+            end
+        end
+    end
 end
 
 pcall(function()
@@ -51,14 +65,15 @@ local Config = {
     AntiGrab = true,
     AntiOwnershipSpam = true,
 
-    GrabTail = 0.32,
-    OwnershipTail = 0.40,
+    GrabTail = 0.30,
+
+    OwnershipQuietTail = 0.08,
 
     StruggleInterval = 0.012,
-    StruggleBurstCount = 14,
-    StruggleBurstDelay = 0.006,
+    StruggleBurstCount = 16,
+    StruggleBurstDelay = 0.005,
 
-    RagdollResetInterval = 0.055,
+    RagdollResetInterval = 0.045,
 
     MaxHorizontal = 90,
     MaxVertical = 115,
@@ -69,11 +84,18 @@ local Config = {
     SafeUpVelocity = 78,
     SafeDownVelocity = -95,
 
-    BlobGrabRange = 20,
-    BlobLockJumpDelay = 0.010,
-    BlobGrabConfirmTime = 0.060,
-    BlobBringTimeout = 2,
-    BlobBringInterval = 0.075,
+    BlobLockHoldTime = 2,
+    BlobLockJumpInterval = 0.25,
+    BlobBringStickTime = 0.25,
+
+    OpFlingAura = false,
+    OpFlingRange = 15,
+    OpFlingPulse = 0.03,
+    OpOwnershipRequests = 4,
+    OpFlingSpeed = 400,
+    OpFlingUpSpeed = 400,
+    OpFlingAngular = 90,
+    OpFlingForceFrames = 3,
 
     Debug = false
 }
@@ -84,12 +106,14 @@ local State = {
     Connections = {},
     CharacterConnections = {},
     OwnerConnections = {},
-    OwnerMarkers = {},
 
     Character = nil,
     Humanoid = nil,
     Root = nil,
+    Head = nil,
     IsHeld = nil,
+
+    HeadPartOwner = nil,
 
     GrabbedObject = nil,
     OwnerObject = nil,
@@ -99,7 +123,8 @@ local State = {
     LastMouseTime = 0,
 
     GrabUntil = 0,
-    OwnershipUntil = 0,
+
+    OwnershipLastSeen = 0,
 
     LastStruggle = 0,
     LastRagdoll = 0,
@@ -108,7 +133,8 @@ local State = {
 
     LastSafeVelocity = Vector3.zero,
 
-    JumpUntil = 0,
+    FreezeActive = false,
+    FreezeStates = {},
 
     InternalFlingDisabled = false,
 
@@ -119,6 +145,231 @@ local State = {
 
 ENV.MangaHubState = State
 
+if ENV.MangaMouseController
+    and ENV.MangaMouseController.Stop
+then
+    pcall(
+        ENV.MangaMouseController.Stop
+    )
+end
+
+local MouseController = {
+    Running = true,
+    MangaOpen = true,
+    RightMouseDown = false,
+    Connections = {}
+}
+
+ENV.MangaMouseController =
+    MouseController
+
+local function unlockMouse()
+    if not MouseController.Running
+        or not State.Running
+    then
+        return
+    end
+
+    UserInputService.MouseBehavior =
+        Enum.MouseBehavior.Default
+
+    UserInputService.MouseIconEnabled =
+        true
+end
+
+local function holdRightMouse()
+    if not MouseController.Running
+        or not State.Running
+        or not MouseController.MangaOpen
+    then
+        return
+    end
+
+    MouseController.RightMouseDown =
+        true
+
+    UserInputService.MouseBehavior =
+        Enum.MouseBehavior.LockCurrentPosition
+
+    UserInputService.MouseIconEnabled =
+        false
+end
+
+local function releaseRightMouse()
+    MouseController.RightMouseDown =
+        false
+
+    if not MouseController.Running
+        or not State.Running
+        or not MouseController.MangaOpen
+    then
+        return
+    end
+
+    UserInputService.MouseBehavior =
+        Enum.MouseBehavior.Default
+
+    UserInputService.MouseIconEnabled =
+        true
+end
+
+local function closeMangaMouse()
+    MouseController.RightMouseDown =
+        false
+
+    UserInputService.MouseBehavior =
+        Enum.MouseBehavior.LockCenter
+
+    UserInputService.MouseIconEnabled =
+        false
+end
+
+local function openMangaMouse()
+    MouseController.RightMouseDown =
+        false
+
+    unlockMouse()
+end
+
+local function stopMouseController()
+    if not MouseController.Running then
+        return
+    end
+
+    MouseController.Running =
+        false
+
+    for _, connection in ipairs(
+        MouseController.Connections
+    ) do
+        pcall(function()
+            connection:Disconnect()
+        end)
+    end
+
+    table.clear(
+        MouseController.Connections
+    )
+
+    pcall(function()
+        RunService:
+            UnbindFromRenderStep(
+                "MangaHub_MouseUnlock"
+            )
+    end)
+
+    if ENV.MangaMouseController
+        == MouseController
+    then
+        ENV.MangaMouseController =
+            nil
+    end
+end
+
+MouseController.Stop =
+    stopMouseController
+
+table.insert(
+    MouseController.Connections,
+
+    UserInputService.InputBegan:
+        Connect(function(
+            input
+        )
+            if not MouseController.Running
+                or not State.Running
+            then
+                return
+            end
+
+            if input.UserInputType
+                == Enum.UserInputType.MouseButton2
+            then
+                if MouseController.MangaOpen then
+                    holdRightMouse()
+                end
+
+                return
+            end
+
+            if input.KeyCode
+                == Enum.KeyCode.N
+            then
+                if UserInputService:
+                    GetFocusedTextBox()
+                then
+                    return
+                end
+
+                MouseController.MangaOpen =
+                    not MouseController.MangaOpen
+
+                if MouseController.MangaOpen then
+                    openMangaMouse()
+                else
+                    closeMangaMouse()
+                end
+            end
+        end)
+)
+
+table.insert(
+    MouseController.Connections,
+
+    UserInputService.InputEnded:
+        Connect(function(input)
+            if input.UserInputType
+                == Enum.UserInputType.MouseButton2
+            then
+                releaseRightMouse()
+            end
+        end)
+)
+
+RunService:
+    BindToRenderStep(
+        "MangaHub_MouseUnlock",
+        Enum.RenderPriority.Camera.Value + 10,
+
+        function()
+            if not MouseController.Running then
+                return
+            end
+
+            if not State.Running then
+                stopMouseController()
+                return
+            end
+
+            if not MouseController.MangaOpen then
+                return
+            end
+
+            if MouseController.RightMouseDown then
+                if UserInputService.MouseBehavior
+                    ~= Enum.MouseBehavior.LockCurrentPosition
+                then
+                    UserInputService.MouseBehavior =
+                        Enum.MouseBehavior.LockCurrentPosition
+                end
+
+                UserInputService.MouseIconEnabled =
+                    false
+
+                return
+            end
+
+            if UserInputService.MouseBehavior
+                == Enum.MouseBehavior.LockCenter
+            then
+                UserInputService.MouseBehavior =
+                    Enum.MouseBehavior.Default
+            end
+        end
+    )
+
+unlockMouse()
+
 local function log(...)
     if Config.Debug then
         print("[MANGA HUB]", ...)
@@ -126,53 +377,80 @@ local function log(...)
 end
 
 local function connect(signal, callback)
-    local connection = signal:Connect(callback)
-    table.insert(State.Connections, connection)
+    local connection =
+        signal:Connect(callback)
+
+    table.insert(
+        State.Connections,
+        connection
+    )
+
     return connection
 end
 
-local function connectCharacter(signal, callback)
-    local connection = signal:Connect(callback)
-    table.insert(State.CharacterConnections, connection)
+local function connectCharacter(
+    signal,
+    callback
+)
+    local connection =
+        signal:Connect(callback)
+
+    table.insert(
+        State.CharacterConnections,
+        connection
+    )
+
     return connection
 end
 
 local function clearCharacterConnections()
-    for _, connection in ipairs(State.CharacterConnections) do
+    for _, connection in ipairs(
+        State.CharacterConnections
+    ) do
         pcall(function()
             connection:Disconnect()
         end)
     end
 
-    table.clear(State.CharacterConnections)
+    table.clear(
+        State.CharacterConnections
+    )
 
-    for marker, connection in pairs(State.OwnerConnections) do
+    for marker, connection in pairs(
+        State.OwnerConnections
+    ) do
         pcall(function()
             connection:Disconnect()
         end)
 
-        State.OwnerConnections[marker] = nil
+        State.OwnerConnections[marker] =
+            nil
     end
-
-    table.clear(State.OwnerMarkers)
 end
 
-local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents")
+local GrabEvents =
+    ReplicatedStorage:
+        WaitForChild(
+            "GrabEvents"
+        )
 
 local CreateGrabLine =
-    GrabEvents:WaitForChild(
-        "CreateGrabLine"
-    )
+    GrabEvents:
+        WaitForChild(
+            "CreateGrabLine"
+        )
 
 local SetNetworkOwner =
-    GrabEvents:WaitForChild(
-        "SetNetworkOwner"
-    )
+    GrabEvents:
+        WaitForChild(
+            "SetNetworkOwner"
+        )
 
 local DestroyGrabLine =
-    GrabEvents:WaitForChild(
-        "DestroyGrabLine"
-    )
+    GrabEvents:
+        WaitForChild(
+            "DestroyGrabLine"
+        )
 
 local CharacterEvents =
     ReplicatedStorage:
@@ -200,21 +478,22 @@ local GameCorrectionEvents =
 
 local StopAllVelocity =
     GameCorrectionEvents
-    and GameCorrectionEvents:
-        FindFirstChild(
-            "StopAllVelocity"
-        )
+        and GameCorrectionEvents:
+            FindFirstChild(
+                "StopAllVelocity"
+            )
 
 local MangaUI
 
 do
-    local ok, result = pcall(function()
-        return loadstring(
-            game:HttpGet(
-                "https://raw.githubusercontent.com/scripts498/mangahub/main/mangalibrary"
-            )
-        )()
-    end)
+    local ok, result =
+        pcall(function()
+            return loadstring(
+                game:HttpGet(
+                    "https://raw.githubusercontent.com/scripts498/mangahub/main/mangalibrary"
+                )
+            )()
+        end)
 
     if not ok then
         error(
@@ -223,15 +502,16 @@ do
         )
     end
 
-    MangaUI = result
+    MangaUI =
+        result
 end
 
 local Window =
     MangaUI:CreateWindow({
-        Title = "Manga Hub",
-        SubTitle = "Throw + Protection + Blobman",
+        Title = "Manga Hub | Arremessando coisas e pessoas | Brasil",
+        SubTitle = "by hackmod_01299",
         Theme = "Dark",
-        ToggleKey = Enum.KeyCode.RightControl,
+        ToggleKey = Enum.KeyCode.N,
         ConfigFolder = "MangaHub"
     })
 
@@ -282,68 +562,10 @@ local function getAssemblyRoot(object)
     return nil
 end
 
-local ThrowTab =
-    Window:CreateTab(
-        "Throw",
-        "bomb"
-    )
-
-local ThrowSection =
-    ThrowTab:CreateSection(
-        "Throw Power"
-    )
-
-ThrowSection:CreateToggle({
-    Text = "Throw habilitado",
-    Default = true,
-    Flag = "ThrowEnabled",
-
-    Callback = function(value)
-        Config.ThrowEnabled =
-            value
-    end
-})
-
-ThrowSection:CreateSlider({
-    Text = "Força",
-
-    Min = Config.ThrowMin,
-    Max = Config.ThrowMax,
-    Default = Config.ThrowForce,
-
-    Decimals = 0,
-
-    Flag = "ThrowForce",
-
-    Callback = function(value)
-        Config.ThrowForce =
-            math.clamp(
-                math.floor(
-                    value + 0.5
-                ),
-                Config.ThrowMin,
-                Config.ThrowMax
-            )
-    end
-})
-
-local ProtectionTab =
-    Window:CreateTab(
-        "Proteção",
-        "shield"
-    )
-
-local ProtectionSection =
-    ProtectionTab:
-        CreateSection(
-            "Proteção"
-        )
-
 local function refreshCorrectionRemotes()
     if not GameCorrectionEvents
         or not GameCorrectionEvents.Parent
     then
-
         GameCorrectionEvents =
             ReplicatedStorage:
                 FindFirstChild(
@@ -351,23 +573,22 @@ local function refreshCorrectionRemotes()
                 )
     end
 
-    if GameCorrectionEvents then
-        if not StopAllVelocity
+    if GameCorrectionEvents
+        and (
+            not StopAllVelocity
             or not StopAllVelocity.Parent
-        then
-
-            StopAllVelocity =
-                GameCorrectionEvents:
-                    FindFirstChild(
-                        "StopAllVelocity"
-                    )
-        end
+        )
+    then
+        StopAllVelocity =
+            GameCorrectionEvents:
+                FindFirstChild(
+                    "StopAllVelocity"
+                )
     end
 
     if not RagdollRemote
         or not RagdollRemote.Parent
     then
-
         RagdollRemote =
             CharacterEvents:
                 FindFirstChild(
@@ -402,27 +623,104 @@ local function findIsHeld()
     return nil
 end
 
-local function activateGrab(duration)
+local function getHeadPartOwner()
+    local head =
+        State.Head
+
+    if not head
+        or not head.Parent
+    then
+        return nil
+    end
+
+    return head:
+        FindFirstChild(
+            "PartOwner"
+        )
+end
+
+local function markerValue(marker)
+    if not marker
+        or not marker.Parent
+    then
+        return nil
+    end
+
+    local ok, value =
+        pcall(function()
+            return marker.Value
+        end)
+
+    if ok then
+        return value
+    end
+
+    return nil
+end
+
+local function markerHostile(marker)
+    if not marker
+        or not marker.Parent
+    then
+        return false
+    end
+
+    local value =
+        markerValue(marker)
+
+    if typeof(value)
+        == "string"
+    then
+        if value == "" then
+            return true
+        end
+
+        return string.lower(
+            value
+        ) ~= string.lower(
+            LocalPlayer.Name
+        )
+    end
+
+    if typeof(value)
+        == "number"
+    then
+        return value
+            ~= LocalPlayer.UserId
+    end
+
+    if typeof(value)
+        == "Instance"
+    then
+        if value
+            == LocalPlayer
+            or value
+                == LocalPlayer.Character
+        then
+            return false
+        end
+
+        if LocalPlayer.Character
+            and value:
+                IsDescendantOf(
+                    LocalPlayer.Character
+                )
+        then
+            return false
+        end
+
+        return true
+    end
+
+    return true
+end
+
+local function activateGrab()
     State.GrabUntil =
         math.max(
             State.GrabUntil,
             os.clock()
-                + (
-                    duration
-                    or Config.GrabTail
-                )
-        )
-end
-
-local function activateOwnership(duration)
-    State.OwnershipUntil =
-        math.max(
-            State.OwnershipUntil,
-            os.clock()
-                + (
-                    duration
-                    or Config.OwnershipTail
-                )
+                + Config.GrabTail
         )
 end
 
@@ -432,10 +730,33 @@ local function grabActive()
             < State.GrabUntil
 end
 
+local function ownershipMarkerActive()
+    if not Config.AntiOwnershipSpam then
+        return false
+    end
+
+    local marker =
+        getHeadPartOwner()
+
+    return marker
+        and markerHostile(
+            marker
+        )
+        or false
+end
+
 local function ownershipActive()
-    return Config.AntiOwnershipSpam
-        and os.clock()
-            < State.OwnershipUntil
+    if not Config.AntiOwnershipSpam then
+        return false
+    end
+
+    if ownershipMarkerActive() then
+        return true
+    end
+
+    return os.clock()
+        - State.OwnershipLastSeen
+        <= Config.OwnershipQuietTail
 end
 
 local function defenseActive()
@@ -456,33 +777,8 @@ local function isHeld()
         and held.Value == true
 end
 
-local function hasPartOwner()
-    if not Config.AntiOwnershipSpam then
-        return false
-    end
-
-    for marker in pairs(
-        State.OwnerMarkers
-    ) do
-
-        if marker
-            and marker.Parent
-        then
-            return true
-        end
-    end
-
-    return false
-end
-
 local function fireStruggle()
     if not State.Running then
-        return
-    end
-
-    if not Config.AntiGrab
-        and not Config.AntiOwnershipSpam
-    then
         return
     end
 
@@ -495,12 +791,6 @@ local function fireStruggle()
 end
 
 local function fireStopVelocity()
-    if not Config.AntiOwnershipSpam
-        and not Config.AntiGrab
-    then
-        return
-    end
-
     refreshCorrectionRemotes()
 
     if not StopAllVelocity then
@@ -514,10 +804,6 @@ local function fireStopVelocity()
 end
 
 local function fireRagdollReset()
-    if not ownershipActive() then
-        return
-    end
-
     refreshCorrectionRemotes()
 
     if not RagdollRemote then
@@ -567,13 +853,12 @@ local function struggleBurst()
         for _ = 1,
             Config.StruggleBurstCount
         do
-
             if not State.Running then
                 break
             end
 
-            if not Config.AntiGrab
-                and not Config.AntiOwnershipSpam
+            if not defenseActive()
+                and not isHeld()
             then
                 break
             end
@@ -585,9 +870,140 @@ local function struggleBurst()
             )
         end
 
-        State.BurstRunning =
-            false
+        State.BurstRunning = false
     end)
+end
+
+local function zeroCharacterPhysics()
+    local character =
+        State.Character
+
+    if not character then
+        return
+    end
+
+    for _, object in ipairs(
+        character:GetDescendants()
+    ) do
+        if object:IsA(
+            "BasePart"
+        )
+        then
+            pcall(function()
+                object.AssemblyLinearVelocity =
+                    Vector3.zero
+
+                object.AssemblyAngularVelocity =
+                    Vector3.zero
+            end)
+        end
+    end
+end
+
+local function freezePart(part)
+    if not part
+        or not part:IsA(
+            "BasePart"
+        )
+        or not part.Parent
+    then
+        return
+    end
+
+    if State.FreezeStates[
+        part
+    ] == nil
+    then
+        State.FreezeStates[
+            part
+        ] = part.Anchored
+    end
+
+    pcall(function()
+        part.AssemblyLinearVelocity =
+            Vector3.zero
+
+        part.AssemblyAngularVelocity =
+            Vector3.zero
+
+        part.Anchored =
+            true
+    end)
+end
+
+local function freezeCharacter()
+    local character =
+        State.Character
+
+    if not character then
+        return
+    end
+
+    if not State.FreezeActive then
+        State.FreezeStates = {}
+        State.FreezeActive = true
+    end
+
+    for _, object in ipairs(
+        character:GetDescendants()
+    ) do
+        if object:IsA(
+            "BasePart"
+        )
+        then
+            freezePart(
+                object
+            )
+        end
+    end
+
+    zeroCharacterPhysics()
+end
+
+local function releaseCharacterFreeze()
+    if not State.FreezeActive then
+        return
+    end
+
+    zeroCharacterPhysics()
+
+    fireStopVelocity()
+
+    for part, originalAnchored in pairs(
+        State.FreezeStates
+    ) do
+        if part
+            and part.Parent
+        then
+            pcall(function()
+                part.AssemblyLinearVelocity =
+                    Vector3.zero
+
+                part.AssemblyAngularVelocity =
+                    Vector3.zero
+
+                part.Anchored =
+                    originalAnchored
+            end)
+        end
+    end
+
+    table.clear(
+        State.FreezeStates
+    )
+
+    State.FreezeActive =
+        false
+
+    local root =
+        State.Root
+
+    if root
+        and root.Parent
+    then
+        State.LastSafeVelocity =
+            Vector3.zero
+    end
 end
 
 local function restoreHumanoid()
@@ -604,7 +1020,6 @@ local function restoreHumanoid()
         and humanoid.SeatPart
             == nil
     then
-
         humanoid.Sit =
             false
     end
@@ -627,23 +1042,12 @@ local function restoreHumanoid()
         or humanoidState
             == Enum.HumanoidStateType.FallingDown
     then
-
         pcall(function()
             humanoid:
                 ChangeState(
                     Enum.HumanoidStateType.GettingUp
                 )
         end)
-    end
-
-    if os.clock()
-        < State.JumpUntil
-        and humanoid.SeatPart
-            == nil
-    then
-
-        humanoid.Jump =
-            true
     end
 end
 
@@ -682,11 +1086,9 @@ local function getSafeAttackVelocity()
     if horizontal.Magnitude
         > Config.MaxHorizontal
     then
-
         if movement.Magnitude
             > 0.01
         then
-
             horizontal =
                 movement.Unit
                 * math.min(
@@ -695,7 +1097,6 @@ local function getSafeAttackVelocity()
                     Config.MaxHorizontal
                 )
         else
-
             horizontal =
                 Vector3.zero
         end
@@ -707,7 +1108,6 @@ local function getSafeAttackVelocity()
     if vertical
         > Config.MaxVertical
     then
-
         vertical =
             math.clamp(
                 State.LastSafeVelocity.Y,
@@ -718,7 +1118,6 @@ local function getSafeAttackVelocity()
     elseif vertical
         < -Config.MaxVertical
     then
-
         vertical =
             math.clamp(
                 State.LastSafeVelocity.Y,
@@ -734,9 +1133,9 @@ local function getSafeAttackVelocity()
     )
 end
 
-local function sanitizeAttackPhysics(force)
-    if not force
-        and not defenseActive()
+local function sanitizeGrabPhysics()
+    if not grabActive()
+        or ownershipActive()
     then
         return
     end
@@ -776,37 +1175,25 @@ local function sanitizeAttackPhysics(force)
             - State.LastSafeVelocity
         ).Magnitude
 
-    local badHorizontal =
+    local suspicious =
         horizontal.Magnitude
             > Config.MaxHorizontal
-
-    local badVertical =
-        math.abs(
+        or math.abs(
             velocity.Y
         ) > Config.MaxVertical
-
-    local badAngular =
-        angular.Magnitude
+        or angular.Magnitude
             > Config.MaxAngular
-
-    local badDelta =
-        delta
+        or delta
             > Config.MaxVelocityDelta
 
-    if force
-        or badAngular
+    if angular.Magnitude
+        > Config.MaxAngular
     then
-
         root.AssemblyAngularVelocity =
             Vector3.zero
     end
 
-    if force
-        or badHorizontal
-        or badVertical
-        or badDelta
-    then
-
+    if suspicious then
         root.AssemblyLinearVelocity =
             getSafeAttackVelocity()
     end
@@ -817,53 +1204,28 @@ local function ownershipPulse()
         return
     end
 
-    activateOwnership()
+    State.OwnershipLastSeen =
+        os.clock()
 
-    sanitizeAttackPhysics(
-        true
-    )
+    freezeCharacter()
+
+    restoreHumanoid()
 
     fireStruggle()
-
     fireStopVelocity()
-
     fireRagdollReset()
 
     struggleBurst()
 
     task.defer(function()
-        if not State.Running then
+        if not State.Running
+            or not ownershipActive()
+        then
             return
         end
 
-        sanitizeAttackPhysics(
-            true
-        )
-    end)
-
-    task.spawn(function()
-        for _ = 1, 4 do
-            RunService.Heartbeat:
-                Wait()
-
-            if not State.Running
-                or not Config.AntiOwnershipSpam
-            then
-                break
-            end
-
-            activateOwnership()
-
-            fireStruggle()
-
-            fireStopVelocity()
-
-            fireRagdollReset()
-
-            sanitizeAttackPhysics(
-                true
-            )
-        end
+        freezeCharacter()
+        zeroCharacterPhysics()
     end)
 end
 
@@ -874,28 +1236,81 @@ local function grabPulse()
 
     activateGrab()
 
-    sanitizeAttackPhysics(
-        true
-    )
+    restoreHumanoid()
 
     fireStruggle()
-
     fireStopVelocity()
 
+    sanitizeGrabPhysics()
+
     struggleBurst()
-
-    task.defer(function()
-        if not State.Running then
-            return
-        end
-
-        sanitizeAttackPhysics(
-            true
-        )
-    end)
 end
 
-local function unregisterPartOwner(marker)
+local function registerHeadPartOwner(
+    marker
+)
+    if not marker
+        or marker.Name
+            ~= "PartOwner"
+        or marker.Parent
+            ~= State.Head
+    then
+        return
+    end
+
+    State.HeadPartOwner =
+        marker
+
+    local old =
+        State.OwnerConnections[
+            marker
+        ]
+
+    if old then
+        pcall(function()
+            old:Disconnect()
+        end)
+    end
+
+    local ok, connection =
+        pcall(function()
+            return marker:
+                GetPropertyChangedSignal(
+                    "Value"
+                ):
+                Connect(function()
+                    if not State.Running
+                        or not Config.AntiOwnershipSpam
+                    then
+                        return
+                    end
+
+                    if markerHostile(
+                        marker
+                    ) then
+                        ownershipPulse()
+                    end
+                end)
+        end)
+
+    if ok
+        and connection
+    then
+        State.OwnerConnections[
+            marker
+        ] = connection
+    end
+
+    if markerHostile(
+        marker
+    ) then
+        ownershipPulse()
+    end
+end
+
+local function unregisterHeadPartOwner(
+    marker
+)
     local connection =
         State.OwnerConnections[
             marker
@@ -912,90 +1327,31 @@ local function unregisterPartOwner(marker)
         ] = nil
     end
 
-    State.OwnerMarkers[
-        marker
-    ] = nil
+    if State.HeadPartOwner
+        == marker
+    then
+        State.HeadPartOwner =
+            nil
+    end
 
-    if Config.AntiOwnershipSpam then
-        activateOwnership(
-            Config.OwnershipTail
+    State.OwnershipLastSeen =
+        os.clock()
+end
+
+local function scanHeadOwner()
+    local marker =
+        getHeadPartOwner()
+
+    if marker
+        and marker
+            ~= State.HeadPartOwner
+    then
+        registerHeadPartOwner(
+            marker
         )
     end
-end
 
-local function registerPartOwner(marker)
-    if not marker
-        or marker.Name
-            ~= "PartOwner"
-        or not marker.Parent
-    then
-        return
-    end
-
-    if State.OwnerMarkers[
-        marker
-    ] then
-        return
-    end
-
-    State.OwnerMarkers[
-        marker
-    ] = true
-
-    local ok, connection =
-        pcall(function()
-
-            return marker:
-                GetPropertyChangedSignal(
-                    "Value"
-                ):
-                Connect(function()
-
-                    if not State.Running
-                        or not Config.AntiOwnershipSpam
-                    then
-                        return
-                    end
-
-                    ownershipPulse()
-                end)
-        end)
-
-    if ok
-        and connection
-    then
-
-        State.OwnerConnections[
-            marker
-        ] = connection
-    end
-
-    if Config.AntiOwnershipSpam then
-        ownershipPulse()
-    end
-end
-
-local function scanPartOwners()
-    local character =
-        State.Character
-
-    if not character then
-        return
-    end
-
-    for _, object in ipairs(
-        character:GetDescendants()
-    ) do
-
-        if object.Name
-            == "PartOwner"
-        then
-
-            registerPartOwner(
-                object
-            )
-        end
-    end
+    return marker
 end
 
 local function disableInternalFlingHandler()
@@ -1042,7 +1398,6 @@ local function disableInternalFlingHandler()
     for _, connection in ipairs(
         connections
     ) do
-
         local fn
 
         pcall(function()
@@ -1062,7 +1417,6 @@ local function disableInternalFlingHandler()
                 and type(environment)
                     == "table"
             then
-
                 local scriptObject =
                     environment.script
 
@@ -1074,7 +1428,6 @@ local function disableInternalFlingHandler()
                             == "HumanoidStateTypeByGettingFlung"
                     )
                 then
-
                     local disabledOk =
                         pcall(function()
                             connection:
@@ -1096,8 +1449,12 @@ local function disableInternalFlingHandler()
     end
 end
 
-local function setupCharacter(character)
+local function setupCharacter(
+    character
+)
     clearCharacterConnections()
+
+    releaseCharacterFreeze()
 
     State.Character =
         character
@@ -1116,14 +1473,24 @@ local function setupCharacter(character)
                 10
             )
 
+    State.Head =
+        character:
+            WaitForChild(
+                "Head",
+                10
+            )
+
     State.IsHeld =
         findIsHeld()
+
+    State.HeadPartOwner =
+        nil
 
     State.GrabUntil =
         0
 
-    State.OwnershipUntil =
-        0
+    State.OwnershipLastSeen =
+        -math.huge
 
     State.LastStruggle =
         0
@@ -1134,6 +1501,12 @@ local function setupCharacter(character)
     State.InternalFlingDisabled =
         false
 
+    State.FreezeStates =
+        {}
+
+    State.FreezeActive =
+        false
+
     if State.Root then
         State.LastSafeVelocity =
             State.Root.AssemblyLinearVelocity
@@ -1142,7 +1515,7 @@ local function setupCharacter(character)
             Vector3.zero
     end
 
-    scanPartOwners()
+    scanHeadOwner()
 
     task.defer(
         disableInternalFlingHandler
@@ -1163,7 +1536,6 @@ local function setupCharacter(character)
             "BoolValue"
         )
     then
-
         connectCharacter(
             State.IsHeld:
                 GetPropertyChangedSignal(
@@ -1180,9 +1552,7 @@ local function setupCharacter(character)
                 if State.IsHeld.Value then
                     grabPulse()
                 else
-                    activateGrab(
-                        Config.GrabTail
-                    )
+                    activateGrab()
                 end
             end
         )
@@ -1206,7 +1576,6 @@ local function setupCharacter(character)
                     and State.Humanoid.SeatPart
                         == nil
                 then
-
                     grabPulse()
 
                     State.Humanoid.Sit =
@@ -1238,12 +1607,53 @@ local function setupCharacter(character)
                         == nil
                     and defenseActive()
                 then
+                    restoreHumanoid()
 
-                    sanitizeAttackPhysics(
-                        true
+                    if ownershipActive() then
+                        freezeCharacter()
+                        zeroCharacterPhysics()
+
+                        fireStopVelocity()
+                        fireRagdollReset()
+                    else
+                        sanitizeGrabPhysics()
+                    end
+                end
+            end
+        )
+    end
+
+    if State.Head then
+        connectCharacter(
+            State.Head.ChildAdded,
+
+            function(object)
+                if not State.Running
+                    or not Config.AntiOwnershipSpam
+                then
+                    return
+                end
+
+                if object.Name
+                    == "PartOwner"
+                then
+                    registerHeadPartOwner(
+                        object
                     )
+                end
+            end
+        )
 
-                    fireRagdollReset()
+        connectCharacter(
+            State.Head.ChildRemoved,
+
+            function(object)
+                if object.Name
+                    == "PartOwner"
+                then
+                    unregisterHeadPartOwner(
+                        object
+                    )
                 end
             end
         )
@@ -1257,26 +1667,12 @@ local function setupCharacter(character)
                 return
             end
 
-            if object.Name
-                == "PartOwner"
-            then
-
-                registerPartOwner(
-                    object
+            if State.FreezeActive
+                and object:IsA(
+                    "BasePart"
                 )
-            end
-        end
-    )
-
-    connectCharacter(
-        character.DescendantRemoving,
-
-        function(object)
-            if object.Name
-                == "PartOwner"
             then
-
-                unregisterPartOwner(
+                freezePart(
                     object
                 )
             end
@@ -1303,16 +1699,6 @@ connect(
 )
 
 connect(
-    UserInputService.JumpRequest,
-
-    function()
-        State.JumpUntil =
-            os.clock()
-            + 0.18
-    end
-)
-
-connect(
     RunService.PreSimulation,
 
     function()
@@ -1332,26 +1718,43 @@ connect(
         if not State.IsHeld
             or not State.IsHeld.Parent
         then
-
             State.IsHeld =
                 findIsHeld()
         end
 
-        if isHeld() then
-            activateGrab()
-        end
+        local marker =
+            scanHeadOwner()
 
-        if hasPartOwner() then
-            activateOwnership()
-        end
-
-        if defenseActive() then
-            sanitizeAttackPhysics(
-                false
+        if marker
+            and markerHostile(
+                marker
             )
+        then
+            State.OwnershipLastSeen =
+                os.clock()
+        end
+
+        if ownershipActive() then
+            freezeCharacter()
+
+            zeroCharacterPhysics()
+
+            restoreHumanoid()
         else
-            State.LastSafeVelocity =
-                root.AssemblyLinearVelocity
+            if State.FreezeActive then
+                releaseCharacterFreeze()
+            end
+
+            if isHeld() then
+                activateGrab()
+            end
+
+            if grabActive() then
+                sanitizeGrabPhysics()
+            else
+                State.LastSafeVelocity =
+                    root.AssemblyLinearVelocity
+            end
         end
     end
 )
@@ -1373,52 +1776,63 @@ connect(
             return
         end
 
-        local held =
-            isHeld()
+        local marker =
+            scanHeadOwner()
 
-        local owned =
-            hasPartOwner()
-
-        if held then
-            activateGrab()
-        end
-
-        if owned then
-            activateOwnership()
-        end
-
-        if defenseActive() then
-            local now =
+        if marker
+            and markerHostile(
+                marker
+            )
+        then
+            State.OwnershipLastSeen =
                 os.clock()
+        end
 
-            if now
-                - State.LastStruggle
-                >= Config.StruggleInterval
-            then
+        if ownershipActive() then
+            freezeCharacter()
 
-                State.LastStruggle =
-                    now
+            zeroCharacterPhysics()
 
-                fireStruggle()
+            restoreHumanoid()
+
+            fireStruggle()
+
+            fireStopVelocity()
+
+            fireRagdollReset()
+        else
+            if State.FreezeActive then
+                releaseCharacterFreeze()
             end
 
-            if ownershipActive()
-                or held
-            then
+            local held =
+                isHeld()
+
+            if held then
+                activateGrab()
+            end
+
+            if grabActive() then
+                local now =
+                    os.clock()
+
+                if now
+                    - State.LastStruggle
+                    >= Config.StruggleInterval
+                then
+                    State.LastStruggle =
+                        now
+
+                    fireStruggle()
+                end
 
                 fireStopVelocity()
-            end
 
-            if ownershipActive() then
-                fireRagdollReset()
+                sanitizeGrabPhysics()
+            else
+                State.LastSafeVelocity =
+                    root.AssemblyLinearVelocity
             end
-
-            sanitizeAttackPhysics(
-                false
-            )
-        else
-            State.LastSafeVelocity =
-                root.AssemblyLinearVelocity
         end
     end
 )
@@ -1440,11 +1854,11 @@ connect(
             return
         end
 
-        if defenseActive() then
-            sanitizeAttackPhysics(
-                false
-            )
-        else
+        if ownershipActive() then
+            freezeCharacter()
+
+            zeroCharacterPhysics()
+        elseif not State.FreezeActive then
             State.LastSafeVelocity =
                 root.AssemblyLinearVelocity
         end
@@ -1455,43 +1869,65 @@ connect(
     RunService.RenderStepped,
 
     function()
-        if not State.Running
-            or not defenseActive()
-        then
+        if not State.Running then
             return
         end
 
-        restoreHumanoid()
+        if ownershipActive() then
+            freezeCharacter()
 
-        local now =
-            os.clock()
+            restoreHumanoid()
 
-        if now
-            - State.LastStruggle
-            >= Config.StruggleInterval
-        then
+            return
+        end
 
-            State.LastStruggle =
-                now
+        if grabActive() then
+            restoreHumanoid()
 
-            fireStruggle()
+            local now =
+                os.clock()
+
+            if now
+                - State.LastStruggle
+                >= Config.StruggleInterval
+            then
+                State.LastStruggle =
+                    now
+
+                fireStruggle()
+            end
         end
     end
 )
 
 task.spawn(function()
     while State.Running do
-        task.wait(0.10)
+        task.wait(0.05)
 
-        if Config.AntiOwnershipSpam
-            and State.Character
-        then
+        if Config.AntiOwnershipSpam then
+            local marker =
+                scanHeadOwner()
 
-            scanPartOwners()
+            if marker
+                and markerHostile(
+                    marker
+                )
+            then
+                State.OwnershipLastSeen =
+                    os.clock()
 
-            if hasPartOwner() then
-                activateOwnership()
+                if not State.FreezeActive then
+                    ownershipPulse()
+                end
             end
+
+            if not ownershipActive()
+                and State.FreezeActive
+            then
+                releaseCharacterFreeze()
+            end
+        elseif State.FreezeActive then
+            releaseCharacterFreeze()
         end
     end
 end)
@@ -1507,6 +1943,729 @@ task.spawn(function()
         refreshCorrectionRemotes()
     end
 end)
+
+local SpawnedToysFolder = workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys") or workspace
+local DeleteToyRE = ReplicatedStorage:FindFirstChild("DeleteToyRE") or ReplicatedStorage:FindFirstChild("DeleteToy")
+local BuyToy = ReplicatedStorage:FindFirstChild("BuyToy")
+local KunaiFound = nil
+local antiKickTask = nil
+
+local isKickAllActive = false
+local kickAllLoopEnabled = false
+local kickLoopEnabled = false
+local selectedKickPlayer = nil
+local playerStatus = {}
+local currentBlob = nil
+local seat = nil
+local kickToggle = nil
+
+local function GetPlayerCharacter()
+    return LocalPlayer.Character
+end
+
+local function GetPlayerCFrame()
+    local char = GetPlayerCharacter()
+    return char and char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.CFrame
+end
+
+local function GetMyRoot()
+    local char = GetPlayerCharacter()
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function Getdistancefromcharacter(pos)
+    local hrp = GetMyRoot()
+    if hrp then return (hrp.Position - pos).Magnitude end
+    return 999
+end
+
+local function SNOWship(part) return true end
+local function SNOWshipOnce(part) return true end
+
+local function SpawnToy(args)
+    local re = ReplicatedStorage:FindFirstChild("SpawnToy")
+    if re then re:FireServer(unpack(args)) end
+end
+
+local function GetAllPlayers()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            local isFriend = false
+            pcall(function() isFriend = LocalPlayer:IsFriendsWith(p.UserId) end)
+            if not isFriend then table.insert(list, p) end
+        end
+    end
+    return list
+end
+
+local function SetKunaiToyAntiKick(p460)
+    if not p460:FindFirstChild('Cat') then
+        local v461, v462, v463 = pairs(p460:GetDescendants())
+        while true do
+            local v464, v465 = v461(v462, v463)
+            if v464 == nil then break end
+            v463 = v464
+            if v465:IsA('BasePart') then
+                v465.CanQuery = false
+                v465.Transparency = 1
+                v465.CanCollide = false
+            end
+        end
+
+        local _Sound4 = Instance.new('Sound', p460)
+        _Sound4.SoundId = 'rbxassetid://9120299506'
+        _Sound4.Volume = 0.1
+
+        local _BillboardGui2 = Instance.new('BillboardGui')
+        local _ImageLabel2 = Instance.new('ImageLabel')
+        local _TextLabel2 = Instance.new('TextLabel')
+        local _UITextSizeConstraint2 = Instance.new('UITextSizeConstraint')
+        local u471, u472 = nil, nil
+        local u473 = {
+            'Bliz_T HUB is the best!',
+            'Hi!',
+            'Your avatar is so pretty!',
+            'Try VHS or VerbalHub too!',
+            'Remember, do not abuse, or some admin can hunt you!',
+        }
+
+        _BillboardGui2.Name = 'Cat'
+        _BillboardGui2.Parent = p460
+        _BillboardGui2.Adornee = p460
+        _BillboardGui2.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        _BillboardGui2.Active = true
+        _BillboardGui2.Size = UDim2.new(1, 0, 1, 0)
+
+        _ImageLabel2.Parent = _BillboardGui2
+        _ImageLabel2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        _ImageLabel2.BackgroundTransparency = 1
+        _ImageLabel2.BorderSizePixel = 0
+        _ImageLabel2.Size = UDim2.new(1, 0, 1, 0)
+        _ImageLabel2.Image = 'rbxassetid://9930005090'
+
+        _TextLabel2.Parent = _BillboardGui2
+        _TextLabel2.AnchorPoint = Vector2.new(0.5, 0.5)
+        _TextLabel2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        _TextLabel2.BackgroundTransparency = 1
+        _TextLabel2.BorderSizePixel = 0
+        _TextLabel2.Position = UDim2.new(0.5, 0, 0, 0)
+        _TextLabel2.Size = UDim2.new(2, 0, 0.3, 0)
+        _TextLabel2.Font = Enum.Font.Arcade
+        _TextLabel2.Text = ''
+        _TextLabel2.TextColor3 = Color3.fromRGB(255, 255, 255)
+        _TextLabel2.TextScaled = true
+        _TextLabel2.TextSize = 9
+
+        _UITextSizeConstraint2.Parent = _TextLabel2
+        _UITextSizeConstraint2.MaxTextSize = 9
+
+        local function u477(p474, p475)
+            if (_G.LastTxtFloppaPriority or p475) <= p475 then
+                _G.LastTxtFloppaPriority = p475
+                if u471 then task.cancel(u471) end
+                if u472 then task.cancel(u472) end
+
+                _TextLabel2.Text = ''
+                u472 = task.spawn(function()
+                    for v476 = 0, #p474 do
+                        if p460.Parent == nil then _Sound4:Destroy() break end
+                        _TextLabel2.Text = string.sub(p474, 1, v476)
+                        _Sound4:Play()
+                        task.wait(0.05)
+                    end
+                end)
+
+                u471 = task.delay(15, function()
+                    _G.LastTxtFloppaPriority = 0
+                    _TextLabel2.Text = ''
+                end)
+            end
+        end
+
+        task.spawn(function()
+            local u478 = {}
+            local v480 = task.spawn(function()
+                task.wait(60)
+                while true do
+                    for _ = 1, #u473 do
+                        local v479 = math.random(1, #u473)
+                        if table.find(u478, v479) ~= nil then
+                            repeat v479 = math.random(1, #u473) until table.find(u478, v479) == nil
+                        end
+                        table.insert(u478, v479)
+                        u477(u473[v479], 1)
+                        task.wait(60)
+                    end
+                    table.clear(u478)
+                end
+            end)
+
+            while p460.Parent do task.wait(1) end
+            _BillboardGui2:Destroy()
+            task.cancel(v480)
+        end)
+
+        return u477
+    end
+end
+
+local function CheckIfKunaiIsOnPlayer(p523)
+    if typeof(p523) == 'Instance' and (p523:IsA('Model') and p523.Parent) then
+        local _StickyPart = p523:FindFirstChild('StickyPart')
+        local v525 = GetPlayerCharacter()
+        local v526 = _StickyPart and _StickyPart:FindFirstChild('StickyWeld')
+
+        if v526 then
+            local _Part16 = v526.Part1
+            return v526.Enabled ~= false and (_Part16 and (_Part16:IsDescendantOf(v525) and 'Using' or 'Used') or 'No use!') or 'Useless'
+        end
+    end
+end
+
+local function CheckKunai()
+    if not KunaiFound then
+        local v533 = GetPlayerCFrame()
+        SpawnedToysFolder = workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys") or workspace
+        local v534 = SpawnedToysFolder
+        local v535, v536, v537 = pairs(v534:GetChildren())
+        local u538 = nil
+
+        while true do
+            local v539, v540 = v535(v536, v537)
+            if v539 == nil then break end
+            v537 = v539
+
+            if v540.Name == 'NinjaKunai' and (v540.PrimaryPart and v540.Parent) then
+                if CheckIfKunaiIsOnPlayer(v540) ~= 'No use!' or 30 >= Getdistancefromcharacter(v540.PrimaryPart.Position) then
+                    if CheckIfKunaiIsOnPlayer(v540) ~= 'Useless' then
+                        u538 = v540
+                    else
+                        if DeleteToyRE then DeleteToyRE:FireServer(v540) end
+                    end
+                else
+                    if DeleteToyRE then DeleteToyRE:FireServer(v540) end
+                end
+            end
+        end
+
+        if not u538 then
+            if v533 then
+                local v541 = {
+                    'NinjaKunai',
+                    CFrame.new(v533.Position.X, v533.Position.Y, v533.Position.Z, -0.133750245, -0.471861839, 0.871468484, -3.7252903e-9, 0.879369617, 0.476139903, -0.991015136, 0.0636838302, -0.117615893),
+                    Vector3.new(0, 97.69000244140625, 0),
+                }
+                SpawnToy(v541)
+            end
+            if BuyToy then BuyToy:InvokeServer('NinjaKunai') end
+        end
+
+        if u538 and not u538:GetAttribute('Connected2') and u538:FindFirstChild('StickyPart') and (u538.StickyPart:FindFirstChild('StickyWeld') and u538.Parent) then
+            local _StickyPart2 = u538.StickyPart
+            local u543 = SetKunaiToyAntiKick(u538)
+            local u544 = {
+                _StickyPart2,
+                LocalPlayer.Character:FindFirstChild('Left Leg'),
+                CFrame.new(0, -0.5, 0) * CFrame.Angles(math.rad(0), math.rad(0), math.rad(90)),
+            }
+
+            local u546 = u538.DescendantAdded:Connect(function(p545)
+                if p545.Name == 'PartOwner' and p545.Value ~= LocalPlayer.Name then
+                    u538:SetAttribute('AlreadySetOwnerShip', false)
+                end
+            end)
+
+            task.spawn(function()
+                while u538.Parent do
+                    if CheckIfKunaiIsOnPlayer(u538) == 'Useless' then
+                        if DeleteToyRE then DeleteToyRE:FireServer(u538) end
+                    end
+                    if CheckIfKunaiIsOnPlayer(u538) ~= 'Used' then
+                        if CheckIfKunaiIsOnPlayer(u538) == 'No use!' then
+                            if Getdistancefromcharacter(_StickyPart2.Position) >= 30 then
+                                if DeleteToyRE then DeleteToyRE:FireServer(u538) end
+                            elseif SNOWshipOnce(_StickyPart2) then
+                                ReplicatedStorage:WaitForChild('PlayerEvents'):WaitForChild('StickyPartEvent'):FireServer(unpack(u544))
+                            end
+                        end
+                    elseif Getdistancefromcharacter(_StickyPart2.Position) >= 30 then
+                        if DeleteToyRE then DeleteToyRE:FireServer(u538) end
+                    else
+                        SNOWship(_StickyPart2)
+                    end
+                    task.wait()
+                end
+            end)
+
+            task.spawn(function()
+                while u538.Parent do
+                    if not u538:GetAttribute('AlreadySetOwnerShip') then
+                        if SNOWshipOnce(_StickyPart2) then
+                            if CheckIfKunaiIsOnPlayer(u538) ~= 'Using' then
+                                ReplicatedStorage:WaitForChild('PlayerEvents'):WaitForChild('StickyPartEvent'):FireServer(unpack(u544))
+                                if not _G.FirstFloppaMessage then
+                                    u543("Don't worry my buddy, you won't get kicked", 3)
+                                    _G.FirstFloppaMessage = true
+                                end
+                            else
+                                u538:SetAttribute('AlreadySetOwnerShip', true)
+                            end
+                        elseif Getdistancefromcharacter(_StickyPart2.Position) > 30 then
+                            if DeleteToyRE then DeleteToyRE:FireServer(u538) end
+                        end
+                    end
+                    task.wait()
+                end
+                _StickyPart2 = nil
+                KunaiFound = nil
+                u546:Disconnect()
+            end)
+
+            u538:SetAttribute('Connected2', true)
+        end
+        KunaiFound = u538
+    end
+end
+
+local function GetKunai()
+    if not KunaiFound then CheckKunai() end
+end
+
+local function PrepareBlobman()
+    local toyFolder = workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
+    currentBlob = toyFolder and toyFolder:FindFirstChild("CreatureBlobman")
+
+    if not currentBlob then
+        local rootPart = GetMyRoot()
+        if rootPart then
+            local spawnPos = rootPart.CFrame * CFrame.new(0, 0, -5)
+            local spawnFunc = ReplicatedStorage:FindFirstChild("MenuToys")
+                and ReplicatedStorage.MenuToys:FindFirstChild("SpawnToyRemoteFunction")
+            if spawnFunc then
+                spawnFunc:InvokeServer("CreatureBlobman", spawnPos, Vector3.new(0, 127, 0))
+            end
+        end
+        task.wait(0.5)
+        toyFolder = workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
+        currentBlob = toyFolder and toyFolder:FindFirstChild("CreatureBlobman")
+    end
+
+    if currentBlob then
+        seat = currentBlob:FindFirstChildOfClass("VehicleSeat")
+        if seat and LocalPlayer.Character then
+            seat:Sit(LocalPlayer.Character:FindFirstChildOfClass("Humanoid"))
+        end
+    end
+    return currentBlob, seat
+end
+
+local function LookAll()
+    if isKickAllActive then return end
+    isKickAllActive = true
+
+    local allPlayers = GetAllPlayers()
+    if #allPlayers == 0 then
+        isKickAllActive = false
+        return
+    end
+
+    for _, targetPlayer in ipairs(allPlayers) do
+        playerStatus[targetPlayer.UserId] = "Targeting"
+    end
+
+    local blob, vehicleSeat = PrepareBlobman()
+    if not blob or not vehicleSeat then
+        isKickAllActive = false
+        return
+    end
+    task.wait(0.3)
+
+    local myRoot = GetMyRoot()
+    if not myRoot then
+        isKickAllActive = false
+        return
+    end
+
+    for _, targetPlayer in ipairs(allPlayers) do
+        local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if targetRoot then
+            myRoot.CFrame = targetRoot.CFrame
+            task.wait(0.02)
+            for i = 1, 5 do
+                pcall(function()
+                    blob.BlobmanSeatAndOwnerScript.CreatureGrab:FireServer(
+                        blob.LeftDetector, targetRoot, blob.LeftDetector.LeftWeld
+                    )
+                    blob.BlobmanSeatAndOwnerScript.CreatureRelease:FireServer(blob.LeftDetector.LeftWeld)
+                end)
+                if i < 5 then task.wait(0.08) end
+            end
+        end
+    end
+
+    myRoot.CFrame = CFrame.new(0, 100, 0)
+    task.wait(0.1)
+
+    for _, part in ipairs(blob:GetDescendants()) do
+        if part:IsA("BasePart") then pcall(function() part.Anchored = true end) end
+    end
+    task.wait(0.1)
+
+    local radius = 15
+    for i, targetPlayer in ipairs(allPlayers) do
+        local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if targetRoot then
+            local angle = math.rad((i - 1) * (360 / #allPlayers))
+            local x = radius * math.cos(angle)
+            local z = radius * math.sin(angle)
+            targetRoot.CFrame = CFrame.new(x, 110, z)
+        end
+    end
+    task.wait(0.1)
+
+    for _ = 1, 2 do
+        for _, targetPlayer in ipairs(allPlayers) do
+            local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                task.spawn(function()
+                    pcall(function()
+                        SetNetworkOwner:FireServer(targetRoot, CFrame.new(targetRoot.Position))
+                        DestroyGrabLine:FireServer(targetRoot)
+                    end)
+                end)
+            end
+        end
+        task.wait(0.1)
+    end
+
+    task.wait(0.3)
+
+    for _, targetPlayer in ipairs(allPlayers) do
+        local targetRoot = targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if targetRoot then
+            task.spawn(function()
+                pcall(function()
+                    blob.BlobmanSeatAndOwnerScript.CreatureGrab:FireServer(
+                        blob.LeftDetector, targetRoot, blob.LeftDetector.LeftWeld
+                    )
+                    blob.BlobmanSeatAndOwnerScript.CreatureGrab:FireServer(
+                        blob.RightDetector, targetRoot, blob.RightDetector.RightWeld
+                    )
+                end)
+            end)
+        end
+    end
+
+    task.wait(0.1)
+    myRoot.CFrame = CFrame.new(0, -50000, 0)
+
+    for _, part in ipairs(blob:GetDescendants()) do
+        if part:IsA("BasePart") then pcall(function() part.Anchored = false end) end
+    end
+
+    task.wait(1)
+    isKickAllActive = false
+end
+
+local function StartSingleKickLoop()
+    if not selectedKickPlayer then return end
+
+    local blob, vehicleSeat = PrepareBlobman()
+    if not blob or not vehicleSeat then
+        pcall(function() kickToggle:SetValue(false) end)
+        return
+    end
+
+    task.spawn(function()
+        local blobRoot = blob:FindFirstChild("HumanoidRootPart") or blob.PrimaryPart
+        local scriptObj = blob:FindFirstChild("BlobmanSeatAndOwnerScript")
+
+        local CG = scriptObj and scriptObj:FindFirstChild("CreatureGrab")
+        local CD = scriptObj and scriptObj:FindFirstChild("CreatureDrop")
+
+        local R_Det = blob:FindFirstChild("RightDetector")
+        local R_Weld = R_Det and (R_Det:FindFirstChild("RightWeld") or R_Det:FindFirstChildWhichIsA("Weld"))
+
+        local SavedPos = blobRoot and blobRoot.CFrame
+
+        local tChar = selectedKickPlayer.Character
+        local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+
+        if tRoot and blobRoot and SavedPos then
+            local bringStart = tick()
+            while tick() - bringStart < 0.35 do
+                if not kickLoopEnabled then break end
+                blobRoot.CFrame = tRoot.CFrame
+                blobRoot.Velocity = Vector3.zero
+                pcall(function()
+                    if CG and R_Det then CG:FireServer(R_Det, tRoot, R_Weld) end
+                    CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false)
+                    SetNetworkOwner:FireServer(tRoot, blobRoot.CFrame)
+                end)
+                RunService.Heartbeat:Wait()
+            end
+            blobRoot.CFrame = SavedPos
+            blobRoot.Velocity = Vector3.zero
+            task.wait(0.05)
+        end
+
+        local packetTimer = 0
+
+        while kickLoopEnabled and State.Running do
+            if not selectedKickPlayer or not selectedKickPlayer.Parent or not selectedKickPlayer.Character then break end
+
+            tChar = selectedKickPlayer.Character
+            tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+            local tHum = tChar and tChar:FindFirstChild("Humanoid")
+
+            if tRoot and tHum and tHum.Health > 0 and blobRoot and SavedPos then
+                blobRoot.CFrame = SavedPos
+                blobRoot.Velocity = Vector3.zero
+                local lockPos = SavedPos * CFrame.new(0, 23, 0)
+                tRoot.CFrame = lockPos
+                tRoot.Velocity = Vector3.zero
+                tRoot.RotVelocity = Vector3.zero
+
+                if tick() - packetTimer > 0.05 then
+                    packetTimer = tick()
+                    pcall(function()
+                        tHum.PlatformStand = true
+                        tHum.Sit = true
+                        SetNetworkOwner:FireServer(tRoot, lockPos)
+                        if R_Det then
+                            local weld = R_Det:FindFirstChild("RightWeld") or R_Det:FindFirstChildWhichIsA("Weld")
+                            if weld then CD:FireServer(weld) end
+                        end
+                        DestroyGrabLine:FireServer(tRoot)
+                        if R_Det then CG:FireServer(R_Det, tRoot, R_Weld) end
+                        CreateGrabLine:FireServer(tRoot, Vector3.zero, tRoot.Position, false)
+                    end)
+                end
+            else
+                if blobRoot and SavedPos then
+                    blobRoot.CFrame = SavedPos
+                    blobRoot.Velocity = Vector3.zero
+                end
+            end
+
+            if not kickLoopEnabled then break end
+            RunService.Heartbeat:Wait()
+        end
+
+        kickLoopEnabled = false
+        pcall(function() kickToggle:SetValue(false) end)
+        if blobRoot and SavedPos then
+            blobRoot.CFrame = SavedPos
+            blobRoot.Velocity = Vector3.zero
+        end
+    end)
+end
+
+local function opGetRoot(player)
+    local character = player.Character
+    if not character then
+        return nil
+    end
+    return character:FindFirstChild("HumanoidRootPart")
+end
+
+local function opGetMyRoot()
+    return LocalPlayer.Character
+        and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function opAlive(player)
+    local character = player.Character
+    if not character then
+        return false
+    end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    return humanoid
+        and humanoid.Health > 0
+        and opGetRoot(player) ~= nil
+end
+
+local function opInRange(player)
+    local myRoot = opGetMyRoot()
+    local targetRoot = opGetRoot(player)
+    if not myRoot or not targetRoot then
+        return false
+    end
+    return (targetRoot.Position - myRoot.Position).Magnitude
+        <= Config.OpFlingRange
+end
+
+local function opGetFlingVelocity(targetRoot)
+    local myRoot = opGetMyRoot()
+    if not myRoot then
+        return Vector3.zero
+    end
+    local offset = targetRoot.Position - myRoot.Position
+    local flat = Vector3.new(offset.X, 0, offset.Z)
+    if flat.Magnitude < 0.05 then
+        flat = Vector3.new(
+            myRoot.CFrame.LookVector.X,
+            0,
+            myRoot.CFrame.LookVector.Z
+        )
+    end
+    if flat.Magnitude < 0.05 then
+        flat = Vector3.new(0, 0, -1)
+    end
+    local direction = flat.Unit
+    return direction * Config.OpFlingSpeed
+        + Vector3.new(0, Config.OpFlingUpSpeed, 0)
+end
+
+local function opRequestOwnership(targetRoot)
+    for _ = 1, Config.OpOwnershipRequests do
+        pcall(function()
+            SetNetworkOwner:FireServer(
+                targetRoot,
+                targetRoot.CFrame
+            )
+        end)
+    end
+end
+
+local function opApplyFling(targetRoot)
+    local desired = opGetFlingVelocity(targetRoot)
+    local angular = Vector3.new(
+        Config.OpFlingAngular,
+        Config.OpFlingAngular,
+        Config.OpFlingAngular
+    )
+    for _ = 1, Config.OpFlingForceFrames do
+        if not targetRoot.Parent then
+            break
+        end
+        pcall(function()
+            local current = targetRoot.AssemblyLinearVelocity
+            targetRoot:ApplyImpulse(
+                (desired - current) * targetRoot.AssemblyMass
+            )
+        end)
+        pcall(function()
+            targetRoot.AssemblyLinearVelocity = desired
+            targetRoot.AssemblyAngularVelocity = angular
+        end)
+        RunService.Heartbeat:Wait()
+    end
+end
+
+local function opAttackPlayer(player)
+    if not State.Running
+        or not Config.OpFlingAura
+    then
+        return
+    end
+
+    if player == LocalPlayer then
+        return
+    end
+
+    if not opAlive(player)
+        or not opInRange(player)
+    then
+        return
+    end
+
+    local targetRoot = opGetRoot(player)
+    if not targetRoot then
+        return
+    end
+
+    opRequestOwnership(targetRoot)
+
+    task.spawn(function()
+        RunService.Heartbeat:Wait()
+
+        if not State.Running
+            or not Config.OpFlingAura
+            or not targetRoot.Parent
+        then
+            return
+        end
+
+        opRequestOwnership(targetRoot)
+        opApplyFling(targetRoot)
+    end)
+end
+
+task.spawn(function()
+    while State.Running do
+        if Config.OpFlingAura then
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer
+                    and opAlive(player)
+                    and opInRange(player)
+                then
+                    task.spawn(opAttackPlayer, player)
+                end
+            end
+        end
+        task.wait(Config.OpFlingPulse)
+    end
+end)
+
+local ThrowTab =
+    Window:CreateTab(
+        "Launch",
+        "rocket"
+    )
+
+local ThrowSection =
+    ThrowTab:
+        CreateSection(
+            "Launch Controls"
+        )
+
+ThrowSection:CreateToggle({
+    Text = "Launch Power",
+    Default = true,
+    Flag = "ThrowEnabled",
+
+    Callback = function(value)
+        Config.ThrowEnabled =
+            value
+    end
+})
+
+ThrowSection:CreateSlider({
+    Text = "Força",
+
+    Min = Config.ThrowMin,
+    Max = Config.ThrowMax,
+    Default = Config.ThrowForce,
+
+    Decimals = 0,
+
+    Flag = "ThrowForce",
+
+    Callback = function(value)
+        Config.ThrowForce =
+            math.clamp(
+                math.floor(
+                    value + 0.5
+                ),
+                Config.ThrowMin,
+                Config.ThrowMax
+            )
+    end
+})
+
+local ProtectionTab =
+    Window:CreateTab(
+        "Defense",
+        "🛡️"
+    )
+
+local ProtectionSection =
+    ProtectionTab:
+        CreateSection(
+            "Defense Controls"
+        )
 
 ProtectionSection:CreateToggle({
     Text = "Anti-Grab",
@@ -1531,7 +2690,7 @@ ProtectionSection:CreateToggle({
 })
 
 ProtectionSection:CreateToggle({
-    Text = "Anti Spam de Ownership",
+    Text = "Ownership Guard",
     Default = true,
     Flag = "AntiOwnershipSpam",
 
@@ -1540,14 +2699,52 @@ ProtectionSection:CreateToggle({
             value
 
         if value then
-            scanPartOwners()
+            local marker =
+                scanHeadOwner()
 
-            if hasPartOwner() then
+            if marker
+                and markerHostile(
+                    marker
+                )
+            then
                 ownershipPulse()
             end
         else
-            State.OwnershipUntil =
-                0
+            State.OwnershipLastSeen =
+                -math.huge
+
+            releaseCharacterFreeze()
+        end
+    end
+})
+
+ProtectionSection:CreateToggle({
+    Text = "Anti-Kick",
+    Default = false,
+    Flag = "AntiKick",
+
+    Callback = function(value)
+        _G.AntiKick = value
+
+        if value then
+            antiKickTask = task.spawn(function()
+                while _G.AntiKick
+                    and State.Running
+                do
+                    GetKunai()
+                    task.wait()
+                end
+            end)
+        else
+            if antiKickTask then
+                pcall(function()
+                    task.cancel(
+                        antiKickTask
+                    )
+                end)
+
+                antiKickTask = nil
+            end
         end
     end
 })
@@ -1566,7 +2763,6 @@ local function mouseDetector(
     if inputObject.UserInputType
         == Enum.UserInputType.MouseButton1
     then
-
         State.LastMouseButton =
             1
 
@@ -1576,7 +2772,6 @@ local function mouseDetector(
     elseif inputObject.UserInputType
         == Enum.UserInputType.MouseButton2
     then
-
         State.LastMouseButton =
             2
 
@@ -1619,7 +2814,6 @@ local function getReleaseButton()
         - State.LastMouseTime
         <= Config.MouseMemory
     then
-
         return State.LastMouseButton
     end
 
@@ -1701,7 +2895,6 @@ local function throwObject(object)
     for _ = 1,
         Config.ThrowFrames
     do
-
         RunService.Heartbeat:
             Wait()
 
@@ -1717,7 +2910,6 @@ local function throwObject(object)
         if velocity.Magnitude
             < speed * 0.75
         then
-
             local correction =
                 (
                     desiredVelocity
@@ -1763,11 +2955,9 @@ local function buildPlayerList()
     for _, player in ipairs(
         players
     ) do
-
         if player
             ~= LocalPlayer
         then
-
             local label =
                 string.format(
                     "%s (@%s)",
@@ -1812,14 +3002,12 @@ local function getMountedBlobman()
         while current
             and current ~= Workspace
         do
-
             if current:IsA(
                 "Model"
             )
                 and current.Name
                     == "CreatureBlobman"
             then
-
                 return current
             end
 
@@ -1831,14 +3019,12 @@ local function getMountedBlobman()
     for _, object in ipairs(
         Workspace:GetDescendants()
     ) do
-
         if object:IsA(
             "Model"
         )
             and object.Name
                 == "CreatureBlobman"
         then
-
             local vehicleSeat =
                 object:
                     FindFirstChildWhichIsA(
@@ -1850,145 +3036,8 @@ local function getMountedBlobman()
                 and vehicleSeat.Occupant
                     == humanoid
             then
-
                 return object
             end
-        end
-    end
-
-    return nil
-end
-
-local function getBlobController(blob)
-    if not blob then
-        return nil
-    end
-
-    return blob:
-        FindFirstChild(
-            "BlobmanSeatAndOwnerScript",
-            true
-        )
-end
-
-local function getCreatureGrab(blob)
-    local controller =
-        getBlobController(
-            blob
-        )
-
-    if not controller then
-        return nil
-    end
-
-    return controller:
-        FindFirstChild(
-            "CreatureGrab",
-            true
-        )
-end
-
-local function getBlobDetector(
-    blob,
-    side
-)
-    if not blob then
-        return nil
-    end
-
-    return blob:
-        FindFirstChild(
-            side .. "Detector",
-            true
-        )
-end
-
-local function getObjectPosition(object)
-    if not object then
-        return nil
-    end
-
-    if object:IsA(
-        "BasePart"
-    ) then
-
-        return object.Position
-    end
-
-    if object:IsA(
-        "Model"
-    ) then
-
-        local part =
-            object.PrimaryPart
-            or object:
-                FindFirstChildWhichIsA(
-                    "BasePart",
-                    true
-                )
-
-        return part
-            and part.Position
-            or nil
-    end
-
-    local part =
-        object:
-            FindFirstChildWhichIsA(
-                "BasePart",
-                true
-            )
-
-    return part
-        and part.Position
-        or nil
-end
-
-local function findGrabWeld(
-    detector,
-    side
-)
-    if not detector then
-        return nil
-    end
-
-    local names = {
-        side .. "Weld",
-        "AttachPlayer",
-        "PlayerWeld",
-        "GrabWeld",
-        "Weld"
-    }
-
-    for _, name in ipairs(
-        names
-    ) do
-
-        local object =
-            detector:
-                FindFirstChild(
-                    name,
-                    true
-                )
-
-        if object then
-            return object
-        end
-    end
-
-    for _, object in ipairs(
-        detector:GetDescendants()
-    ) do
-
-        if object:IsA(
-            "Weld"
-        )
-            or object:IsA(
-                "WeldConstraint"
-            )
-        then
-
-            return object
         end
     end
 
@@ -2003,7 +3052,6 @@ local function getSelectedBlobTarget()
         or player.Parent
             ~= Players
     then
-
         Window:Notify({
             Title = "Blobman",
             Text = "Selecione um player.",
@@ -2034,7 +3082,6 @@ local function getSelectedBlobTarget()
         or not humanoid
         or humanoid.Health <= 0
     then
-
         Window:Notify({
             Title = "Blobman",
             Text = "Player indisponível.",
@@ -2048,173 +3095,6 @@ local function getSelectedBlobTarget()
         character,
         root,
         humanoid
-end
-
-local function nearestBlobSide(
-    blob,
-    targetRoot
-)
-    local left =
-        getBlobDetector(
-            blob,
-            "Left"
-        )
-
-    local right =
-        getBlobDetector(
-            blob,
-            "Right"
-        )
-
-    local targetPosition =
-        targetRoot.Position
-
-    local leftPosition =
-        getObjectPosition(
-            left
-        )
-
-    local rightPosition =
-        getObjectPosition(
-            right
-        )
-
-    local leftDistance =
-        leftPosition
-        and (
-            leftPosition
-            - targetPosition
-        ).Magnitude
-        or math.huge
-
-    local rightDistance =
-        rightPosition
-        and (
-            rightPosition
-            - targetPosition
-        ).Magnitude
-        or math.huge
-
-    if leftDistance
-        <= rightDistance
-    then
-
-        return "Left",
-            leftDistance
-    end
-
-    return "Right",
-        rightDistance
-end
-
-local function grabBlobSide(
-    blob,
-    targetRoot,
-    side
-)
-    local remote =
-        getCreatureGrab(
-            blob
-        )
-
-    local detector =
-        getBlobDetector(
-            blob,
-            side
-        )
-
-    local weld =
-        findGrabWeld(
-            detector,
-            side
-        )
-
-    if not remote
-        or not detector
-        or not weld
-    then
-
-        return false
-    end
-
-    return pcall(function()
-        remote:FireServer(
-            detector,
-            targetRoot,
-            weld
-        )
-    end)
-end
-
-local function grabBlobTarget(
-    blob,
-    targetRoot
-)
-    local nearest,
-        distance =
-        nearestBlobSide(
-            blob,
-            targetRoot
-        )
-
-    if distance
-        > Config.BlobGrabRange
-    then
-
-        return false,
-            nil,
-            distance
-    end
-
-    local other =
-        nearest == "Left"
-        and "Right"
-        or "Left"
-
-    if grabBlobSide(
-        blob,
-        targetRoot,
-        nearest
-    ) then
-
-        return true,
-            nearest,
-            distance
-    end
-
-    if grabBlobSide(
-        blob,
-        targetRoot,
-        other
-    ) then
-
-        return true,
-            other,
-            distance
-    end
-
-    return false,
-        nil,
-        distance
-end
-
-local function targetHeld(player)
-    if not player then
-        return false
-    end
-
-    local held =
-        player:
-            FindFirstChild(
-                "IsHeld",
-                true
-            )
-
-    return held
-        and held:IsA(
-            "BoolValue"
-        )
-        and held.Value
 end
 
 local function jumpFromBlob()
@@ -2236,97 +3116,96 @@ local function jumpFromBlob()
     end)
 end
 
-local function lockBlobPlayer()
-    local player,
-        character,
-        targetRoot =
-        getSelectedBlobTarget()
+local function blobBringPhase(blob, tRoot)
+    local blobRoot =
+        blob:FindFirstChild(
+            "HumanoidRootPart"
+        )
+        or blob.PrimaryPart
 
-    if not player then
-        return
-    end
-
-    local blob =
-        getMountedBlobman()
-
-    if not blob then
-        Window:Notify({
-            Title = "Blobman",
-            Text = "Sente no Blobman primeiro.",
-            Duration = 2
-        })
-
-        return
-    end
-
-    local grabbed,
-        side,
-        distance =
-        grabBlobTarget(
-            blob,
-            targetRoot
+    local scriptObj =
+        blob:FindFirstChild(
+            "BlobmanSeatAndOwnerScript"
         )
 
-    if not grabbed then
-        Window:Notify({
-            Title = "Blobman",
+    local CG =
+        scriptObj
+        and scriptObj:
+            FindFirstChild(
+                "CreatureGrab"
+            )
 
-            Text =
-                distance ~= math.huge
-                and string.format(
-                    "Fora do alcance: %.1f studs",
-                    distance
-                )
-                or "Grab falhou.",
+    local R_Det =
+        blob:FindFirstChild(
+            "RightDetector"
+        )
 
-            Duration = 2
-        })
+    local R_Weld =
+        R_Det
+        and (
+            R_Det:FindFirstChild(
+                "RightWeld"
+            )
+            or R_Det:FindFirstChildWhichIsA(
+                "Weld"
+            )
+        )
 
-        return
+    if not blobRoot
+        or not CG
+    then
+        return nil,
+            nil
     end
 
-    local deadline =
-        os.clock()
-        + Config.BlobGrabConfirmTime
+    local SavedPos =
+        blobRoot.CFrame
 
-    while os.clock()
-        < deadline
-    do
+    local bringStart =
+        tick()
 
-        if targetHeld(
-            player
-        ) then
-            break
-        end
+    while tick() - bringStart < 0.35 do
+        blobRoot.CFrame =
+            tRoot.CFrame
+
+        blobRoot.Velocity =
+            Vector3.zero
+
+        pcall(function()
+            if CG and R_Det then
+                CG:FireServer(
+                    R_Det,
+                    tRoot,
+                    R_Weld
+                )
+            end
+
+            CreateGrabLine:FireServer(
+                tRoot,
+                Vector3.zero,
+                tRoot.Position,
+                false
+            )
+
+            SetNetworkOwner:FireServer(
+                tRoot,
+                blobRoot.CFrame
+            )
+        end)
 
         RunService.Heartbeat:
             Wait()
     end
 
-    task.wait(
-        Config.BlobLockJumpDelay
-    )
-
-    jumpFromBlob()
-
-    Window:Notify({
-        Title = "Blobman",
-
-        Text =
-            "Lock: "
-            .. player.Name
-            .. " ["
-            .. tostring(side)
-            .. "]",
-
-        Duration = 2
-    })
+    return blobRoot,
+        SavedPos
 end
 
 local function bringBlobPlayer()
     local player,
         character,
-        targetRoot =
+        targetRoot,
+        targetHumanoid =
         getSelectedBlobTarget()
 
     if not player then
@@ -2347,63 +3226,355 @@ local function bringBlobPlayer()
     end
 
     task.spawn(function()
-        local deadline =
-            os.clock()
-            + Config.BlobBringTimeout
+        local blobRoot,
+            SavedPos =
+            blobBringPhase(
+                blob,
+                targetRoot
+            )
 
-        while State.Running
-            and player.Parent
-                == Players
-            and targetRoot.Parent
-            and os.clock()
-                < deadline
-        do
+        if not blobRoot
+            or not SavedPos
+        then
+            Window:Notify({
+                Title = "Blobman",
+                Text = "Bring falhou.",
+                Duration = 2
+            })
 
-            local success,
-                side,
-                distance =
-                grabBlobTarget(
-                    blob,
-                    targetRoot
+            return
+        end
+
+        blobRoot.CFrame =
+            SavedPos
+
+        blobRoot.Velocity =
+            Vector3.zero
+
+        targetRoot.CFrame =
+            SavedPos
+            * CFrame.new(
+                0,
+                3,
+                0
+            )
+
+        targetRoot.Velocity =
+            Vector3.zero
+
+        local scriptObj =
+            blob:FindFirstChild(
+                "BlobmanSeatAndOwnerScript"
+            )
+
+        local CG =
+            scriptObj
+            and scriptObj:
+                FindFirstChild(
+                    "CreatureGrab"
                 )
 
-            if not success
-                and distance
-                    > Config.BlobGrabRange
-            then
+        local R_Det =
+            blob:FindFirstChild(
+                "RightDetector"
+            )
 
-                Window:Notify({
-                    Title = "Blobman",
+        local R_Weld =
+            R_Det
+            and (
+                R_Det:FindFirstChild(
+                    "RightWeld"
+                )
+                or R_Det:FindFirstChildWhichIsA(
+                    "Weld"
+                )
+            )
 
-                    Text =
-                        string.format(
-                            "Fora do alcance: %.1f studs",
-                            distance
-                        ),
+        local stickEnd =
+            tick()
+            + Config.BlobBringStickTime
 
-                    Duration = 2
-                })
-
-                return
+        while tick() < stickEnd do
+            if not targetRoot.Parent then
+                break
             end
 
-            task.wait(
-                Config.BlobBringInterval
-            )
+            pcall(function()
+                if CG and R_Det then
+                    CG:FireServer(
+                        R_Det,
+                        targetRoot,
+                        R_Weld
+                    )
+                end
+
+                SetNetworkOwner:FireServer(
+                    targetRoot,
+                    SavedPos
+                )
+            end)
+
+            RunService.Heartbeat:
+                Wait()
         end
+
+        Window:Notify({
+            Title = "Blobman",
+            Text = "Bring: "
+                .. player.Name,
+            Duration = 2
+        })
+    end)
+end
+
+local function lockBlobPlayer()
+    local player,
+        character,
+        targetRoot,
+        targetHumanoid =
+        getSelectedBlobTarget()
+
+    if not player then
+        return
+    end
+
+    local blob =
+        getMountedBlobman()
+
+    if not blob then
+        Window:Notify({
+            Title = "Blobman",
+            Text = "Sente no Blobman primeiro.",
+            Duration = 2
+        })
+
+        return
+    end
+
+    task.spawn(function()
+        local blobRoot,
+            SavedPos =
+            blobBringPhase(
+                blob,
+                targetRoot
+            )
+
+        if not blobRoot
+            or not SavedPos
+        then
+            Window:Notify({
+                Title = "Blobman",
+                Text = "Lock falhou.",
+                Duration = 2
+            })
+
+            return
+        end
+
+        blobRoot.CFrame =
+            SavedPos
+
+        blobRoot.Velocity =
+            Vector3.zero
+
+        task.wait(0.05)
+
+        local scriptObj =
+            blob:FindFirstChild(
+                "BlobmanSeatAndOwnerScript"
+            )
+
+        local CG =
+            scriptObj
+            and scriptObj:
+                FindFirstChild(
+                    "CreatureGrab"
+                )
+
+        local CD =
+            scriptObj
+            and scriptObj:
+                FindFirstChild(
+                    "CreatureDrop"
+                )
+
+        local R_Det =
+            blob:FindFirstChild(
+                "RightDetector"
+            )
+
+        local L_Det =
+            blob:FindFirstChild(
+                "LeftDetector"
+            )
+
+        local R_Weld =
+            R_Det
+            and (
+                R_Det:FindFirstChild(
+                    "RightWeld"
+                )
+                or R_Det:FindFirstChildWhichIsA(
+                    "Weld"
+                )
+            )
+
+        local L_Weld =
+            L_Det
+            and (
+                L_Det:FindFirstChild(
+                    "LeftWeld"
+                )
+                or L_Det:FindFirstChildWhichIsA(
+                    "Weld"
+                )
+            )
+
+        if not CG then
+            Window:Notify({
+                Title = "Blobman",
+                Text = "Lock falhou.",
+                Duration = 2
+            })
+
+            return
+        end
+
+        local lockEnd =
+            tick()
+            + Config.BlobLockHoldTime
+
+        local packetTimer = 0
+        local jumpTimer = 0
+
+        while tick() < lockEnd do
+            if not player.Parent
+                or not targetRoot.Parent
+            then
+                break
+            end
+
+            blobRoot.CFrame =
+                SavedPos
+
+            blobRoot.Velocity =
+                Vector3.zero
+
+            local lockPos =
+                SavedPos
+                * CFrame.new(
+                    0,
+                    23,
+                    0
+                )
+
+            targetRoot.CFrame =
+                lockPos
+
+            targetRoot.Velocity =
+                Vector3.zero
+
+            targetRoot.RotVelocity =
+                Vector3.zero
+
+            if tick() - packetTimer > 0.05 then
+                packetTimer = tick()
+
+                pcall(function()
+                    targetHumanoid.PlatformStand =
+                        true
+
+                    targetHumanoid.Sit =
+                        true
+
+                    SetNetworkOwner:FireServer(
+                        targetRoot,
+                        lockPos
+                    )
+
+                    if R_Det then
+                        local weld =
+                            R_Det:FindFirstChild(
+                                "RightWeld"
+                            )
+                            or R_Det:FindFirstChildWhichIsA(
+                                "Weld"
+                            )
+
+                        if weld and CD then
+                            CD:FireServer(
+                                weld
+                            )
+                        end
+                    end
+
+                    DestroyGrabLine:FireServer(
+                        targetRoot
+                    )
+
+                    if R_Det then
+                        CG:FireServer(
+                            R_Det,
+                            targetRoot,
+                            R_Weld
+                        )
+                    end
+
+                    if L_Det and L_Weld then
+                        CG:FireServer(
+                            L_Det,
+                            targetRoot,
+                            L_Weld
+                        )
+                    end
+
+                    CreateGrabLine:FireServer(
+                        targetRoot,
+                        Vector3.zero,
+                        targetRoot.Position,
+                        false
+                    )
+                end)
+            end
+
+            if tick() - jumpTimer
+                > Config.BlobLockJumpInterval
+            then
+                jumpTimer = tick()
+
+                jumpFromBlob()
+            end
+
+            RunService.Heartbeat:
+                Wait()
+        end
+
+        blobRoot.CFrame =
+            SavedPos
+
+        blobRoot.Velocity =
+            Vector3.zero
+
+        Window:Notify({
+            Title = "Blobman",
+            Text = "Lock: "
+                .. player.Name,
+            Duration = 2
+        })
     end)
 end
 
 local BlobTab =
     Window:CreateTab(
-        "Blobman",
-        "package"
+        "Blob Control",
+        "🧬"
     )
 
 local BlobSection =
-    BlobTab:CreateSection(
-        "Player"
-    )
+    BlobTab:
+        CreateSection(
+            "Player Control"
+        )
 
 local initialPlayers,
     initialMap =
@@ -2413,21 +3584,32 @@ State.BlobPlayerMap =
     initialMap
 
 local BlobDropdown =
-    BlobSection:CreateDropdown({
-        Text = "Selecionar player",
-        List = initialPlayers,
-        Default = initialPlayers[1],
-        Flag = "BlobPlayer",
+    BlobSection:
+        CreateDropdown({
+            Text = "Selecionar player",
+            List = initialPlayers,
+            Default = initialPlayers[1],
+            Flag = "BlobPlayer",
 
-        Callback = function(value)
-            State.BlobSelectedPlayer =
-                State.BlobPlayerMap[
-                    value
-                ]
-        end
-    })
+            Callback = function(value)
+                State.BlobSelectedPlayer =
+                    State.BlobPlayerMap[
+                        value
+                    ]
+
+                selectedKickPlayer =
+                    State.BlobPlayerMap[
+                        value
+                    ]
+            end
+        })
 
 State.BlobSelectedPlayer =
+    State.BlobPlayerMap[
+        initialPlayers[1]
+    ]
+
+selectedKickPlayer =
     State.BlobPlayerMap[
         initialPlayers[1]
     ]
@@ -2442,297 +3624,222 @@ BlobSection:CreateButton({
     Callback = bringBlobPlayer
 })
 
-BlobSection:CreateButton({
-    Text = "Kick Player",
+kickToggle =
+    BlobSection:
+        CreateToggle({
+            Text = "Kick Player (Loop)",
+            Default = false,
+            Flag = "KickLoop",
 
-    Callback = function()
-        Window:Notify({
-            Title = "Blobman",
-            Text = "Kick real não está ativo.",
-            Duration = 2
-        })
-    end
-})
+            Callback = function(value)
+                kickLoopEnabled =
+                    value
 
-task.spawn(function()
-    while State.Running do
-        task.wait(1)
-
-        local list,
-            map =
-            buildPlayerList()
-
-        local signature =
-            table.concat(
-                list,
-                "\0"
-            )
-
-        if signature
-            ~= State.BlobPlayerSignature
-        then
-
-            State.BlobPlayerSignature =
-                signature
-
-            local previous =
-                State.BlobSelectedPlayer
-
-            State.BlobPlayerMap =
-                map
-
-            BlobDropdown:
-                Refresh(
-                    list
-                )
-
-            local restored =
-                false
-
-            if previous
-                and previous.Parent
-                    == Players
-            then
-
-                for label, player in pairs(
-                    map
-                ) do
-
-                    if player
-                        == previous
-                    then
-
-                        BlobDropdown:
-                            SetValue(
-                                label
-                            )
-
-                        State.BlobSelectedPlayer =
-                            player
-
-                        restored =
-                            true
-
-                        break
+                if value then
+                    if selectedKickPlayer then
+                        StartSingleKickLoop()
+                    else
+                        pcall(function()
+                            kickToggle:
+                                SetValue(
+                                    false
+                                )
+                        end)
                     end
                 end
             end
+        })
 
-            if not restored then
-                local first =
-                    list[1]
+BlobSection:CreateToggle({
+    Text = "Kick All (Loop)",
+    Default = false,
+    Flag = "KickAllLoop",
 
-                BlobDropdown:
-                    SetValue(
-                        first
-                    )
+    Callback = function(value)
+        kickAllLoopEnabled =
+            value
 
-                State.BlobSelectedPlayer =
-                    map[first]
-            end
+        if value then
+            task.spawn(function()
+                while kickAllLoopEnabled
+                    and State.Running
+                do
+                    LookAll()
+
+                    task.wait(0.25)
+                end
+            end)
         end
     end
-end)
+})
 
-local function mouseDetector(
-    actionName,
-    inputState,
-    inputObject
-)
-    if inputState
-        ~= Enum.UserInputState.Begin
-    then
-
-        return Enum.ContextActionResult.Pass
-    end
-
-    if inputObject.UserInputType
-        == Enum.UserInputType.MouseButton1
-    then
-
-        State.LastMouseButton =
-            1
-
-        State.LastMouseTime =
-            os.clock()
-
-    elseif inputObject.UserInputType
-        == Enum.UserInputType.MouseButton2
-    then
-
-        State.LastMouseButton =
-            2
-
-        State.LastMouseTime =
-            os.clock()
-    end
-
-    return Enum.ContextActionResult.Pass
-end
-
-ContextActionService:
-    BindActionAtPriority(
-        "MangaHub_MouseDetector",
-        mouseDetector,
-        false,
-        Enum.ContextActionPriority.High.Value
-            + 1000,
-        Enum.UserInputType.MouseButton1,
-        Enum.UserInputType.MouseButton2
+local OpTab =
+    Window:CreateTab(
+        "Experimental",
+        "🧪"
     )
 
-local function getReleaseButton()
-    if UserInputService:
-        IsMouseButtonPressed(
-            Enum.UserInputType.MouseButton2
-        )
-    then
-
-        return 2
-    end
-
-    if UserInputService:
-        IsMouseButtonPressed(
-            Enum.UserInputType.MouseButton1
-        )
-    then
-
-        return 1
-    end
-
-    if os.clock()
-        - State.LastMouseTime
-        <= Config.MouseMemory
-    then
-
-        return State.LastMouseButton
-    end
-
-    return 0
-end
-
-local function throwObject(object)
-    if State.Throwing
-        or not State.Running
-        or not Config.ThrowEnabled
-    then
-        return
-    end
-
-    local root =
-        getAssemblyRoot(
-            object
-        )
-        or getAssemblyRoot(
-            State.OwnerObject
-        )
-        or getAssemblyRoot(
-            State.GrabbedObject
+local OpSection =
+    OpTab:
+        CreateSection(
+            "Experimental Features"
         )
 
-    if not root
-        or root.Anchored
-    then
-        return
+OpSection:CreateToggle({
+    Text = "Force Aura",
+    Default = false,
+    Flag = "FlingAura",
+
+    Callback = function(value)
+        Config.OpFlingAura =
+            value
     end
+})
 
-    local camera =
-        Workspace.CurrentCamera
+OpSection:CreateSlider({
+    Text = "Alcance",
 
-    if not camera then
-        return
+    Min = 5,
+    Max = 100,
+    Default = Config.OpFlingRange,
+
+    Decimals = 0,
+
+    Flag = "OpFlingRange",
+
+    Callback = function(value)
+        Config.OpFlingRange =
+            value
     end
+})
 
-    State.Throwing =
-        true
+OpSection:CreateSlider({
+    Text = "Power fling",
 
-    local speed =
-        math.clamp(
-            Config.ThrowForce,
-            Config.ThrowMin,
-            Config.ThrowMax
-        )
+    Min = 15,
+    Max = 10000,
+    Default = Config.OpFlingSpeed,
 
-    local desiredVelocity =
-        camera.CFrame.LookVector
-        * speed
+    Decimals = 0,
 
-    RunService.Heartbeat:
-        Wait()
+    Flag = "OpFlingSpeed",
 
-    if not root.Parent then
-        State.Throwing =
-            false
+    Callback = function(value)
+        Config.OpFlingSpeed =
+            value
 
-        return
+        Config.OpFlingUpSpeed =
+            value
     end
+})
 
-    local impulse =
-        (
-            desiredVelocity
-            - root.AssemblyLinearVelocity
-        )
-        * root.AssemblyMass
+local function refreshPlayerDropdowns()
+    local newList,
+        newMap =
+        buildPlayerList()
+
+    State.BlobPlayerMap =
+        newMap
 
     pcall(function()
-        root:ApplyImpulse(
-            impulse
+        BlobDropdown:Refresh(
+            newList
         )
     end)
 
-    root.AssemblyLinearVelocity =
-        desiredVelocity
-
-    for _ = 1,
-        Config.ThrowFrames
-    do
-
-        RunService.Heartbeat:
-            Wait()
-
-        if not State.Running
-            or not root.Parent
-        then
-            break
-        end
-
-        local velocity =
-            root.AssemblyLinearVelocity
-
-        if velocity.Magnitude
-            < speed * 0.75
-        then
-
-            local correction =
-                (
-                    desiredVelocity
-                    - velocity
-                )
-                * root.AssemblyMass
-
-            pcall(function()
-                root:ApplyImpulse(
-                    correction
-                )
-            end)
-
-            root.AssemblyLinearVelocity =
-                desiredVelocity
-        end
+    if selectedKickPlayer
+        and not Players:
+            FindFirstChild(
+                selectedKickPlayer.Name
+            )
+    then
+        selectedKickPlayer = nil
     end
 
-    State.Throwing =
-        false
+    if State.BlobSelectedPlayer
+        and not Players:
+            FindFirstChild(
+                State.BlobSelectedPlayer.Name
+            )
+    then
+        State.BlobSelectedPlayer = nil
+    end
 end
+
+connect(
+    Players.PlayerAdded,
+
+    function(player)
+        if player
+            == LocalPlayer
+        then
+            return
+        end
+
+        task.wait(1)
+
+        refreshPlayerDropdowns()
+
+        Window:Notify({
+            Title = "Player",
+            Text = player.DisplayName
+                .. " (@"
+                .. player.Name
+                .. ") entrou",
+            Duration = 3
+        })
+    end
+)
+
+connect(
+    Players.PlayerRemoving,
+
+    function(player)
+        if player
+            == LocalPlayer
+        then
+            return
+        end
+
+        if selectedKickPlayer
+            == player
+        then
+            selectedKickPlayer = nil
+            kickLoopEnabled = false
+
+            pcall(function()
+                kickToggle:
+                    SetValue(
+                        false
+                    )
+            end)
+        end
+
+        if State.BlobSelectedPlayer
+            == player
+        then
+            State.BlobSelectedPlayer = nil
+        end
+
+        refreshPlayerDropdowns()
+
+        Window:Notify({
+            Title = "Player",
+            Text = player.DisplayName
+                .. " (@"
+                .. player.Name
+                .. ") saiu",
+            Duration = 3
+        })
+    end
+)
 
 local OldNamecall
 
 OldNamecall =
     hookmetamethod(
         game,
-
         "__namecall",
-
         newcclosure(function(
             self,
             ...
@@ -2751,11 +3858,9 @@ OldNamecall =
             end
 
             if not State.Running
-                or method
-                    ~= "FireServer"
+                or method ~= "FireServer"
                 or caller
             then
-
                 return OldNamecall(
                     self,
                     ...
@@ -2778,14 +3883,10 @@ OldNamecall =
             if self
                 == CreateGrabLine
             then
-
                 local object =
                     args[1]
 
-                if valid(
-                    object
-                ) then
-
+                if valid(object) then
                     State.GrabbedObject =
                         object
                 end
@@ -2793,14 +3894,10 @@ OldNamecall =
             elseif self
                 == SetNetworkOwner
             then
-
                 local object =
                     args[1]
 
-                if valid(
-                    object
-                ) then
-
+                if valid(object) then
                     State.OwnerObject =
                         object
 
@@ -2811,7 +3908,6 @@ OldNamecall =
             elseif self
                 == DestroyGrabLine
             then
-
                 local object =
                     args[1]
                     or State.OwnerObject
@@ -2821,11 +3917,8 @@ OldNamecall =
                     getReleaseButton()
 
                 if button == 2
-                    and valid(
-                        object
-                    )
+                    and valid(object)
                 then
-
                     task.spawn(
                         throwObject,
                         object
@@ -2852,9 +3945,3 @@ OldNamecall =
             )
         end)
     )
-
-Window:Notify({
-    Title = "Manga Hub",
-    Text = "Throw + Anti-Grab + Anti Ownership carregados",
-    Duration = 4
-})
