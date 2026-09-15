@@ -4083,4 +4083,3 @@ OldNamecall =
             SilentAim.Distance = val
         end,
     })
-end
