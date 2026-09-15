@@ -3945,3 +3945,142 @@ OldNamecall =
             )
         end)
     )
+
+
+
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local UserInputService = game:GetService("UserInputService")
+    local Workspace = game:GetService("Workspace")
+
+    local LocalPlayer = Players.LocalPlayer
+
+    local SilentAim = {
+        Enabled = false,
+        Distance = 28,
+        TargetMode = "cursor",
+        TargetPosition = nil
+    }
+
+    local function updateTarget()
+        if not SilentAim.Enabled then
+            SilentAim.TargetPosition = nil
+            return
+        end
+
+        local camera = Workspace.CurrentCamera
+        if not camera then
+            SilentAim.TargetPosition = nil
+            return
+        end
+
+        local referencePos
+        if SilentAim.TargetMode == "cursor" then
+            referencePos = UserInputService:GetMouseLocation()
+        else
+            referencePos = Vector2.new(
+                camera.ViewportSize.X / 2,
+                camera.ViewportSize.Y / 2
+            )
+        end
+
+        if not referencePos then
+            SilentAim.TargetPosition = nil
+            return
+        end
+
+        local closestPart = nil
+        local minScreenDist = math.huge
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                local char = player.Character
+                if char then
+                    local humanoid = char:FindFirstChildOfClass("Humanoid")
+                    if humanoid and humanoid.Health > 0 then
+                        local targetPart = char:FindFirstChild("HumanoidRootPart")
+                            or char:FindFirstChild("Torso")
+                        if targetPart then
+                            local worldDist = (targetPart.Position - camera.CFrame.Position).Magnitude
+                            if worldDist <= SilentAim.Distance then
+                                local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
+                                if onScreen then
+                                    local screenVec = Vector2.new(screenPos.X, screenPos.Y)
+                                    local screenDist = (screenVec - referencePos).Magnitude
+                                    if screenDist < minScreenDist then
+                                        minScreenDist = screenDist
+                                        closestPart = targetPart
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if closestPart then
+            SilentAim.TargetPosition = closestPart.Position
+        else
+            SilentAim.TargetPosition = nil
+        end
+    end
+
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        if SilentAim.Enabled
+            and SilentAim.TargetPosition
+            and self == Workspace
+            and method == "Raycast"
+        then
+            local args = {...}
+            if typeof(args[1]) == "Vector3" then
+                local origin = args[1]
+                local newDir = (SilentAim.TargetPosition - origin).Unit * SilentAim.Distance
+                args[2] = newDir
+                return oldNamecall(self, unpack(args))
+            end
+        end
+        return oldNamecall(self, ...)
+    end))
+
+    RunService.RenderStepped:Connect(updateTarget)
+
+    local SilentAimTab = Window:Tab({ Title = "silent aim", Icon = "crosshair" })
+
+    SilentAimTab:Section({ Title = "Silent Aim Settings" })
+
+    SilentAimTab:Toggle({
+        Title = "Silent Aim",
+        Desc = "pega a pessoa mais perto do cursor/centro da tela",
+        Value = false,
+        Callback = function(state)
+            SilentAim.Enabled = state
+            if not state then
+                SilentAim.TargetPosition = nil
+            end
+        end,
+    })
+
+    SilentAimTab:Dropdown({
+        Title = "Target Mode",
+        Desc = "cursor = mais perto do mouse / center = mais perto do centro da tela",
+        Values = { "cursor", "center" },
+        Value = "cursor",
+        Callback = function(selected)
+            SilentAim.TargetMode = selected
+        end,
+    })
+
+    SilentAimTab:Slider({
+        Title = "Max Distance",
+        Desc = "Distância máxima que o silent aim funciona",
+        Min = 5,
+        Max = 100,
+        Value = 28,
+        Callback = function(val)
+            SilentAim.Distance = val
+        end,
+    })
+end
