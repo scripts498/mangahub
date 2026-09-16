@@ -66,6 +66,14 @@ then
     )
 end
 
+if ENV.MangaMobileThrowController
+    and ENV.MangaMobileThrowController.Stop
+then
+    pcall(
+        ENV.MangaMobileThrowController.Stop
+    )
+end
+
 pcall(function()
     ContextActionService:UnbindAction("MangaHub_MouseDetector")
 end)
@@ -123,7 +131,6 @@ local Config = {
     NoclipGrab = false,
     KillGrabHoldTime = 5,
     GrabEffectsPulse = 0.05,
-    GrabEffectsOwnershipPulse = 0.20,
 
     Debug = false
 }
@@ -149,6 +156,10 @@ local State = {
 
     LastMouseButton = 0,
     LastMouseTime = 0,
+    MobileThrowIntentUntil = 0,
+    MobileThrowBoundScript = nil,
+    MobileThrowFunction = nil,
+    MobileThrowOriginal = nil,
 
     GrabUntil = 0,
 
@@ -181,13 +192,11 @@ local State = {
     GrabEffectTargetPlayer = nil,
     GrabEffectTargetCharacter = nil,
     GrabEffectStarted = 0,
-    GrabEffectLastOwnership = 0,
     GrabMasslessOriginal = {},
     GrabCollideOriginal = {},
     KillGrabTriggered = false,
     KillGrabHazard = nil,
-    KillGrabHazardState = nil,
-    KillGrabLastOwnership = 0
+    KillGrabHazardState = nil
 }
 
 ENV.MangaHubState = State
@@ -1336,7 +1345,6 @@ local function restoreKillGrabHazard()
 
     State.KillGrabHazard = nil
     State.KillGrabHazardState = nil
-    State.KillGrabLastOwnership = 0
 end
 
 local function restoreGrabEffectParts()
@@ -1352,7 +1360,6 @@ local function resetGrabEffectsTransient()
     State.GrabEffectTargetPlayer = nil
     State.GrabEffectTargetCharacter = nil
     State.GrabEffectStarted = 0
-    State.GrabEffectLastOwnership = 0
     State.KillGrabTriggered = false
 end
 
@@ -1363,38 +1370,34 @@ local function currentGrabEffectPart()
                 "GrabParts"
             )
 
-    if grabParts then
-        local grabPart =
-            grabParts:
-                FindFirstChild(
-                    "GrabPart"
-                )
-
-        if grabPart then
-            local weld =
-                grabPart:
-                    FindFirstChild(
-                        "WeldConstraint"
-                    )
-                or grabPart:
-                    FindFirstChildWhichIsA(
-                        "WeldConstraint"
-                    )
-
-            if weld
-                and valid(weld.Part1)
-            then
-                return weld.Part1
-            end
-        end
+    if not grabParts then
+        return nil
     end
 
-    if valid(State.OwnerObject) then
-        return State.OwnerObject
+    local grabPart =
+        grabParts:
+            FindFirstChild(
+                "GrabPart"
+            )
+
+    if not grabPart then
+        return nil
     end
 
-    if valid(State.GrabbedObject) then
-        return State.GrabbedObject
+    local weld =
+        grabPart:
+            FindFirstChild(
+                "WeldConstraint"
+            )
+        or grabPart:
+            FindFirstChildWhichIsA(
+                "WeldConstraint"
+            )
+
+    if weld
+        and valid(weld.Part1)
+    then
+        return weld.Part1
     end
 
     return nil
@@ -1574,26 +1577,6 @@ local function grabEffectParts(
     return result
 end
 
-local function requestGrabEffectOwnership(
-    part
-)
-    local root =
-        getAssemblyRoot(
-            part
-        )
-
-    if not root then
-        return
-    end
-
-    pcall(function()
-        SetNetworkOwner:FireServer(
-            root,
-            root.CFrame
-        )
-    end)
-end
-
 local function applyGrabMassless(
     parts
 )
@@ -1716,24 +1699,6 @@ local function applyKillGrab(
         return
     end
 
-    local now =
-        os.clock()
-
-    if now
-        - State.KillGrabLastOwnership
-        >= Config.GrabEffectsOwnershipPulse
-    then
-        State.KillGrabLastOwnership =
-            now
-
-        pcall(function()
-            SetNetworkOwner:FireServer(
-                hazard,
-                hazard.CFrame
-            )
-        end)
-    end
-
     pcall(function()
         hazard.Size =
             Vector3.new(
@@ -1789,17 +1754,6 @@ local function updateGrabEffects()
 
     local now =
         os.clock()
-
-    if now
-        - State.GrabEffectLastOwnership
-        >= Config.GrabEffectsOwnershipPulse
-    then
-        State.GrabEffectLastOwnership =
-            now
-        requestGrabEffectOwnership(
-            part
-        )
-    end
 
     local parts =
         grabEffectParts(
@@ -3053,6 +3007,9 @@ connect(
 
     function(character)
         resetGrabEffectsTransient()
+
+        State.MobileThrowIntentUntil =
+            0
 
         task.spawn(
             setupCharacter,
@@ -4482,6 +4439,186 @@ local function throwObject(object)
         false
 end
 
+local MobileThrowController = {
+    Running = true
+}
+
+local function mobileThrowHookFunction()
+    if typeof(hookfunction)
+        == "function"
+    then
+        return hookfunction
+    end
+
+    if typeof(hookfunc)
+        == "function"
+    then
+        return hookfunc
+    end
+
+    return nil
+end
+
+local function clearMobileThrowBinding()
+    local hook =
+        mobileThrowHookFunction()
+
+    if hook
+        and State.MobileThrowFunction
+        and State.MobileThrowOriginal
+    then
+        pcall(
+            hook,
+            State.MobileThrowFunction,
+            State.MobileThrowOriginal
+        )
+    end
+
+    State.MobileThrowBoundScript = nil
+    State.MobileThrowFunction = nil
+    State.MobileThrowOriginal = nil
+end
+
+local function bindMobileThrowFunction()
+    local grabbingScript =
+        lineCurrentGrabScript()
+
+    if not grabbingScript then
+        return false
+    end
+
+    if State.MobileThrowBoundScript
+            == grabbingScript
+        and State.MobileThrowFunction
+        and State.MobileThrowOriginal
+    then
+        return true
+    end
+
+    clearMobileThrowBinding()
+
+    local hook =
+        mobileThrowHookFunction()
+
+    if not hook then
+        return false
+    end
+
+    for _, fn in ipairs(
+        lineFunctions()
+    ) do
+        if lineFunctionScript(fn)
+            == grabbingScript
+        then
+            local info =
+                lineFunctionInfo(fn)
+
+            local name =
+                info
+                and tostring(
+                    info.name
+                        or ""
+                )
+                or ""
+
+            if name == "throw" then
+                local original
+
+                local wrapper =
+                    function(...)
+                        if MobileThrowController.Running
+                            and State.Running
+                            and Config.ThrowEnabled
+                            and UserInputService.TouchEnabled
+                        then
+                            State.MobileThrowIntentUntil =
+                                os.clock()
+                                + 1.25
+                        end
+
+                        if original then
+                            return original(...)
+                        end
+                    end
+
+                if typeof(newcclosure)
+                    == "function"
+                then
+                    wrapper =
+                        newcclosure(
+                            wrapper
+                        )
+                end
+
+                local ok, result =
+                    pcall(
+                        hook,
+                        fn,
+                        wrapper
+                    )
+
+                if ok
+                    and type(result)
+                        == "function"
+                then
+                    original = result
+
+                    State.MobileThrowBoundScript =
+                        grabbingScript
+                    State.MobileThrowFunction = fn
+                    State.MobileThrowOriginal = result
+
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function mobileThrowIntentActive()
+    return UserInputService.TouchEnabled
+        and os.clock()
+            <= State.MobileThrowIntentUntil
+end
+
+function MobileThrowController.Stop()
+    MobileThrowController.Running = false
+    State.MobileThrowIntentUntil = 0
+
+    clearMobileThrowBinding()
+
+    if ENV.MangaMobileThrowController
+        == MobileThrowController
+    then
+        ENV.MangaMobileThrowController = nil
+    end
+end
+
+ENV.MangaMobileThrowController =
+    MobileThrowController
+
+task.spawn(function()
+    while State.Running
+        and MobileThrowController.Running
+    do
+        if UserInputService.TouchEnabled then
+            local currentScript =
+                lineCurrentGrabScript()
+
+            if State.MobileThrowBoundScript
+                    ~= currentScript
+                or not State.MobileThrowFunction
+            then
+                bindMobileThrowFunction()
+            end
+        end
+
+        task.wait(0.75)
+    end
+end)
+
 local function buildPlayerList()
     local list = {}
     local map = {}
@@ -5466,7 +5603,13 @@ OldNamecall =
                 local button =
                     getReleaseButton()
 
-                if button == 2
+                local mobileIntent =
+                    mobileThrowIntentActive()
+
+                if (
+                    button == 2
+                    or mobileIntent
+                )
                     and valid(object)
                 then
                     task.spawn(
@@ -5474,6 +5617,9 @@ OldNamecall =
                         object
                     )
                 end
+
+                State.MobileThrowIntentUntil =
+                    0
 
                 State.GrabbedObject =
                     nil
