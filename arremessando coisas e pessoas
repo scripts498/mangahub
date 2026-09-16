@@ -160,7 +160,8 @@ local State = {
     LineOriginalReach = nil,
     LineBoundScript = nil,
     LineAppliedReach = nil,
-    LineFailureNotified = false
+    LineFailureNotified = false,
+    LineBeamActive = false
 }
 
 ENV.MangaHubState = State
@@ -1110,7 +1111,9 @@ ENV.MangaLineController =
 
 task.spawn(function()
     while State.Running do
-        if Config.LineEnabled then
+        if Config.LineEnabled
+            and State.LineBeamActive
+        then
             local ok =
                 applyLineReach()
 
@@ -1128,7 +1131,7 @@ task.spawn(function()
             end
         end
 
-        task.wait(0.35)
+        task.wait(0.10)
     end
 
     restoreLineReach()
@@ -3322,18 +3325,22 @@ LineSection:CreateToggle({
             false
 
         if value then
-            local ok =
-                applyLineReach()
+            if State.LineBeamActive then
+                local ok =
+                    applyLineReach()
 
-            if not ok then
-                State.LineFailureNotified =
-                    true
+                if not ok then
+                    State.LineFailureNotified =
+                        true
 
-                Window:Notify({
-                    Title = "Line",
-                    Text = "Não consegui localizar o limite interno da Grab Line.",
-                    Duration = 4
-                })
+                    Window:Notify({
+                        Title = "Line",
+                        Text = "Não consegui localizar o limite interno da Grab Line.",
+                        Duration = 4
+                    })
+                end
+            else
+                locateLineReach()
             end
         else
             restoreLineReach()
@@ -3364,7 +3371,9 @@ LineSection:CreateSlider({
         State.LineFailureNotified =
             false
 
-        if Config.LineEnabled then
+        if Config.LineEnabled
+            and State.LineBeamActive
+        then
             local ok =
                 applyLineReach()
 
@@ -4597,6 +4606,32 @@ OldNamecall =
                     ...
                 )
 
+            local isBeam =
+                typeof(self)
+                    == "Instance"
+                and self.Name
+                    == "Beam"
+
+            local beamAction =
+                isBeam
+                and tostring(
+                    args[1]
+                )
+                or nil
+
+            if Config.LineEnabled
+                and beamAction
+                    == "make"
+            then
+                State.LineBeamActive =
+                    true
+
+                State.LineFailureNotified =
+                    false
+
+                applyLineReach()
+            end
+
             local result =
                 table.pack(
                     OldNamecall(
@@ -4604,6 +4639,15 @@ OldNamecall =
                         ...
                     )
                 )
+
+            if beamAction
+                == "destroy"
+            then
+                State.LineBeamActive =
+                    false
+
+                restoreLineReach()
+            end
 
             if self
                 == CreateGrabLine
