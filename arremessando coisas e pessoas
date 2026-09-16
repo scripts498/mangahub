@@ -129,7 +129,6 @@ local Config = {
     KillGrab = false,
     MasslessGrab = false,
     NoclipGrab = false,
-    KillGrabHoldTime = 5,
     GrabEffectsPulse = 0.05,
 
     Debug = false
@@ -191,12 +190,9 @@ local State = {
     GrabEffectTarget = nil,
     GrabEffectTargetPlayer = nil,
     GrabEffectTargetCharacter = nil,
-    GrabEffectStarted = 0,
-    GrabMasslessOriginal = {},
+    GrabConstraintOriginal = {},
     GrabCollideOriginal = {},
-    KillGrabTriggered = false,
-    KillGrabHazard = nil,
-    KillGrabHazardState = nil
+    KillGrabHazardStates = {}
 }
 
 ENV.MangaHubState = State
@@ -506,6 +502,12 @@ local DestroyGrabLine =
     GrabEvents:
         WaitForChild(
             "DestroyGrabLine"
+        )
+
+local EndGrabEarly =
+    GrabEvents:
+        FindFirstChild(
+            "EndGrabEarly"
         )
 
 local CharacterEvents =
@@ -1293,19 +1295,174 @@ task.spawn(function()
 end)
 
 local function restoreGrabMassless()
-    for part, original in pairs(
-        State.GrabMasslessOriginal
+    for constraint, saved in pairs(
+        State.GrabConstraintOriginal
     ) do
-        if part
-            and part.Parent
+        if constraint
+            and constraint.Parent
         then
-            pcall(function()
-                part.Massless = original
-            end)
+            for property, value in pairs(
+                saved
+            ) do
+                pcall(function()
+                    constraint[property] = value
+                end)
+            end
         end
     end
 
-    State.GrabMasslessOriginal = {}
+    State.GrabConstraintOriginal = {}
+end
+
+local function saveGrabConstraintProperty(
+    constraint,
+    property
+)
+    local saved =
+        State.GrabConstraintOriginal[
+            constraint
+        ]
+
+    if not saved then
+        saved = {}
+        State.GrabConstraintOriginal[
+            constraint
+        ] = saved
+    end
+
+    if saved[property] ~= nil then
+        return true
+    end
+
+    local ok, value =
+        pcall(function()
+            return constraint[property]
+        end)
+
+    if not ok then
+        return false
+    end
+
+    saved[property] = value
+    return true
+end
+
+local function setGrabConstraintProperty(
+    constraint,
+    property,
+    value
+)
+    if not saveGrabConstraintProperty(
+        constraint,
+        property
+    ) then
+        return false
+    end
+
+    return pcall(function()
+        constraint[property] = value
+    end)
+end
+
+local function applyMasslessGrabConstraints()
+    local grabParts =
+        Workspace:
+            FindFirstChild(
+                "GrabParts"
+            )
+
+    if not grabParts then
+        restoreGrabMassless()
+        return false
+    end
+
+    local applied = false
+
+    for _, name in ipairs({
+        "DragPart",
+        "DragPart1"
+    }) do
+        local dragPart =
+            grabParts:
+                FindFirstChild(
+                    name
+                )
+            or grabParts:
+                FindFirstChild(
+                    name,
+                    true
+                )
+
+        if dragPart then
+            local alignOrientation =
+                dragPart:
+                    FindFirstChildWhichIsA(
+                        "AlignOrientation"
+                    )
+
+            if alignOrientation then
+                setGrabConstraintProperty(
+                    alignOrientation,
+                    "MaxAngularVelocity",
+                    math.huge
+                )
+
+                setGrabConstraintProperty(
+                    alignOrientation,
+                    "MaxTorque",
+                    math.huge
+                )
+
+                setGrabConstraintProperty(
+                    alignOrientation,
+                    "Responsiveness",
+                    200
+                )
+
+                applied = true
+            end
+
+            local alignPosition =
+                dragPart:
+                    FindFirstChildWhichIsA(
+                        "AlignPosition"
+                    )
+
+            if alignPosition then
+                setGrabConstraintProperty(
+                    alignPosition,
+                    "MaxAxesForce",
+                    Vector3.new(
+                        math.huge,
+                        math.huge,
+                        math.huge
+                    )
+                )
+
+                setGrabConstraintProperty(
+                    alignPosition,
+                    "MaxForce",
+                    math.huge
+                )
+
+                setGrabConstraintProperty(
+                    alignPosition,
+                    "MaxVelocity",
+                    math.huge
+                )
+
+                setGrabConstraintProperty(
+                    alignPosition,
+                    "Responsiveness",
+                    200
+                )
+
+                applied = true
+            end
+        end
+    end
+
+    return applied
 end
 
 local function restoreGrabCollisions()
@@ -1324,43 +1481,39 @@ local function restoreGrabCollisions()
     State.GrabCollideOriginal = {}
 end
 
-local function restoreKillGrabHazard()
-    local hazard =
-        State.KillGrabHazard
-
-    local saved =
-        State.KillGrabHazardState
-
-    if hazard
-        and hazard.Parent
-        and saved
-    then
-        pcall(function()
-            hazard.CFrame = saved.CFrame
-            hazard.Size = saved.Size
-            hazard.Transparency =
-                saved.Transparency
-        end)
+local function restoreKillGrabHazards()
+    for hazard, saved in pairs(
+        State.KillGrabHazardStates
+    ) do
+        if hazard
+            and hazard.Parent
+            and saved
+        then
+            pcall(function()
+                hazard.CFrame = saved.CFrame
+                hazard.Size = saved.Size
+                hazard.Transparency =
+                    saved.Transparency
+            end)
+        end
     end
 
-    State.KillGrabHazard = nil
-    State.KillGrabHazardState = nil
+    State.KillGrabHazardStates = {}
 end
 
 local function restoreGrabEffectParts()
     restoreGrabMassless()
     restoreGrabCollisions()
-    restoreKillGrabHazard()
+    restoreKillGrabHazards()
 end
 
 local function resetGrabEffectsTransient()
-    restoreGrabEffectParts()
+    restoreGrabCollisions()
+    restoreKillGrabHazards()
 
     State.GrabEffectTarget = nil
     State.GrabEffectTargetPlayer = nil
     State.GrabEffectTargetCharacter = nil
-    State.GrabEffectStarted = 0
-    State.KillGrabTriggered = false
 end
 
 local function currentGrabEffectPart()
@@ -1577,23 +1730,6 @@ local function grabEffectParts(
     return result
 end
 
-local function applyGrabMassless(
-    parts
-)
-    for _, part in ipairs(parts) do
-        if State.GrabMasslessOriginal[part]
-            == nil
-        then
-            State.GrabMasslessOriginal[part] =
-                part.Massless
-        end
-
-        pcall(function()
-            part.Massless = true
-        end)
-    end
-end
-
 local function applyGrabNoclip(
     parts
 )
@@ -1611,13 +1747,7 @@ local function applyGrabNoclip(
     end
 end
 
-local function findKillGrabHazard()
-    if State.KillGrabHazard
-        and State.KillGrabHazard.Parent
-    then
-        return State.KillGrabHazard
-    end
-
+local function findKillGrabHazards()
     local map =
         Workspace:
             FindFirstChild(
@@ -1628,28 +1758,39 @@ local function findKillGrabHazard()
         map
         or Workspace
 
+    local hazards = {}
+
     for _, descendant in ipairs(
         searchRoot:GetDescendants()
     ) do
-        if descendant:IsA("BasePart")
+        if descendant:IsA(
+                "BasePart"
+            )
             and descendant.Name
                 == "PoisonHurtPart"
         then
-            State.KillGrabHazard =
+            if not State.KillGrabHazardStates[
                 descendant
+            ]
+            then
+                State.KillGrabHazardStates[
+                    descendant
+                ] = {
+                    CFrame = descendant.CFrame,
+                    Size = descendant.Size,
+                    Transparency =
+                        descendant.Transparency
+                }
+            end
 
-            State.KillGrabHazardState = {
-                CFrame = descendant.CFrame,
-                Size = descendant.Size,
-                Transparency =
-                    descendant.Transparency
-            }
-
-            return descendant
+            table.insert(
+                hazards,
+                descendant
+            )
         end
     end
 
-    return nil
+    return hazards
 end
 
 local function applyKillGrab(
@@ -1661,7 +1802,8 @@ local function applyKillGrab(
         or not character
         or not character.Parent
     then
-        return
+        restoreKillGrabHazards()
+        return false
     end
 
     local humanoid =
@@ -1673,7 +1815,8 @@ local function applyKillGrab(
     if not humanoid
         or humanoid.Health <= 0
     then
-        return
+        restoreKillGrabHazards()
+        return false
     end
 
     local head =
@@ -1687,38 +1830,60 @@ local function applyKillGrab(
             )
 
     if not head
-        or not head:IsA("BasePart")
+        or not head:IsA(
+            "BasePart"
+        )
     then
-        return
+        restoreKillGrabHazards()
+        return false
     end
 
-    local hazard =
-        findKillGrabHazard()
+    local hazards =
+        findKillGrabHazards()
 
-    if not hazard then
-        return
+    if #hazards <= 0 then
+        return false
     end
 
-    pcall(function()
-        hazard.Size =
-            Vector3.new(
-                2,
-                2,
-                2
-            )
+    for _, hazard in ipairs(
+        hazards
+    ) do
+        pcall(function()
+            hazard.Size =
+                Vector3.new(
+                    2,
+                    2,
+                    2
+                )
 
-        hazard.Transparency = 1
-        hazard.CFrame = head.CFrame
-    end)
+            hazard.Transparency = 1
+            hazard.CFrame =
+                head.CFrame
+        end)
+    end
+
+    return true
 end
 
 local function updateGrabEffects()
+    if Config.MasslessGrab then
+        applyMasslessGrabConstraints()
+    else
+        restoreGrabMassless()
+    end
+
     local part =
         currentGrabEffectPart()
 
     if not valid(part) then
         if State.GrabEffectTarget
-            ~= nil
+                ~= nil
+            or next(
+                State.GrabCollideOriginal
+            )
+            or next(
+                State.KillGrabHazardStates
+            )
         then
             resetGrabEffectsTransient()
         end
@@ -1748,28 +1913,15 @@ local function updateGrabEffects()
             player
         State.GrabEffectTargetCharacter =
             character
-        State.GrabEffectStarted =
-            os.clock()
-    end
-
-    local now =
-        os.clock()
-
-    local parts =
-        grabEffectParts(
-            part,
-            character
-        )
-
-    if Config.MasslessGrab then
-        applyGrabMassless(
-            parts
-        )
-    else
-        restoreGrabMassless()
     end
 
     if Config.NoclipGrab then
+        local parts =
+            grabEffectParts(
+                part,
+                character
+            )
+
         applyGrabNoclip(
             parts
         )
@@ -1777,39 +1929,17 @@ local function updateGrabEffects()
         restoreGrabCollisions()
     end
 
-    local targetHumanoid =
-        character
-        and character:
-            FindFirstChildOfClass(
-                "Humanoid"
-            )
-
     if Config.KillGrab
         and player
         and player ~= LocalPlayer
         and character
-        and targetHumanoid
-        and targetHumanoid.Health > 0
-        and now
-            - State.GrabEffectStarted
-            >= Config.KillGrabHoldTime
     then
-        State.KillGrabTriggered =
-            true
-
         applyKillGrab(
             player,
             character
         )
     else
-        if State.KillGrabTriggered
-            or State.KillGrabHazard
-        then
-            restoreKillGrabHazard()
-        end
-
-        State.KillGrabTriggered =
-            false
+        restoreKillGrabHazards()
     end
 end
 
@@ -1840,9 +1970,9 @@ task.spawn(function()
         then
             updateGrabEffects()
         elseif State.GrabEffectTarget
-            or next(State.GrabMasslessOriginal)
+            or next(State.GrabConstraintOriginal)
             or next(State.GrabCollideOriginal)
-            or State.KillGrabHazard
+            or next(State.KillGrabHazardStates)
         then
             resetGrabEffectsTransient()
         end
@@ -4123,13 +4253,8 @@ GrabEffectsSection:CreateToggle({
     Callback = function(value)
         Config.KillGrab = value
 
-        State.GrabEffectStarted =
-            os.clock()
-        State.KillGrabTriggered =
-            false
-
         if not value then
-            restoreKillGrabHazard()
+            restoreKillGrabHazards()
         end
     end
 })
@@ -5558,6 +5683,13 @@ OldNamecall =
                 table.pack(
                     ...
                 )
+
+            if Config.MasslessGrab
+                and EndGrabEarly
+                and self == EndGrabEarly
+            then
+                return nil
+            end
 
             local result =
                 table.pack(
