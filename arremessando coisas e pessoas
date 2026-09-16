@@ -946,22 +946,7 @@ local function locateLineReach()
                 local constants =
                     lineConstants(fn)
 
-                local ownerScript =
-                    lineFunctionScript(fn)
-
-                local correctOwner =
-                    ownerScript
-                        == grabbingScript
-
-                local fallbackOwner =
-                    ownerScript == nil
-                        and name == "grab"
-
-                if (
-                    correctOwner
-                    or fallbackOwner
-                )
-                    and name == "grab"
+                if name == "grab"
                     and lineHasConstant(
                         constants,
                         "make"
