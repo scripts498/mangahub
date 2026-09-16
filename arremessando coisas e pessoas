@@ -50,6 +50,14 @@ if ENV.MangaHubState then
     end
 end
 
+if ENV.MangaLineController
+    and ENV.MangaLineController.Stop
+then
+    pcall(
+        ENV.MangaLineController.Stop
+    )
+end
+
 pcall(function()
     ContextActionService:UnbindAction("MangaHub_MouseDetector")
 end)
@@ -97,6 +105,11 @@ local Config = {
     OpFlingAngular = 90,
     OpFlingForceFrames = 3,
 
+    LineEnabled = false,
+    LineLevel = 0,
+    LineInfiniteLevel = 28,
+    LineInfiniteReach = 1000000,
+
     Debug = false
 }
 
@@ -140,7 +153,14 @@ local State = {
 
     BlobPlayerMap = {},
     BlobPlayerSignature = "",
-    BlobSelectedPlayer = nil
+    BlobSelectedPlayer = nil,
+
+    LineGrabFunction = nil,
+    LineUpvalueIndex = nil,
+    LineOriginalReach = nil,
+    LineBoundScript = nil,
+    LineAppliedReach = nil,
+    LineFailureNotified = false
 }
 
 ENV.MangaHubState = State
@@ -561,6 +581,564 @@ local function getAssemblyRoot(object)
 
     return nil
 end
+
+local function lineRegistry()
+    if typeof(getreg)
+        == "function"
+    then
+        local ok, result =
+            pcall(getreg)
+
+        if ok
+            and type(result)
+                == "table"
+        then
+            return result
+        end
+    end
+
+    if type(debug)
+            == "table"
+        and typeof(debug.getregistry)
+            == "function"
+    then
+        local ok, result =
+            pcall(
+                debug.getregistry
+            )
+
+        if ok
+            and type(result)
+                == "table"
+        then
+            return result
+        end
+    end
+
+    return nil
+end
+
+local function lineConstants(fn)
+    if typeof(getconstants)
+        == "function"
+    then
+        local ok, result =
+            pcall(
+                getconstants,
+                fn
+            )
+
+        if ok
+            and type(result)
+                == "table"
+        then
+            return result
+        end
+    end
+
+    if type(debug)
+            == "table"
+        and typeof(debug.getconstants)
+            == "function"
+    then
+        local ok, result =
+            pcall(
+                debug.getconstants,
+                fn
+            )
+
+        if ok
+            and type(result)
+                == "table"
+        then
+            return result
+        end
+    end
+
+    return nil
+end
+
+local function lineUpvalues(fn)
+    if typeof(getupvalues)
+        == "function"
+    then
+        local ok, result =
+            pcall(
+                getupvalues,
+                fn
+            )
+
+        if ok
+            and type(result)
+                == "table"
+        then
+            return result
+        end
+    end
+
+    if type(debug)
+            == "table"
+        and typeof(debug.getupvalues)
+            == "function"
+    then
+        local ok, result =
+            pcall(
+                debug.getupvalues,
+                fn
+            )
+
+        if ok
+            and type(result)
+                == "table"
+        then
+            return result
+        end
+    end
+
+    return nil
+end
+
+local function lineSetUpvalue(
+    fn,
+    index,
+    value
+)
+    if typeof(setupvalue)
+        == "function"
+    then
+        local ok =
+            pcall(
+                setupvalue,
+                fn,
+                index,
+                value
+            )
+
+        if ok then
+            return true
+        end
+    end
+
+    if type(debug)
+            == "table"
+        and typeof(debug.setupvalue)
+            == "function"
+    then
+        local ok =
+            pcall(
+                debug.setupvalue,
+                fn,
+                index,
+                value
+            )
+
+        if ok then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function lineFunctionInfo(fn)
+    if typeof(getinfo)
+        == "function"
+    then
+        local ok, result =
+            pcall(
+                getinfo,
+                fn
+            )
+
+        if ok
+            and type(result)
+                == "table"
+        then
+            return result
+        end
+    end
+
+    if type(debug)
+            == "table"
+        and typeof(debug.getinfo)
+            == "function"
+    then
+        local ok, result =
+            pcall(
+                debug.getinfo,
+                fn
+            )
+
+        if ok
+            and type(result)
+                == "table"
+        then
+            return result
+        end
+    end
+
+    return nil
+end
+
+local function lineFunctionScript(fn)
+    if typeof(getfenv)
+        ~= "function"
+    then
+        return nil
+    end
+
+    local ok, environment =
+        pcall(
+            getfenv,
+            fn
+        )
+
+    if ok
+        and type(environment)
+            == "table"
+    then
+        return environment.script
+    end
+
+    return nil
+end
+
+local function lineHasConstant(
+    constants,
+    expected
+)
+    if not constants then
+        return false
+    end
+
+    for _, value in pairs(
+        constants
+    ) do
+        if value == expected then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function lineCurrentGrabScript()
+    local character =
+        LocalPlayer.Character
+
+    if not character then
+        return nil
+    end
+
+    return character:
+        FindFirstChild(
+            "GrabbingScript"
+        )
+end
+
+local function clearLineBinding()
+    State.LineGrabFunction = nil
+    State.LineUpvalueIndex = nil
+    State.LineOriginalReach = nil
+    State.LineBoundScript = nil
+    State.LineAppliedReach = nil
+end
+
+local function restoreLineReach()
+    if State.LineGrabFunction
+        and State.LineUpvalueIndex
+        and type(
+            State.LineOriginalReach
+        ) == "number"
+    then
+        lineSetUpvalue(
+            State.LineGrabFunction,
+            State.LineUpvalueIndex,
+            State.LineOriginalReach
+        )
+    end
+
+    State.LineAppliedReach =
+        State.LineOriginalReach
+end
+
+local function locateLineReach()
+    local grabbingScript =
+        lineCurrentGrabScript()
+
+    if not grabbingScript then
+        return false
+    end
+
+    if State.LineGrabFunction
+        and State.LineBoundScript
+            == grabbingScript
+        and State.LineUpvalueIndex
+        and type(
+            State.LineOriginalReach
+        ) == "number"
+    then
+        return true
+    end
+
+    restoreLineReach()
+    clearLineBinding()
+
+    local registry =
+        lineRegistry()
+
+    if not registry then
+        return false
+    end
+
+    for _, fn in pairs(registry) do
+        if type(fn)
+            == "function"
+        then
+            local blocked = false
+
+            if typeof(is_synapse_function)
+                == "function"
+            then
+                local ok, result =
+                    pcall(
+                        is_synapse_function,
+                        fn
+                    )
+
+                if ok
+                    and result
+                then
+                    blocked = true
+                end
+            end
+
+            if not blocked
+                and typeof(islclosure)
+                    == "function"
+            then
+                local ok, result =
+                    pcall(
+                        islclosure,
+                        fn
+                    )
+
+                if ok
+                    and not result
+                then
+                    blocked = true
+                end
+            end
+
+            if not blocked then
+                local info =
+                    lineFunctionInfo(fn)
+
+                local name =
+                    info
+                    and tostring(
+                        info.name
+                            or ""
+                    )
+                    or ""
+
+                local constants =
+                    lineConstants(fn)
+
+                local ownerScript =
+                    lineFunctionScript(fn)
+
+                local correctOwner =
+                    ownerScript
+                        == grabbingScript
+
+                local fallbackOwner =
+                    ownerScript == nil
+                        and name == "grab"
+
+                if (
+                    correctOwner
+                    or fallbackOwner
+                )
+                    and name == "grab"
+                    and lineHasConstant(
+                        constants,
+                        "make"
+                    )
+                then
+                    local values =
+                        lineUpvalues(fn)
+
+                    if values then
+                        local index
+
+                        if type(values[17])
+                            == "number"
+                        then
+                            index = 17
+                        else
+                            for candidateIndex,
+                                candidateValue
+                            in pairs(values) do
+                                if type(candidateValue)
+                                        == "number"
+                                    and (
+                                        candidateValue
+                                            == 20
+                                        or candidateValue
+                                            == 30
+                                        or candidateValue
+                                            == 33
+                                    )
+                                then
+                                    index =
+                                        candidateIndex
+                                    break
+                                end
+                            end
+                        end
+
+                        if index
+                            and type(values[index])
+                                == "number"
+                        then
+                            State.LineGrabFunction =
+                                fn
+
+                            State.LineUpvalueIndex =
+                                index
+
+                            State.LineOriginalReach =
+                                values[index]
+
+                            State.LineBoundScript =
+                                grabbingScript
+
+                            State.LineAppliedReach =
+                                values[index]
+
+                            State.LineFailureNotified =
+                                false
+
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function lineTargetReach()
+    if not locateLineReach() then
+        return nil
+    end
+
+    local level =
+        math.clamp(
+            math.floor(
+                Config.LineLevel
+                    + 0.5
+            ),
+            0,
+            Config.LineInfiniteLevel
+        )
+
+    if level <= 0 then
+        return State.LineOriginalReach
+    end
+
+    if level
+        >= Config.LineInfiniteLevel
+    then
+        return Config.LineInfiniteReach
+    end
+
+    return State.LineOriginalReach
+        * (level + 1)
+end
+
+local function applyLineReach()
+    if not Config.LineEnabled then
+        restoreLineReach()
+        return true,
+            State.LineOriginalReach
+    end
+
+    local target =
+        lineTargetReach()
+
+    if not target then
+        return false,
+            nil
+    end
+
+    local ok =
+        lineSetUpvalue(
+            State.LineGrabFunction,
+            State.LineUpvalueIndex,
+            target
+        )
+
+    if ok then
+        State.LineAppliedReach =
+            target
+    end
+
+    return ok,
+        target
+end
+
+local LineController = {}
+
+function LineController.Stop()
+    Config.LineEnabled = false
+
+    restoreLineReach()
+
+    if ENV.MangaLineController
+        == LineController
+    then
+        ENV.MangaLineController = nil
+    end
+end
+
+ENV.MangaLineController =
+    LineController
+
+task.spawn(function()
+    while State.Running do
+        if Config.LineEnabled then
+            local ok =
+                applyLineReach()
+
+            if not ok
+                and not State.LineFailureNotified
+            then
+                State.LineFailureNotified =
+                    true
+
+                Window:Notify({
+                    Title = "Line",
+                    Text = "Executor sem acesso ao controle interno da Grab Line.",
+                    Duration = 4
+                })
+            end
+        end
+
+        task.wait(0.35)
+    end
+
+    restoreLineReach()
+
+    if ENV.MangaLineController
+        == LineController
+    then
+        ENV.MangaLineController = nil
+    end
+end)
 
 local function refreshCorrectionRemotes()
     if not GameCorrectionEvents
@@ -2670,6 +3248,137 @@ ThrowSection:CreateSlider({
             )
     end
 })
+
+local LineTab =
+    Window:CreateTab(
+        "Line",
+        "📏"
+    )
+
+local LineSection =
+    LineTab:
+        CreateSection(
+            "Line Controls"
+        )
+
+local LineStatus =
+    LineSection:
+        CreateLabel(
+            "0 = Normal | 1-27 = Extended | 28 = Infinite"
+        )
+
+local function updateLineStatus()
+    local level =
+        math.clamp(
+            math.floor(
+                Config.LineLevel
+                    + 0.5
+            ),
+            0,
+            Config.LineInfiniteLevel
+        )
+
+    if not Config.LineEnabled then
+        LineStatus:SetText(
+            "Disabled | 0 = Normal | 28 = Infinite"
+        )
+        return
+    end
+
+    if level <= 0 then
+        LineStatus:SetText(
+            "Enabled | Normal limit"
+        )
+        return
+    end
+
+    if level
+        >= Config.LineInfiniteLevel
+    then
+        LineStatus:SetText(
+            "Enabled | Infinite"
+        )
+        return
+    end
+
+    LineStatus:SetText(
+        "Enabled | Level "
+            .. tostring(level)
+            .. " | Max x"
+            .. tostring(level + 1)
+    )
+end
+
+LineSection:CreateToggle({
+    Text = "Line Extension",
+    Default = false,
+    Flag = "LineEnabled",
+
+    Callback = function(value)
+        Config.LineEnabled =
+            value
+
+        State.LineFailureNotified =
+            false
+
+        if value then
+            local ok =
+                applyLineReach()
+
+            if not ok then
+                State.LineFailureNotified =
+                    true
+
+                Window:Notify({
+                    Title = "Line",
+                    Text = "Não consegui localizar o limite interno da Grab Line.",
+                    Duration = 4
+                })
+            end
+        else
+            restoreLineReach()
+        end
+
+        updateLineStatus()
+    end
+})
+
+LineSection:CreateSlider({
+    Text = "Line Reach (28 = Infinite)",
+    Min = 0,
+    Max = Config.LineInfiniteLevel,
+    Default = Config.LineLevel,
+    Decimals = 0,
+    Flag = "LineReach",
+
+    Callback = function(value)
+        Config.LineLevel =
+            math.clamp(
+                math.floor(
+                    value + 0.5
+                ),
+                0,
+                Config.LineInfiniteLevel
+            )
+
+        State.LineFailureNotified =
+            false
+
+        if Config.LineEnabled then
+            local ok =
+                applyLineReach()
+
+            if not ok then
+                State.LineFailureNotified =
+                    true
+            end
+        end
+
+        updateLineStatus()
+    end
+})
+
+updateLineStatus()
 
 local ProtectionTab =
     Window:CreateTab(
