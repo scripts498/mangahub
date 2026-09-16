@@ -155,13 +155,11 @@ local State = {
     BlobPlayerSignature = "",
     BlobSelectedPlayer = nil,
 
-    LineGrabFunction = nil,
-    LineUpvalueIndex = nil,
+    LineTargets = {},
     LineOriginalReach = nil,
     LineBoundScript = nil,
     LineAppliedReach = nil,
-    LineFailureNotified = false,
-    LineBeamActive = false
+    LineFailureNotified = false
 }
 
 ENV.MangaHubState = State
@@ -583,18 +581,77 @@ local function getAssemblyRoot(object)
     return nil
 end
 
-local function lineRegistry()
+local function safeLineCollect(
+    output,
+    seen,
+    source
+)
+    if type(source) ~= "table" then
+        return
+    end
+
+    for _, value in pairs(source) do
+        if type(value) == "function"
+            and not seen[value]
+        then
+            seen[value] = true
+            table.insert(
+                output,
+                value
+            )
+        end
+    end
+end
+
+local function lineFunctions()
+    local functions = {}
+    local seen = {}
+
+    if typeof(getgc)
+        == "function"
+    then
+        local okAll, all =
+            pcall(
+                getgc,
+                true
+            )
+
+        if okAll then
+            safeLineCollect(
+                functions,
+                seen,
+                all
+            )
+        end
+
+        local okFunctions, onlyFunctions =
+            pcall(
+                getgc
+            )
+
+        if okFunctions then
+            safeLineCollect(
+                functions,
+                seen,
+                onlyFunctions
+            )
+        end
+    end
+
     if typeof(getreg)
         == "function"
     then
-        local ok, result =
-            pcall(getreg)
+        local ok, registry =
+            pcall(
+                getreg
+            )
 
-        if ok
-            and type(result)
-                == "table"
-        then
-            return result
+        if ok then
+            safeLineCollect(
+                functions,
+                seen,
+                registry
+            )
         end
     end
 
@@ -603,60 +660,21 @@ local function lineRegistry()
         and typeof(debug.getregistry)
             == "function"
     then
-        local ok, result =
+        local ok, registry =
             pcall(
                 debug.getregistry
             )
 
-        if ok
-            and type(result)
-                == "table"
-        then
-            return result
-        end
-    end
-
-    return nil
-end
-
-local function lineConstants(fn)
-    if typeof(getconstants)
-        == "function"
-    then
-        local ok, result =
-            pcall(
-                getconstants,
-                fn
+        if ok then
+            safeLineCollect(
+                functions,
+                seen,
+                registry
             )
-
-        if ok
-            and type(result)
-                == "table"
-        then
-            return result
         end
     end
 
-    if type(debug)
-            == "table"
-        and typeof(debug.getconstants)
-            == "function"
-    then
-        local ok, result =
-            pcall(
-                debug.getconstants,
-                fn
-            )
-
-        if ok
-            and type(result)
-                == "table"
-        then
-            return result
-        end
-    end
-
-    return nil
+    return functions
 end
 
 local function lineUpvalues(fn)
@@ -804,25 +822,6 @@ local function lineFunctionScript(fn)
     return nil
 end
 
-local function lineHasConstant(
-    constants,
-    expected
-)
-    if not constants then
-        return false
-    end
-
-    for _, value in pairs(
-        constants
-    ) do
-        if value == expected then
-            return true
-        end
-    end
-
-    return false
-end
-
 local function lineCurrentGrabScript()
     local character =
         LocalPlayer.Character
@@ -833,34 +832,46 @@ local function lineCurrentGrabScript()
 
     return character:
         FindFirstChild(
-            "GrabbingScript"
+            "GrabbingScript",
+            true
         )
 end
 
 local function clearLineBinding()
-    State.LineGrabFunction = nil
-    State.LineUpvalueIndex = nil
+    State.LineTargets = {}
     State.LineOriginalReach = nil
     State.LineBoundScript = nil
     State.LineAppliedReach = nil
 end
 
 local function restoreLineReach()
-    if State.LineGrabFunction
-        and State.LineUpvalueIndex
-        and type(
-            State.LineOriginalReach
-        ) == "number"
-    then
-        lineSetUpvalue(
-            State.LineGrabFunction,
-            State.LineUpvalueIndex,
-            State.LineOriginalReach
-        )
+    for _, target in ipairs(
+        State.LineTargets
+    ) do
+        if target.Function
+            and target.Index
+            and type(target.Original)
+                == "number"
+        then
+            lineSetUpvalue(
+                target.Function,
+                target.Index,
+                target.Original
+            )
+        end
     end
 
     State.LineAppliedReach =
         State.LineOriginalReach
+end
+
+local function lineReachCandidateName(
+    name
+)
+    return name == "grab"
+        or name == "distanceChangeScrolling"
+        or name == "distanceChangeButtonMoving"
+        or name == ""
 end
 
 local function locateLineReach()
@@ -871,13 +882,11 @@ local function locateLineReach()
         return false
     end
 
-    if State.LineGrabFunction
-        and State.LineBoundScript
+    if State.LineBoundScript
             == grabbingScript
-        and State.LineUpvalueIndex
-        and type(
-            State.LineOriginalReach
-        ) == "number"
+        and type(State.LineOriginalReach)
+            == "number"
+        and #State.LineTargets > 0
     then
         return true
     end
@@ -885,128 +894,93 @@ local function locateLineReach()
     restoreLineReach()
     clearLineBinding()
 
-    local registry =
-        lineRegistry()
+    local functions =
+        lineFunctions()
 
-    if not registry then
+    local grabFunction
+    local baseReach
+
+    for _, fn in ipairs(functions) do
+        if lineFunctionScript(fn)
+            == grabbingScript
+        then
+            local info =
+                lineFunctionInfo(fn)
+
+            local name =
+                info
+                and tostring(
+                    info.name
+                        or ""
+                )
+                or ""
+
+            if name == "grab" then
+                local values =
+                    lineUpvalues(fn)
+
+                if values
+                    and type(values[17])
+                        == "number"
+                then
+                    grabFunction = fn
+                    baseReach =
+                        values[17]
+                    break
+                end
+            end
+        end
+    end
+
+    if not grabFunction
+        or type(baseReach)
+            ~= "number"
+    then
         return false
     end
 
-    for _, fn in pairs(registry) do
-        if type(fn)
-            == "function"
+    local targets = {}
+
+    for _, fn in ipairs(functions) do
+        if lineFunctionScript(fn)
+            == grabbingScript
         then
-            local blocked = false
+            local info =
+                lineFunctionInfo(fn)
 
-            if typeof(is_synapse_function)
-                == "function"
+            local name =
+                info
+                and tostring(
+                    info.name
+                        or ""
+                )
+                or ""
+
+            if lineReachCandidateName(
+                name
+            )
             then
-                local ok, result =
-                    pcall(
-                        is_synapse_function,
-                        fn
-                    )
+                local values =
+                    lineUpvalues(fn)
 
-                if ok
-                    and result
-                then
-                    blocked = true
-                end
-            end
-
-            if not blocked
-                and typeof(islclosure)
-                    == "function"
-            then
-                local ok, result =
-                    pcall(
-                        islclosure,
-                        fn
-                    )
-
-                if ok
-                    and not result
-                then
-                    blocked = true
-                end
-            end
-
-            if not blocked then
-                local info =
-                    lineFunctionInfo(fn)
-
-                local name =
-                    info
-                    and tostring(
-                        info.name
-                            or ""
-                    )
-                    or ""
-
-                local constants =
-                    lineConstants(fn)
-
-                if name == "grab"
-                    and lineHasConstant(
-                        constants,
-                        "make"
-                    )
-                then
-                    local values =
-                        lineUpvalues(fn)
-
-                    if values then
-                        local index
-
-                        if type(values[17])
-                            == "number"
-                        then
-                            index = 17
-                        else
-                            for candidateIndex,
-                                candidateValue
-                            in pairs(values) do
-                                if type(candidateValue)
-                                        == "number"
-                                    and (
-                                        candidateValue
-                                            == 20
-                                        or candidateValue
-                                            == 30
-                                        or candidateValue
-                                            == 33
-                                    )
-                                then
-                                    index =
-                                        candidateIndex
-                                    break
-                                end
-                            end
-                        end
-
-                        if index
-                            and type(values[index])
+                if values then
+                    for index,
+                        value
+                    in pairs(values) do
+                        if type(value)
                                 == "number"
+                            and value
+                                == baseReach
                         then
-                            State.LineGrabFunction =
-                                fn
-
-                            State.LineUpvalueIndex =
-                                index
-
-                            State.LineOriginalReach =
-                                values[index]
-
-                            State.LineBoundScript =
-                                grabbingScript
-
-                            State.LineAppliedReach =
-                                values[index]
-
-                            State.LineFailureNotified =
-                                false
-
-                            return true
+                            table.insert(
+                                targets,
+                                {
+                                    Function = fn,
+                                    Index = index,
+                                    Original = value,
+                                    Name = name
+                                }
+                            )
                         end
                     end
                 end
@@ -1014,7 +988,26 @@ local function locateLineReach()
         end
     end
 
-    return false
+    if #targets <= 0 then
+        return false
+    end
+
+    State.LineTargets =
+        targets
+
+    State.LineOriginalReach =
+        baseReach
+
+    State.LineBoundScript =
+        grabbingScript
+
+    State.LineAppliedReach =
+        baseReach
+
+    State.LineFailureNotified =
+        false
+
+    return true
 end
 
 local function lineTargetReach()
@@ -1061,12 +1054,25 @@ local function applyLineReach()
             nil
     end
 
-    local ok =
-        lineSetUpvalue(
-            State.LineGrabFunction,
-            State.LineUpvalueIndex,
+    local applied = 0
+
+    for _, entry in ipairs(
+        State.LineTargets
+    ) do
+        if lineSetUpvalue(
+            entry.Function,
+            entry.Index,
             target
         )
+        then
+            applied += 1
+        end
+    end
+
+    local ok =
+        applied
+            == #State.LineTargets
+        and applied > 0
 
     if ok then
         State.LineAppliedReach =
@@ -1096,9 +1102,18 @@ ENV.MangaLineController =
 
 task.spawn(function()
     while State.Running do
-        if Config.LineEnabled
-            and State.LineBeamActive
-        then
+        if Config.LineEnabled then
+            local currentScript =
+                lineCurrentGrabScript()
+
+            if currentScript
+                and currentScript
+                    ~= State.LineBoundScript
+            then
+                restoreLineReach()
+                clearLineBinding()
+            end
+
             local ok =
                 applyLineReach()
 
@@ -1110,13 +1125,13 @@ task.spawn(function()
 
                 Window:Notify({
                     Title = "Line",
-                    Text = "Executor sem acesso ao controle interno da Grab Line.",
+                    Text = "Não consegui aplicar os limites internos da Grab Line.",
                     Duration = 4
                 })
             end
         end
 
-        task.wait(0.10)
+        task.wait(0.20)
     end
 
     restoreLineReach()
@@ -3310,22 +3325,18 @@ LineSection:CreateToggle({
             false
 
         if value then
-            if State.LineBeamActive then
-                local ok =
-                    applyLineReach()
+            local ok =
+                applyLineReach()
 
-                if not ok then
-                    State.LineFailureNotified =
-                        true
+            if not ok then
+                State.LineFailureNotified =
+                    true
 
-                    Window:Notify({
-                        Title = "Line",
-                        Text = "Não consegui localizar o limite interno da Grab Line.",
-                        Duration = 4
-                    })
-                end
-            else
-                locateLineReach()
+                Window:Notify({
+                    Title = "Line",
+                    Text = "Não consegui aplicar os limites internos da Grab Line.",
+                    Duration = 4
+                })
             end
         else
             restoreLineReach()
@@ -3356,9 +3367,7 @@ LineSection:CreateSlider({
         State.LineFailureNotified =
             false
 
-        if Config.LineEnabled
-            and State.LineBeamActive
-        then
+        if Config.LineEnabled then
             local ok =
                 applyLineReach()
 
@@ -4591,32 +4600,6 @@ OldNamecall =
                     ...
                 )
 
-            local isBeam =
-                typeof(self)
-                    == "Instance"
-                and self.Name
-                    == "Beam"
-
-            local beamAction =
-                isBeam
-                and tostring(
-                    args[1]
-                )
-                or nil
-
-            if Config.LineEnabled
-                and beamAction
-                    == "make"
-            then
-                State.LineBeamActive =
-                    true
-
-                State.LineFailureNotified =
-                    false
-
-                applyLineReach()
-            end
-
             local result =
                 table.pack(
                     OldNamecall(
@@ -4624,15 +4607,6 @@ OldNamecall =
                         ...
                     )
                 )
-
-            if beamAction
-                == "destroy"
-            then
-                State.LineBeamActive =
-                    false
-
-                restoreLineReach()
-            end
 
             if self
                 == CreateGrabLine
