@@ -129,6 +129,7 @@ local Config = {
     KillGrab = false,
     MasslessGrab = false,
     NoclipGrab = false,
+    KillGrabMaxTime = 3,
     GrabEffectsPulse = 0.05,
 
     Debug = false
@@ -192,7 +193,10 @@ local State = {
     GrabEffectTargetCharacter = nil,
     GrabConstraintOriginal = {},
     GrabCollideOriginal = {},
-    KillGrabHazardStates = {}
+    KillGrabHazardStates = {},
+    KillGrabStarted = 0,
+    KillGrabTimedOut = false,
+    KillGrabTouchUnavailableNotified = false
 }
 
 ENV.MangaHubState = State
@@ -1514,6 +1518,8 @@ local function resetGrabEffectsTransient()
     State.GrabEffectTarget = nil
     State.GrabEffectTargetPlayer = nil
     State.GrabEffectTargetCharacter = nil
+    State.KillGrabStarted = 0
+    State.KillGrabTimedOut = false
 end
 
 local function currentGrabEffectPart()
@@ -1645,86 +1651,154 @@ local function appendGrabEffectPart(
     end
 end
 
-local function grabEffectParts(
+local function grabNoclipParts(
     part,
     character
 )
     local result = {}
     local seen = {}
 
-    local container =
-        grabEffectContainer(
-            part,
-            character
-        )
-
-    if typeof(container)
-        == "Instance"
-    then
-        if container:IsA("BasePart") then
+    if character then
+        for _, descendant in ipairs(
+            character:GetDescendants()
+        ) do
             appendGrabEffectPart(
                 result,
                 seen,
-                container
+                descendant
             )
-
-            local root =
-                getAssemblyRoot(
-                    container
-                )
-
-            appendGrabEffectPart(
-                result,
-                seen,
-                root
-            )
-
-            if root then
-                local ok,
-                    connected =
-                    pcall(
-                        root.GetConnectedParts,
-                        root,
-                        true
-                    )
-
-                if ok
-                    and type(connected)
-                        == "table"
-                then
-                    for _, linked in ipairs(
-                        connected
-                    ) do
-                        appendGrabEffectPart(
-                            result,
-                            seen,
-                            linked
-                        )
-                    end
-                end
-            end
-        else
-            for _, descendant in ipairs(
-                container:GetDescendants()
-            ) do
-                appendGrabEffectPart(
-                    result,
-                    seen,
-                    descendant
-                )
-            end
         end
+
+        return result
     end
 
-    if #result <= 0
-        and valid(part)
-        and part:IsA("BasePart")
+    if not valid(part)
+        or not part:IsA(
+            "BasePart"
+        )
     then
+        return result
+    end
+
+    local grabParts =
+        Workspace:
+            FindFirstChild(
+                "GrabParts"
+            )
+
+    local targetInMap =
+        Workspace:
+            FindFirstChild(
+                "Map"
+            )
+        and part:IsDescendantOf(
+            Workspace.Map
+        )
+
+    local function allowed(
+        candidate
+    )
+        if not candidate
+            or not candidate:IsA(
+                "BasePart"
+            )
+            or not candidate.Parent
+        then
+            return false
+        end
+
+        if grabParts
+            and candidate:IsDescendantOf(
+                grabParts
+            )
+        then
+            return false
+        end
+
+        local candidatePlayer =
+            grabEffectPlayerFromPart(
+                candidate
+            )
+
+        if candidatePlayer then
+            return false
+        end
+
+        if candidate.Anchored then
+            return false
+        end
+
+        if Workspace:
+                FindFirstChild(
+                    "Map"
+                )
+            and candidate:IsDescendantOf(
+                Workspace.Map
+            )
+            and not targetInMap
+        then
+            return false
+        end
+
+        return true
+    end
+
+    local queue = {}
+    local queued = {}
+
+    if allowed(part) then
+        table.insert(
+            queue,
+            part
+        )
+        queued[part] = true
+    end
+
+    local index = 1
+
+    while index <= #queue
+        and #result < 256
+    do
+        local current =
+            queue[index]
+        index = index + 1
+
         appendGrabEffectPart(
             result,
             seen,
-            part
+            current
         )
+
+        local ok, linked =
+            pcall(function()
+                return current:
+                    GetConnectedParts(
+                        false
+                    )
+            end)
+
+        if ok
+            and type(linked)
+                == "table"
+        then
+            for _, candidate in ipairs(
+                linked
+            ) do
+                if not queued[candidate]
+                    and allowed(
+                        candidate
+                    )
+                then
+                    queued[candidate] =
+                        true
+
+                    table.insert(
+                        queue,
+                        candidate
+                    )
+                end
+            end
+        end
     end
 
     return result
@@ -1793,6 +1867,45 @@ local function findKillGrabHazards()
     return hazards
 end
 
+local function killGrabTouchParts(
+    character
+)
+    local result = {}
+    local seen = {}
+
+    local names = {
+        "Head",
+        "HumanoidRootPart",
+        "UpperTorso",
+        "Torso"
+    }
+
+    for _, name in ipairs(
+        names
+    ) do
+        local part =
+            character:
+                FindFirstChild(
+                    name
+                )
+
+        if part
+            and part:IsA(
+                "BasePart"
+            )
+            and not seen[part]
+        then
+            seen[part] = true
+            table.insert(
+                result,
+                part
+            )
+        end
+    end
+
+    return result
+end
+
 local function applyKillGrab(
     player,
     character
@@ -1803,6 +1916,8 @@ local function applyKillGrab(
         or not character.Parent
     then
         restoreKillGrabHazards()
+        State.KillGrabStarted = 0
+        State.KillGrabTimedOut = false
         return false
     end
 
@@ -1819,22 +1934,51 @@ local function applyKillGrab(
         return false
     end
 
-    local head =
-        character:
-            FindFirstChild(
-                "Head"
-            )
-        or character:
-            FindFirstChild(
-                "HumanoidRootPart"
-            )
+    if State.KillGrabStarted <= 0 then
+        State.KillGrabStarted =
+            os.clock()
+        State.KillGrabTimedOut =
+            false
+    end
 
-    if not head
-        or not head:IsA(
-            "BasePart"
-        )
+    if State.KillGrabTimedOut then
+        return false
+    end
+
+    if os.clock()
+        - State.KillGrabStarted
+        >= Config.KillGrabMaxTime
     then
         restoreKillGrabHazards()
+        State.KillGrabTimedOut =
+            true
+        return false
+    end
+
+    if typeof(firetouchinterest)
+        ~= "function"
+    then
+        if not State.KillGrabTouchUnavailableNotified
+        then
+            State.KillGrabTouchUnavailableNotified =
+                true
+            warn(
+                "[Manga Hub] Kill Grab: firetouchinterest indisponivel neste executor."
+            )
+        end
+
+        restoreKillGrabHazards()
+        State.KillGrabTimedOut =
+            true
+        return false
+    end
+
+    local touchParts =
+        killGrabTouchParts(
+            character
+        )
+
+    if #touchParts <= 0 then
         return false
     end
 
@@ -1845,9 +1989,17 @@ local function applyKillGrab(
         return false
     end
 
+    local head =
+        touchParts[1]
+
     for _, hazard in ipairs(
         hazards
     ) do
+        local saved =
+            State.KillGrabHazardStates[
+                hazard
+            ]
+
         pcall(function()
             hazard.Size =
                 Vector3.new(
@@ -1855,11 +2007,40 @@ local function applyKillGrab(
                     2,
                     2
                 )
-
             hazard.Transparency = 1
             hazard.CFrame =
                 head.CFrame
         end)
+
+        for _, touchPart in ipairs(
+            touchParts
+        ) do
+            pcall(function()
+                firetouchinterest(
+                    hazard,
+                    touchPart,
+                    0
+                )
+                firetouchinterest(
+                    hazard,
+                    touchPart,
+                    1
+                )
+            end)
+        end
+
+        if saved
+            and hazard.Parent
+        then
+            pcall(function()
+                hazard.CFrame =
+                    saved.CFrame
+                hazard.Size =
+                    saved.Size
+                hazard.Transparency =
+                    saved.Transparency
+            end)
+        end
     end
 
     return true
@@ -1913,11 +2094,13 @@ local function updateGrabEffects()
             player
         State.GrabEffectTargetCharacter =
             character
+        State.KillGrabStarted = 0
+        State.KillGrabTimedOut = false
     end
 
     if Config.NoclipGrab then
         local parts =
-            grabEffectParts(
+            grabNoclipParts(
                 part,
                 character
             )
@@ -4252,6 +4435,8 @@ GrabEffectsSection:CreateToggle({
 
     Callback = function(value)
         Config.KillGrab = value
+        State.KillGrabStarted = 0
+        State.KillGrabTimedOut = false
 
         if not value then
             restoreKillGrabHazards()
