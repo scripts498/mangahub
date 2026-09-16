@@ -1016,6 +1016,13 @@ local function restoreHumanoid()
         return
     end
 
+    pcall(function()
+        humanoid:SetStateEnabled(
+            Enum.HumanoidStateType.Jumping,
+            true
+        )
+    end)
+
     if humanoid.Sit
         and humanoid.SeatPart
             == nil
@@ -1465,6 +1472,15 @@ local function setupCharacter(
                 "Humanoid",
                 10
             )
+
+    if State.Humanoid then
+        pcall(function()
+            State.Humanoid:SetStateEnabled(
+                Enum.HumanoidStateType.Jumping,
+                true
+            )
+        end)
+    end
 
     State.Root =
         character:
