@@ -58,6 +58,14 @@ then
     )
 end
 
+if ENV.MangaGrabEffectsController
+    and ENV.MangaGrabEffectsController.Stop
+then
+    pcall(
+        ENV.MangaGrabEffectsController.Stop
+    )
+end
+
 pcall(function()
     ContextActionService:UnbindAction("MangaHub_MouseDetector")
 end)
@@ -110,6 +118,13 @@ local Config = {
     LineInfiniteLevel = 28,
     LineInfiniteReach = 1000000,
 
+    KillGrab = false,
+    MasslessGrab = false,
+    NoclipGrab = false,
+    KillGrabHoldTime = 5,
+    GrabEffectsPulse = 0.05,
+    GrabEffectsOwnershipPulse = 0.20,
+
     Debug = false
 }
 
@@ -159,7 +174,20 @@ local State = {
     LineOriginalReach = nil,
     LineBoundScript = nil,
     LineAppliedReach = nil,
-    LineFailureNotified = false
+    LineFailureNotified = false,
+    LineNextRescan = 0,
+
+    GrabEffectTarget = nil,
+    GrabEffectTargetPlayer = nil,
+    GrabEffectTargetCharacter = nil,
+    GrabEffectStarted = 0,
+    GrabEffectLastOwnership = 0,
+    GrabMasslessOriginal = {},
+    GrabCollideOriginal = {},
+    KillGrabTriggered = false,
+    KillGrabHazard = nil,
+    KillGrabHazardState = nil,
+    KillGrabLastOwnership = 0
 }
 
 ENV.MangaHubState = State
@@ -871,6 +899,7 @@ local function lineReachCandidateName(
     return name == "grab"
         or name == "distanceChangeScrolling"
         or name == "distanceChangeButtonMoving"
+        or name == "distanceChangeButtonToggle"
         or name == ""
 end
 
@@ -1010,6 +1039,104 @@ local function locateLineReach()
     return true
 end
 
+local function lineTargetExists(
+    fn,
+    index
+)
+    for _, entry in ipairs(
+        State.LineTargets
+    ) do
+        if entry.Function == fn
+            and entry.Index == index
+        then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function refreshLineTargets()
+    local grabbingScript =
+        lineCurrentGrabScript()
+
+    if not grabbingScript then
+        return false,
+            0
+    end
+
+    if State.LineBoundScript
+            ~= grabbingScript
+        or type(State.LineOriginalReach)
+            ~= "number"
+        or #State.LineTargets <= 0
+    then
+        return locateLineReach(),
+            0
+    end
+
+    local functions =
+        lineFunctions()
+
+    local added = 0
+
+    for _, fn in ipairs(functions) do
+        if lineFunctionScript(fn)
+            == grabbingScript
+        then
+            local info =
+                lineFunctionInfo(fn)
+
+            local name =
+                info
+                and tostring(
+                    info.name
+                        or ""
+                )
+                or ""
+
+            if lineReachCandidateName(
+                name
+            )
+            then
+                local values =
+                    lineUpvalues(fn)
+
+                if values then
+                    for index,
+                        value
+                    in pairs(values) do
+                        if type(value)
+                                == "number"
+                            and value
+                                == State.LineOriginalReach
+                            and not lineTargetExists(
+                                fn,
+                                index
+                            )
+                        then
+                            table.insert(
+                                State.LineTargets,
+                                {
+                                    Function = fn,
+                                    Index = index,
+                                    Original = value,
+                                    Name = name
+                                }
+                            )
+
+                            added += 1
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return #State.LineTargets > 0,
+        added
+end
+
 local function lineTargetReach()
     if not locateLineReach() then
         return nil
@@ -1112,6 +1239,19 @@ task.spawn(function()
             then
                 restoreLineReach()
                 clearLineBinding()
+                State.LineNextRescan = 0
+            end
+
+            local now =
+                os.clock()
+
+            if now
+                >= State.LineNextRescan
+            then
+                State.LineNextRescan =
+                    now + 0.75
+
+                refreshLineTargets()
             end
 
             local ok =
@@ -1140,6 +1280,630 @@ task.spawn(function()
         == LineController
     then
         ENV.MangaLineController = nil
+    end
+end)
+
+local function restoreGrabMassless()
+    for part, original in pairs(
+        State.GrabMasslessOriginal
+    ) do
+        if part
+            and part.Parent
+        then
+            pcall(function()
+                part.Massless = original
+            end)
+        end
+    end
+
+    State.GrabMasslessOriginal = {}
+end
+
+local function restoreGrabCollisions()
+    for part, original in pairs(
+        State.GrabCollideOriginal
+    ) do
+        if part
+            and part.Parent
+        then
+            pcall(function()
+                part.CanCollide = original
+            end)
+        end
+    end
+
+    State.GrabCollideOriginal = {}
+end
+
+local function restoreKillGrabHazard()
+    local hazard =
+        State.KillGrabHazard
+
+    local saved =
+        State.KillGrabHazardState
+
+    if hazard
+        and hazard.Parent
+        and saved
+    then
+        pcall(function()
+            hazard.CFrame = saved.CFrame
+            hazard.Size = saved.Size
+            hazard.Transparency =
+                saved.Transparency
+        end)
+    end
+
+    State.KillGrabHazard = nil
+    State.KillGrabHazardState = nil
+    State.KillGrabLastOwnership = 0
+end
+
+local function restoreGrabEffectParts()
+    restoreGrabMassless()
+    restoreGrabCollisions()
+    restoreKillGrabHazard()
+end
+
+local function resetGrabEffectsTransient()
+    restoreGrabEffectParts()
+
+    State.GrabEffectTarget = nil
+    State.GrabEffectTargetPlayer = nil
+    State.GrabEffectTargetCharacter = nil
+    State.GrabEffectStarted = 0
+    State.GrabEffectLastOwnership = 0
+    State.KillGrabTriggered = false
+end
+
+local function currentGrabEffectPart()
+    local grabParts =
+        Workspace:
+            FindFirstChild(
+                "GrabParts"
+            )
+
+    if grabParts then
+        local grabPart =
+            grabParts:
+                FindFirstChild(
+                    "GrabPart"
+                )
+
+        if grabPart then
+            local weld =
+                grabPart:
+                    FindFirstChild(
+                        "WeldConstraint"
+                    )
+                or grabPart:
+                    FindFirstChildWhichIsA(
+                        "WeldConstraint"
+                    )
+
+            if weld
+                and valid(weld.Part1)
+            then
+                return weld.Part1
+            end
+        end
+    end
+
+    if valid(State.OwnerObject) then
+        return State.OwnerObject
+    end
+
+    if valid(State.GrabbedObject) then
+        return State.GrabbedObject
+    end
+
+    return nil
+end
+
+local function grabEffectPlayerFromPart(
+    part
+)
+    local current = part
+
+    while current
+        and current ~= Workspace
+    do
+        if current:IsA("Model") then
+            local player =
+                Players:
+                    GetPlayerFromCharacter(
+                        current
+                    )
+
+            if player then
+                return player,
+                    current
+            end
+        end
+
+        current = current.Parent
+    end
+
+    return nil,
+        nil
+end
+
+local function grabEffectContainer(
+    part,
+    character
+)
+    if character then
+        return character
+    end
+
+    if not valid(part) then
+        return nil
+    end
+
+    if part:IsA("Model") then
+        return part
+    end
+
+    local current =
+        part.Parent
+
+    while current
+        and current ~= Workspace
+    do
+        if current:IsA("Model") then
+            if Workspace:
+                    FindFirstChild(
+                        "Map"
+                    )
+                and current:IsDescendantOf(
+                    Workspace.Map
+                )
+            then
+                break
+            end
+
+            return current
+        end
+
+        current = current.Parent
+    end
+
+    return part
+end
+
+local function appendGrabEffectPart(
+    list,
+    seen,
+    part
+)
+    if part
+        and part:IsA("BasePart")
+        and part.Parent
+        and not seen[part]
+    then
+        seen[part] = true
+        table.insert(
+            list,
+            part
+        )
+    end
+end
+
+local function grabEffectParts(
+    part,
+    character
+)
+    local result = {}
+    local seen = {}
+
+    local container =
+        grabEffectContainer(
+            part,
+            character
+        )
+
+    if typeof(container)
+        == "Instance"
+    then
+        if container:IsA("BasePart") then
+            appendGrabEffectPart(
+                result,
+                seen,
+                container
+            )
+
+            local root =
+                getAssemblyRoot(
+                    container
+                )
+
+            appendGrabEffectPart(
+                result,
+                seen,
+                root
+            )
+
+            if root then
+                local ok,
+                    connected =
+                    pcall(
+                        root.GetConnectedParts,
+                        root,
+                        true
+                    )
+
+                if ok
+                    and type(connected)
+                        == "table"
+                then
+                    for _, linked in ipairs(
+                        connected
+                    ) do
+                        appendGrabEffectPart(
+                            result,
+                            seen,
+                            linked
+                        )
+                    end
+                end
+            end
+        else
+            for _, descendant in ipairs(
+                container:GetDescendants()
+            ) do
+                appendGrabEffectPart(
+                    result,
+                    seen,
+                    descendant
+                )
+            end
+        end
+    end
+
+    if #result <= 0
+        and valid(part)
+        and part:IsA("BasePart")
+    then
+        appendGrabEffectPart(
+            result,
+            seen,
+            part
+        )
+    end
+
+    return result
+end
+
+local function requestGrabEffectOwnership(
+    part
+)
+    local root =
+        getAssemblyRoot(
+            part
+        )
+
+    if not root then
+        return
+    end
+
+    pcall(function()
+        SetNetworkOwner:FireServer(
+            root,
+            root.CFrame
+        )
+    end)
+end
+
+local function applyGrabMassless(
+    parts
+)
+    for _, part in ipairs(parts) do
+        if State.GrabMasslessOriginal[part]
+            == nil
+        then
+            State.GrabMasslessOriginal[part] =
+                part.Massless
+        end
+
+        pcall(function()
+            part.Massless = true
+        end)
+    end
+end
+
+local function applyGrabNoclip(
+    parts
+)
+    for _, part in ipairs(parts) do
+        if State.GrabCollideOriginal[part]
+            == nil
+        then
+            State.GrabCollideOriginal[part] =
+                part.CanCollide
+        end
+
+        pcall(function()
+            part.CanCollide = false
+        end)
+    end
+end
+
+local function findKillGrabHazard()
+    if State.KillGrabHazard
+        and State.KillGrabHazard.Parent
+    then
+        return State.KillGrabHazard
+    end
+
+    local map =
+        Workspace:
+            FindFirstChild(
+                "Map"
+            )
+
+    local searchRoot =
+        map
+        or Workspace
+
+    for _, descendant in ipairs(
+        searchRoot:GetDescendants()
+    ) do
+        if descendant:IsA("BasePart")
+            and descendant.Name
+                == "PoisonHurtPart"
+        then
+            State.KillGrabHazard =
+                descendant
+
+            State.KillGrabHazardState = {
+                CFrame = descendant.CFrame,
+                Size = descendant.Size,
+                Transparency =
+                    descendant.Transparency
+            }
+
+            return descendant
+        end
+    end
+
+    return nil
+end
+
+local function applyKillGrab(
+    player,
+    character
+)
+    if not player
+        or player == LocalPlayer
+        or not character
+        or not character.Parent
+    then
+        return
+    end
+
+    local humanoid =
+        character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+    if not humanoid
+        or humanoid.Health <= 0
+    then
+        return
+    end
+
+    local head =
+        character:
+            FindFirstChild(
+                "Head"
+            )
+        or character:
+            FindFirstChild(
+                "HumanoidRootPart"
+            )
+
+    if not head
+        or not head:IsA("BasePart")
+    then
+        return
+    end
+
+    local hazard =
+        findKillGrabHazard()
+
+    if not hazard then
+        return
+    end
+
+    local now =
+        os.clock()
+
+    if now
+        - State.KillGrabLastOwnership
+        >= Config.GrabEffectsOwnershipPulse
+    then
+        State.KillGrabLastOwnership =
+            now
+
+        pcall(function()
+            SetNetworkOwner:FireServer(
+                hazard,
+                hazard.CFrame
+            )
+        end)
+    end
+
+    pcall(function()
+        hazard.Size =
+            Vector3.new(
+                2,
+                2,
+                2
+            )
+
+        hazard.Transparency = 1
+        hazard.CFrame = head.CFrame
+    end)
+end
+
+local function updateGrabEffects()
+    local part =
+        currentGrabEffectPart()
+
+    if not valid(part) then
+        if State.GrabEffectTarget
+            ~= nil
+        then
+            resetGrabEffectsTransient()
+        end
+
+        return
+    end
+
+    local player,
+        character =
+        grabEffectPlayerFromPart(
+            part
+        )
+
+    local targetIdentity =
+        character
+        or getAssemblyRoot(part)
+        or part
+
+    if State.GrabEffectTarget
+        ~= targetIdentity
+    then
+        resetGrabEffectsTransient()
+
+        State.GrabEffectTarget =
+            targetIdentity
+        State.GrabEffectTargetPlayer =
+            player
+        State.GrabEffectTargetCharacter =
+            character
+        State.GrabEffectStarted =
+            os.clock()
+    end
+
+    local now =
+        os.clock()
+
+    if now
+        - State.GrabEffectLastOwnership
+        >= Config.GrabEffectsOwnershipPulse
+    then
+        State.GrabEffectLastOwnership =
+            now
+        requestGrabEffectOwnership(
+            part
+        )
+    end
+
+    local parts =
+        grabEffectParts(
+            part,
+            character
+        )
+
+    if Config.MasslessGrab then
+        applyGrabMassless(
+            parts
+        )
+    else
+        restoreGrabMassless()
+    end
+
+    if Config.NoclipGrab then
+        applyGrabNoclip(
+            parts
+        )
+    else
+        restoreGrabCollisions()
+    end
+
+    local targetHumanoid =
+        character
+        and character:
+            FindFirstChildOfClass(
+                "Humanoid"
+            )
+
+    if Config.KillGrab
+        and player
+        and player ~= LocalPlayer
+        and character
+        and targetHumanoid
+        and targetHumanoid.Health > 0
+        and now
+            - State.GrabEffectStarted
+            >= Config.KillGrabHoldTime
+    then
+        State.KillGrabTriggered =
+            true
+
+        applyKillGrab(
+            player,
+            character
+        )
+    else
+        if State.KillGrabTriggered
+            or State.KillGrabHazard
+        then
+            restoreKillGrabHazard()
+        end
+
+        State.KillGrabTriggered =
+            false
+    end
+end
+
+local GrabEffectsController = {}
+
+function GrabEffectsController.Stop()
+    Config.KillGrab = false
+    Config.MasslessGrab = false
+    Config.NoclipGrab = false
+
+    resetGrabEffectsTransient()
+
+    if ENV.MangaGrabEffectsController
+        == GrabEffectsController
+    then
+        ENV.MangaGrabEffectsController = nil
+    end
+end
+
+ENV.MangaGrabEffectsController =
+    GrabEffectsController
+
+task.spawn(function()
+    while State.Running do
+        if Config.KillGrab
+            or Config.MasslessGrab
+            or Config.NoclipGrab
+        then
+            updateGrabEffects()
+        elseif State.GrabEffectTarget
+            or next(State.GrabMasslessOriginal)
+            or next(State.GrabCollideOriginal)
+            or State.KillGrabHazard
+        then
+            resetGrabEffectsTransient()
+        end
+
+        task.wait(
+            Config.GrabEffectsPulse
+        )
+    end
+
+    resetGrabEffectsTransient()
+
+    if ENV.MangaGrabEffectsController
+        == GrabEffectsController
+    then
+        ENV.MangaGrabEffectsController = nil
     end
 end)
 
@@ -2288,6 +3052,8 @@ connect(
     LocalPlayer.CharacterAdded,
 
     function(character)
+        resetGrabEffectsTransient()
+
         task.spawn(
             setupCharacter,
             character
@@ -3324,6 +4090,9 @@ LineSection:CreateToggle({
         State.LineFailureNotified =
             false
 
+        State.LineNextRescan =
+            0
+
         if value then
             local ok =
                 applyLineReach()
@@ -3382,6 +4151,59 @@ LineSection:CreateSlider({
 })
 
 updateLineStatus()
+
+local GrabEffectsSection =
+    LineTab:
+        CreateSection(
+            "Grab Effects"
+        )
+
+GrabEffectsSection:CreateToggle({
+    Text = "Kill Grab",
+    Default = false,
+    Flag = "KillGrab",
+
+    Callback = function(value)
+        Config.KillGrab = value
+
+        State.GrabEffectStarted =
+            os.clock()
+        State.KillGrabTriggered =
+            false
+
+        if not value then
+            restoreKillGrabHazard()
+        end
+    end
+})
+
+GrabEffectsSection:CreateToggle({
+    Text = "Massless Grab",
+    Default = false,
+    Flag = "MasslessGrab",
+
+    Callback = function(value)
+        Config.MasslessGrab = value
+
+        if not value then
+            restoreGrabMassless()
+        end
+    end
+})
+
+GrabEffectsSection:CreateToggle({
+    Text = "Noclip Grab",
+    Default = false,
+    Flag = "NoclipGrab",
+
+    Callback = function(value)
+        Config.NoclipGrab = value
+
+        if not value then
+            restoreGrabCollisions()
+        end
+    end
+})
 
 local ProtectionTab =
     Window:CreateTab(
