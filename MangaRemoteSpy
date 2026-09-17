@@ -1,0 +1,1229 @@
+local ENV = getgenv()
+
+if ENV.FTAP_REMOTE_SPY and type(ENV.FTAP_REMOTE_SPY.Destroy) == "function" then
+    pcall(ENV.FTAP_REMOTE_SPY.Destroy)
+end
+
+local Spy = {}
+Spy.Config = {}
+Spy.State = {}
+Spy.Util = {}
+Spy.Serializer = {}
+Spy.Store = {}
+Spy.Capture = {}
+Spy.UI = {}
+
+Spy.Config.MaxLogs = 500
+Spy.Config.MaxDepth = 6
+Spy.Config.MaxTableItems = 80
+
+Spy.Config.Theme = {
+    Accent = Color3.fromRGB(182, 72, 255),
+    AccentBright = Color3.fromRGB(220, 125, 255),
+    AccentDark = Color3.fromRGB(93, 34, 151),
+    AccentSoft = Color3.fromRGB(137, 74, 208),
+    AccentGlow = Color3.fromRGB(201, 111, 255),
+    Background = Color3.fromRGB(12, 10, 20),
+    Panel = Color3.fromRGB(20, 16, 33),
+    PanelAlt = Color3.fromRGB(27, 22, 43),
+    PanelSoft = Color3.fromRGB(33, 27, 52),
+    Surface = Color3.fromRGB(16, 13, 27),
+    Border = Color3.fromRGB(114, 64, 169),
+    Text = Color3.fromRGB(244, 236, 255),
+    SubText = Color3.fromRGB(192, 174, 223),
+    Success = Color3.fromRGB(152, 255, 202),
+    Error = Color3.fromRGB(255, 126, 156)
+}
+
+Spy.State.Running = true
+Spy.State.Paused = false
+Spy.State.InternalReplay = false
+Spy.State.Logs = {}
+Spy.State.Excluded = setmetatable({}, {__mode = "k"})
+Spy.State.SelectedId = nil
+Spy.State.NextId = 0
+Spy.State.PerRemoteCount = setmetatable({}, {__mode = "k"})
+Spy.State.CaptureThreads = setmetatable({}, {__mode = "k"})
+Spy.State.Connections = {}
+Spy.State.Instances = {}
+Spy.State.UIRefreshPending = false
+Spy.State.MainVisible = true
+Spy.State.MainOpenPosition = nil
+Spy.State.MainHiddenPosition = nil
+Spy.State.Minimized = false
+Spy.State.MainNormalSize = UDim2.new(0, 900, 0, 520)
+Spy.State.LastToggleDragAt = 0
+
+
+function Spy.Util.SafeTypeof(value)
+    local ok, result = pcall(typeof, value)
+    if ok then return result end
+    return type(value)
+end
+
+function Spy.Serializer.InstancePath(instance)
+    if instance == game then return "game" end
+    if instance == workspace then return "workspace" end
+    if typeof(instance) ~= "Instance" then return "nil" end
+    local chain = {}
+    local cursor = instance
+    while cursor and cursor.Parent and cursor.Parent ~= game do
+        table.insert(chain, 1, cursor.Name)
+        cursor = cursor.Parent
+    end
+    local root
+    if cursor and cursor.Parent == game then
+        local ok, service = pcall(game.GetService, game, cursor.ClassName)
+        if ok and service == cursor then
+            root = "game:GetService(" .. string.format("%q", cursor.ClassName) .. ")"
+        else
+            root = "game:WaitForChild(" .. string.format("%q", cursor.Name) .. ")"
+        end
+    else
+        return "nil"
+    end
+    for _, name in ipairs(chain) do
+        root = root .. ":WaitForChild(" .. string.format("%q", name) .. ")"
+    end
+    return root
+end
+
+function Spy.Serializer.RemotePath(remote)
+    return Spy.Serializer.InstancePath(remote)
+end
+
+function Spy.Serializer.Number(value)
+    if value ~= value then return "0/0" end
+    if value == math.huge then return "math.huge" end
+    if value == -math.huge then return "-math.huge" end
+    return tostring(value)
+end
+
+function Spy.Serializer.Value(value, seen, depth)
+    seen = seen or {}
+    depth = depth or 0
+    local kind = Spy.Util.SafeTypeof(value)
+    if kind == "nil" then return "nil"
+    elseif kind == "string" then return string.format("%q", value)
+    elseif kind == "boolean" then return tostring(value)
+    elseif kind == "number" then return Spy.Serializer.Number(value)
+    elseif kind == "Instance" then return Spy.Serializer.InstancePath(value)
+    elseif kind == "Vector2" then return string.format("Vector2.new(%s, %s)", Spy.Serializer.Number(value.X), Spy.Serializer.Number(value.Y))
+    elseif kind == "Vector3" then return string.format("Vector3.new(%s, %s, %s)", Spy.Serializer.Number(value.X), Spy.Serializer.Number(value.Y), Spy.Serializer.Number(value.Z))
+    elseif kind == "CFrame" then
+        local components = table.pack(value:GetComponents())
+        local out = {}
+        for i = 1, components.n do out[i] = Spy.Serializer.Number(components[i]) end
+        return "CFrame.new(" .. table.concat(out, ", ") .. ")"
+    elseif kind == "Color3" then return string.format("Color3.new(%s, %s, %s)", Spy.Serializer.Number(value.R), Spy.Serializer.Number(value.G), Spy.Serializer.Number(value.B))
+    elseif kind == "UDim" then return string.format("UDim.new(%s, %s)", Spy.Serializer.Number(value.Scale), Spy.Serializer.Number(value.Offset))
+    elseif kind == "UDim2" then return string.format("UDim2.new(%s, %s, %s, %s)", Spy.Serializer.Number(value.X.Scale), Spy.Serializer.Number(value.X.Offset), Spy.Serializer.Number(value.Y.Scale), Spy.Serializer.Number(value.Y.Offset))
+    elseif kind == "BrickColor" then return string.format("BrickColor.new(%s)", string.format("%q", value.Name))
+    elseif kind == "EnumItem" then return tostring(value)
+    elseif kind == "NumberRange" then return string.format("NumberRange.new(%s, %s)", Spy.Serializer.Number(value.Min), Spy.Serializer.Number(value.Max))
+    elseif kind == "NumberSequence" then
+        local parts = {}
+        for index, keypoint in ipairs(value.Keypoints) do
+            parts[index] = string.format("NumberSequenceKeypoint.new(%s, %s, %s)", Spy.Serializer.Number(keypoint.Time), Spy.Serializer.Number(keypoint.Value), Spy.Serializer.Number(keypoint.Envelope))
+        end
+        return "NumberSequence.new({" .. table.concat(parts, ", ") .. "})"
+    elseif kind == "ColorSequence" then
+        local parts = {}
+        for index, keypoint in ipairs(value.Keypoints) do
+            parts[index] = string.format("ColorSequenceKeypoint.new(%s, Color3.new(%s, %s, %s))", Spy.Serializer.Number(keypoint.Time), Spy.Serializer.Number(keypoint.Value.R), Spy.Serializer.Number(keypoint.Value.G), Spy.Serializer.Number(keypoint.Value.B))
+        end
+        return "ColorSequence.new({" .. table.concat(parts, ", ") .. "})"
+    elseif kind == "Ray" then return string.format("Ray.new(%s, %s)", Spy.Serializer.Value(value.Origin), Spy.Serializer.Value(value.Direction))
+    elseif kind == "Rect" then return string.format("Rect.new(%s, %s)", Spy.Serializer.Value(value.Min), Spy.Serializer.Value(value.Max))
+    elseif kind == "table" then
+        if seen[value] then return string.format("%q", "CyclicTable") end
+        if depth >= Spy.Config.MaxDepth then return string.format("%q", "Unsupported<TableDepth>") end
+        seen[value] = true
+        local pieces = {}
+        local count = 0
+        for key, nested in pairs(value) do
+            count = count + 1
+            if count > Spy.Config.MaxTableItems then
+                pieces[#pieces + 1] = "[\"__truncated\"] = true"
+                break
+            end
+            local keySource = Spy.Serializer.Value(key, seen, depth + 1)
+            local valueSource = Spy.Serializer.Value(nested, seen, depth + 1)
+            pieces[#pieces + 1] = "[" .. keySource .. "] = " .. valueSource
+        end
+        seen[value] = nil
+        if #pieces == 0 then return "{}" end
+        return "{ " .. table.concat(pieces, ", ") .. " }"
+    end
+    return string.format("%q", "Unsupported<" .. tostring(kind) .. ">")
+end
+
+function Spy.Serializer.PackedArgs(argsPack)
+    local lines = {"local args = table.pack("}
+    for index = 1, argsPack.n do
+        local suffix = index < argsPack.n and "," or ""
+        lines[#lines + 1] = "    " .. Spy.Serializer.Value(argsPack[index]) .. suffix
+    end
+    lines[#lines + 1] = ")"
+    return table.concat(lines, "\n")
+end
+
+function Spy.Serializer.CallCode(remote, method, argsPack)
+    local path = Spy.Serializer.InstancePath(remote)
+    local prefix = Spy.Serializer.PackedArgs(argsPack)
+    if method == "InvokeServer" then
+        return prefix .. "\n\nlocal results = table.pack(" .. path .. ":InvokeServer(table.unpack(args, 1, args.n)))"
+    end
+    return prefix .. "\n\n" .. path .. ":FireServer(table.unpack(args, 1, args.n))"
+end
+
+
+Spy.Store.OnChanged = nil
+
+function Spy.Store.Notify()
+    if Spy.UI and type(Spy.UI.RequestRefresh) == "function" then
+        Spy.UI.RequestRefresh()
+    end
+end
+
+function Spy.Store.Add(remote, method, argsPack, returnsPack, caller)
+    if not Spy.State.Running or Spy.State.Paused or Spy.State.Excluded[remote] then
+        return nil
+    end
+    local occurrence = (Spy.State.PerRemoteCount[remote] or 0) + 1
+    Spy.State.PerRemoteCount[remote] = occurrence
+    local generatedCode = "Unable to generate code"
+    local okCode, code = pcall(Spy.Serializer.CallCode, remote, method, argsPack)
+    if okCode then generatedCode = code end
+    local remotePath = "Unavailable"
+    local okPath, path = pcall(Spy.Serializer.RemotePath, remote)
+    if okPath then remotePath = path end
+    Spy.State.NextId = Spy.State.NextId + 1
+    local entry = {
+        Id = Spy.State.NextId,
+        Remote = remote,
+        Name = remote.Name,
+        Class = remote.ClassName,
+        Method = method,
+        Args = argsPack,
+        ArgCount = argsPack.n,
+        Returns = returnsPack,
+        Time = os.clock(),
+        Caller = caller,
+        Code = generatedCode,
+        Path = remotePath,
+        Occurrence = occurrence
+    }
+    table.insert(Spy.State.Logs, 1, entry)
+    while #Spy.State.Logs > Spy.Config.MaxLogs do
+        local removed = table.remove(Spy.State.Logs)
+        if removed and Spy.State.SelectedId == removed.Id then
+            Spy.State.SelectedId = nil
+        end
+    end
+    Spy.Store.Notify()
+    return entry
+end
+
+function Spy.Store.Clear()
+    Spy.State.Logs = {}
+    Spy.State.PerRemoteCount = setmetatable({}, {__mode = "k"})
+    Spy.State.SelectedId = nil
+    Spy.Store.Notify()
+end
+
+function Spy.Store.Exclude(remote)
+    if not remote then return end
+    Spy.State.Excluded[remote] = true
+    local kept = {}
+    for _, entry in ipairs(Spy.State.Logs) do
+        if entry.Remote ~= remote then
+            kept[#kept + 1] = entry
+        elseif Spy.State.SelectedId == entry.Id then
+            Spy.State.SelectedId = nil
+        end
+    end
+    Spy.State.Logs = kept
+    Spy.Store.Notify()
+end
+
+function Spy.Store.Restore(remote)
+    if remote then
+        Spy.State.Excluded[remote] = nil
+        Spy.Store.Notify()
+    end
+end
+
+function Spy.Store.Select(logId)
+    Spy.State.SelectedId = logId
+    Spy.Store.Notify()
+end
+
+function Spy.Store.GetSelected()
+    if Spy.State.SelectedId == nil then return nil end
+    for _, entry in ipairs(Spy.State.Logs) do
+        if entry.Id == Spy.State.SelectedId then return entry end
+    end
+    return nil
+end
+
+function Spy.Store.SetPaused(value)
+    Spy.State.Paused = value == true
+    Spy.Store.Notify()
+end
+
+
+Spy.Capture.Errors = {}
+Spy.Capture.OriginalNamecall = nil
+
+function Spy.Capture.GetCaller()
+    if type(getcallingscript) ~= "function" then return nil end
+    local ok, caller = pcall(getcallingscript)
+    if ok then return caller end
+    return nil
+end
+
+function Spy.Capture.SafeAdd(remote, method, args, returns, caller)
+    if Spy.State.InternalReplay or Spy.State.Paused or Spy.State.Excluded[remote] then return end
+    pcall(Spy.Store.Add, remote, method, args, returns, caller)
+end
+
+function Spy.Capture.QueueAdd(remote, method, args, caller)
+    task.defer(function()
+        if Spy.State.Running and not Spy.State.InternalReplay then
+            Spy.Capture.SafeAdd(remote, method, args, nil, caller)
+        end
+    end)
+end
+
+function Spy.Capture.InstallNamecallHook()
+    if type(hookmetamethod) ~= "function" then
+        error("hookmetamethod unavailable")
+    end
+    if type(getnamecallmethod) ~= "function" then
+        error("getnamecallmethod unavailable")
+    end
+
+    if type(newcclosure) ~= "function" then
+        error("newcclosure unavailable")
+    end
+
+    local originalNamecall
+    local wrapper = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+
+        if Spy.State.Running and not Spy.State.InternalReplay and typeof(self) == "Instance" then
+            local className = self.ClassName
+            local isRemoteEvent = method == "FireServer" and className == "RemoteEvent"
+            local isRemoteFunction = method == "InvokeServer" and className == "RemoteFunction"
+
+            if isRemoteEvent or isRemoteFunction then
+                local args = table.pack(...)
+                local caller = Spy.Capture.GetCaller()
+                Spy.Capture.QueueAdd(self, method, args, caller)
+            end
+        end
+
+        return originalNamecall(self, ...)
+    end)
+
+    originalNamecall = hookmetamethod(game, "__namecall", wrapper)
+
+    if type(originalNamecall) ~= "function" then
+        error("hookmetamethod did not return original __namecall")
+    end
+
+    Spy.Capture.OriginalNamecall = originalNamecall
+    return true
+end
+
+function Spy.Capture.Install()
+    local ok, result = pcall(Spy.Capture.InstallNamecallHook)
+    if ok then return "__namecall" end
+    Spy.Capture.Errors.NamecallHook = tostring(result)
+    error("capture install failed: " .. tostring(result))
+end
+
+function Spy.Capture.Restore()
+    local original = Spy.Capture.OriginalNamecall
+    Spy.Capture.OriginalNamecall = nil
+
+    if original and type(hookmetamethod) == "function" then
+        pcall(hookmetamethod, game, "__namecall", original)
+    end
+end
+
+function Spy.Capture.CallOriginal(remote, method, argsPack)
+    local dynamicRemote = remote :: any
+
+    if method == "InvokeServer" then
+        return table.pack(dynamicRemote:InvokeServer(table.unpack(argsPack, 1, argsPack.n)))
+    end
+
+    dynamicRemote:FireServer(table.unpack(argsPack, 1, argsPack.n))
+    return table.pack()
+end
+
+function Spy.Capture.Replay(entry)
+    if not entry or not entry.Remote or entry.Remote.Parent == nil then
+        return false, "Remote is no longer available"
+    end
+    if not entry.Args or type(entry.Args.n) ~= "number" then
+        return false, "Captured arguments are unavailable"
+    end
+
+    Spy.State.InternalReplay = true
+    local ok, payload = pcall(Spy.Capture.CallOriginal, entry.Remote, entry.Method, entry.Args)
+    Spy.State.InternalReplay = false
+
+    if not ok then return false, payload end
+
+    Spy.Store.Add(entry.Remote, entry.Method, entry.Args, payload, Spy.Capture.GetCaller())
+    return true, payload
+end
+
+Spy.UI.Refs = {}
+Spy.UI.EventBadge = "⚡"
+Spy.UI.FunctionBadge = "ƒ"
+
+function Spy.UI.TrackConnection(connection)
+    Spy.State.Connections[#Spy.State.Connections + 1] = connection
+    return connection
+end
+
+function Spy.UI.New(className, properties, parent)
+    local object = Instance.new(className)
+    for key, value in pairs(properties or {}) do object[key] = value end
+    object.Parent = parent
+    return object
+end
+
+function Spy.UI.Round(object, radius)
+    return Spy.UI.New("UICorner", {CornerRadius = UDim.new(0, radius or 8)}, object)
+end
+
+function Spy.UI.Stroke(object, color, thickness, transparency)
+    return Spy.UI.New("UIStroke", {
+        Color = color,
+        Thickness = thickness or 1,
+        Transparency = transparency or 0
+    }, object)
+end
+
+function Spy.UI.Gradient(object, colorA, colorB, rotation)
+    return Spy.UI.New("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, colorA),
+            ColorSequenceKeypoint.new(1, colorB)
+        }),
+        Rotation = rotation or 90
+    }, object)
+end
+
+function Spy.UI.Shadow(object, radius, spread, transparency)
+    local shadow = Spy.UI.New("Frame", {
+        Name = "Shadow",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 8),
+        Size = UDim2.new(1, spread or 18, 1, spread or 18),
+        BackgroundColor3 = Spy.Config.Theme.AccentDark,
+        BackgroundTransparency = transparency or 0.7,
+        BorderSizePixel = 0,
+        ZIndex = math.max((object.ZIndex or 2) - 1, 1)
+    }, object)
+    Spy.UI.Round(shadow, radius or 12)
+    return shadow
+end
+
+function Spy.UI.AnimateButton(button)
+    local tweenService = game:GetService("TweenService")
+    Spy.UI.TrackConnection(button.MouseEnter:Connect(function()
+        tweenService:Create(button, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Spy.Config.Theme.AccentBright
+        }):Play()
+    end))
+    Spy.UI.TrackConnection(button.MouseLeave:Connect(function()
+        tweenService:Create(button, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            BackgroundColor3 = Spy.Config.Theme.Accent
+        }):Play()
+    end))
+end
+
+function Spy.UI.BindFloatingDrag(button)
+    local userInputService = game:GetService("UserInputService")
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPosition
+
+    Spy.UI.TrackConnection(button.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPosition = button.Position
+            dragInput = input
+        end
+    end))
+
+    Spy.UI.TrackConnection(button.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end))
+
+    Spy.UI.TrackConnection(userInputService.InputChanged:Connect(function(input)
+        if dragging and input == dragInput and dragStart and startPosition then
+            local delta = input.Position - dragStart
+            if math.abs(delta.X) > 4 or math.abs(delta.Y) > 4 then
+                Spy.State.LastToggleDragAt = os.clock()
+            end
+            button.Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + delta.X, startPosition.Y.Scale, startPosition.Y.Offset + delta.Y)
+        end
+    end))
+
+    Spy.UI.TrackConnection(userInputService.InputEnded:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            dragging = false
+            dragInput = nil
+            dragStart = nil
+            startPosition = nil
+        end
+    end))
+end
+
+function Spy.UI.SetStatus(text, isError)
+    local status = Spy.UI.Refs.StatusLabel
+    if not status then return end
+    status.Text = tostring(text or "")
+    status.TextColor3 = isError and Spy.Config.Theme.Error or Spy.Config.Theme.Success
+end
+
+function Spy.UI.RequestRefresh()
+    Spy.State.UIRefreshPending = true
+end
+
+function Spy.UI.FlushRefresh()
+    if not Spy.State.UIRefreshPending then return end
+    Spy.State.UIRefreshPending = false
+    if type(Spy.Store.OnChanged) == "function" then
+        pcall(Spy.Store.OnChanged)
+    end
+end
+
+function Spy.UI.ClearDynamic(container)
+    if not container then return end
+    for _, child in ipairs(container:GetChildren()) do
+        if child:GetAttribute("SpyDynamic") == true then child:Destroy() end
+    end
+end
+
+function Spy.UI.MakeButton(parent, name, text, width)
+    local button = Spy.UI.New("TextButton", {
+        Name = name,
+        Size = UDim2.new(0, width or 110, 0, 36),
+        BackgroundColor3 = Spy.Config.Theme.Accent,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Font = Enum.Font.GothamBold,
+        Text = text,
+        TextColor3 = Color3.fromRGB(0, 0, 0),
+        TextSize = 13,
+        ZIndex = parent.ZIndex or 3
+    }, parent)
+    Spy.UI.Shadow(button, 9, 14, 0.72)
+    Spy.UI.Round(button, 9)
+    Spy.UI.Stroke(button, Spy.Config.Theme.AccentBright, 1, 0.1)
+    Spy.UI.Gradient(button, Spy.Config.Theme.AccentBright, Spy.Config.Theme.AccentDark, 0)
+    Spy.UI.AnimateButton(button)
+    return button
+end
+
+function Spy.UI.FormatReturns(entry)
+    if not entry or not entry.Returns then return "" end
+    local lines = {}
+    for index = 1, entry.Returns.n do
+        local ok, rendered = pcall(Spy.Serializer.Value, entry.Returns[index])
+        if not ok then rendered = string.format("%q", "Unsupported<Return>") end
+        lines[#lines + 1] = "[" .. tostring(index) .. "] = " .. rendered
+    end
+    if #lines == 0 then return "Returns: none" end
+    return "Returns: " .. table.concat(lines, "    ")
+end
+
+function Spy.UI.ResizeCode()
+    local refs = Spy.UI.Refs
+    if not refs.CodeBox or not refs.CodeScroll then return end
+    local text = refs.CodeBox.Text or ""
+    local lines = string.split(text, "\n")
+    local longest = 0
+    for _, line in ipairs(lines) do longest = math.max(longest, #line) end
+    local width = math.max(refs.CodeScroll.AbsoluteSize.X - 14, longest * 7.7 + 24)
+    local height = math.max(refs.CodeScroll.AbsoluteSize.Y - 14, #lines * 17 + 24)
+    refs.CodeBox.Size = UDim2.new(0, width, 0, height)
+    refs.CodeScroll.CanvasSize = UDim2.new(0, width + 8, 0, height + 8)
+end
+
+function Spy.UI.RenderSelected(entry)
+    local refs = Spy.UI.Refs
+    if not refs.DetailTitle or not refs.DetailMeta or not refs.CodeBox then return end
+    if not entry then
+        refs.DetailTitle.Text = "Select a remote"
+        refs.DetailMeta.Text = "Captured calls appear on the left. Select one to inspect that selected call."
+        refs.CodeBox.Text = ""
+        Spy.UI.ResizeCode()
+        if refs.ReturnsBox then refs.ReturnsBox.Text = "" end
+        return
+    end
+    local callerText = "Unavailable"
+    if entry.Caller then
+        local ok, callerPath = pcall(Spy.Serializer.InstancePath, entry.Caller)
+        callerText = ok and callerPath or tostring(entry.Caller)
+    end
+    refs.DetailTitle.Text = entry.Name
+    refs.DetailMeta.Text = table.concat({
+        entry.Class .. "  |  " .. entry.Method,
+        "Args: " .. tostring(entry.ArgCount) .. "  |  Call #" .. tostring(entry.Occurrence),
+        "Path: " .. tostring(entry.Path),
+        "Caller: " .. callerText,
+        "Time: " .. string.format("%.3f", entry.Time)
+    }, "\n")
+    refs.CodeBox.Text = entry.Code or ""
+    Spy.UI.ResizeCode()
+    if refs.ReturnsBox then refs.ReturnsBox.Text = Spy.UI.FormatReturns(entry) end
+end
+
+function Spy.UI.LogMatches(entry, query)
+    if query == "" then return true end
+    local haystack = string.lower(table.concat({
+        tostring(entry.Name),
+        tostring(entry.Path),
+        tostring(entry.Class),
+        tostring(entry.Method)
+    }, " "))
+    return string.find(haystack, query, 1, true) ~= nil
+end
+
+function Spy.UI.RenderList()
+    local refs = Spy.UI.Refs
+    if not refs.LogList then return end
+    Spy.UI.ClearDynamic(refs.LogList)
+    local query = ""
+    if refs.SearchBox then query = string.lower(refs.SearchBox.Text or "") end
+    for index, entry in ipairs(Spy.State.Logs) do
+        if Spy.UI.LogMatches(entry, query) then
+            local selected = Spy.State.SelectedId == entry.Id
+            local card = Spy.UI.New("TextButton", {
+                Name = "LogCard_" .. tostring(entry.Id),
+                LayoutOrder = index,
+                Size = UDim2.new(1, -8, 0, 64),
+                BackgroundColor3 = selected and Color3.fromRGB(57, 36, 89) or Spy.Config.Theme.PanelAlt,
+                BorderSizePixel = 0,
+                AutoButtonColor = true,
+                Text = ""
+            }, refs.LogList)
+            card:SetAttribute("SpyDynamic", true)
+            Spy.UI.Round(card, 8)
+            Spy.UI.Stroke(card, selected and Spy.Config.Theme.AccentBright or Spy.Config.Theme.Border, selected and 2 or 1, selected and 0 or 0.25)
+            Spy.UI.Shadow(card, 8, 12, selected and 0.76 or 0.86)
+            local isEvent = entry.Class == "RemoteEvent"
+            local badge = Spy.UI.New("TextLabel", {
+                Name = isEvent and "EventBadge" or "FunctionBadge",
+                Position = UDim2.new(0, 10, 0, 10),
+                Size = UDim2.new(0, 34, 0, 34),
+                BackgroundColor3 = isEvent and Color3.fromRGB(144, 86, 255) or Color3.fromRGB(209, 102, 255),
+                BorderSizePixel = 0,
+                Font = Enum.Font.GothamBold,
+                Text = isEvent and Spy.UI.EventBadge or Spy.UI.FunctionBadge,
+                TextColor3 = Color3.fromRGB(255, 255, 255),
+                TextSize = 17
+            }, card)
+            Spy.UI.Round(badge, 8)
+            Spy.UI.New("TextLabel", {
+                Name = "RemoteName",
+                Position = UDim2.new(0, 54, 0, 8),
+                Size = UDim2.new(1, -62, 0, 22),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.GothamMedium,
+                Text = entry.Name,
+                TextColor3 = Spy.Config.Theme.Text,
+                TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd
+            }, card)
+            Spy.UI.New("TextLabel", {
+                Name = "RemoteMeta",
+                Position = UDim2.new(0, 54, 0, 31),
+                Size = UDim2.new(1, -62, 0, 20),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.Gotham,
+                Text = entry.Class .. " | " .. entry.Method .. " | " .. tostring(entry.ArgCount) .. " args | #" .. tostring(entry.Occurrence),
+                TextColor3 = Spy.Config.Theme.SubText,
+                TextSize = 10,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd
+            }, card)
+            Spy.UI.TrackConnection(card.MouseButton1Click:Connect(function()
+                Spy.Store.Select(entry.Id)
+                Spy.UI.RenderSelected(entry)
+            end))
+        end
+    end
+    local selected = Spy.Store.GetSelected()
+    Spy.UI.RenderSelected(selected)
+end
+
+function Spy.UI.RefreshExcluded()
+    local refs = Spy.UI.Refs
+    if not refs.ExcludedList then return end
+    Spy.UI.ClearDynamic(refs.ExcludedList)
+    for remote in pairs(Spy.State.Excluded) do
+        if remote then
+            local row = Spy.UI.New("Frame", {
+                Name = "ExcludedRow",
+                Size = UDim2.new(1, -8, 0, 64),
+                BackgroundColor3 = Spy.Config.Theme.Panel,
+                BorderSizePixel = 0
+            }, refs.ExcludedList)
+            row:SetAttribute("SpyDynamic", true)
+            Spy.UI.Round(row, 7)
+            Spy.UI.Stroke(row, Spy.Config.Theme.Border, 1, 0.35)
+            local excludedPath = "Unavailable"
+            local okPath, path = pcall(Spy.Serializer.RemotePath, remote)
+            if okPath then excludedPath = path end
+            Spy.UI.New("TextLabel", {
+                Position = UDim2.new(0, 10, 0, 5),
+                Size = UDim2.new(1, -92, 1, -10),
+                BackgroundTransparency = 1,
+                Font = Enum.Font.Gotham,
+                Text = remote.Name .. "\n" .. remote.ClassName .. "  |  " .. excludedPath,
+                TextColor3 = Spy.Config.Theme.Text,
+                TextSize = 10,
+                TextWrapped = true,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Center
+            }, row)
+            local restore = Spy.UI.MakeButton(row, "RestoreButton", "Restore", 70)
+            restore.Position = UDim2.new(1, -78, 0.5, -17)
+            Spy.UI.TrackConnection(restore.MouseButton1Click:Connect(function()
+                Spy.Store.Restore(remote)
+                Spy.UI.SetStatus("Restored " .. remote.Name, false)
+                Spy.UI.RefreshExcluded()
+            end))
+        end
+    end
+end
+
+function Spy.UI.AnimateMainVisibility(show)
+    local refs = Spy.UI.Refs
+    if not refs.Main or not refs.ToggleButton then return end
+    local tweenService = game:GetService("TweenService")
+    if not show then
+        Spy.State.MainOpenPosition = refs.Main.Position
+    end
+    local openPos = Spy.State.MainOpenPosition or refs.Main.Position
+    Spy.State.MainOpenPosition = openPos
+    local hiddenPos = UDim2.new(0, -refs.Main.AbsoluteSize.X - 40, openPos.Y.Scale, openPos.Y.Offset)
+    Spy.State.MainHiddenPosition = hiddenPos
+    if refs.ExcludedPanel then
+        refs.ExcludedPanel.Visible = false
+    end
+    if show then
+        refs.Main.Visible = true
+        tweenService:Create(refs.Main, TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = openPos}):Play()
+        tweenService:Create(refs.ToggleButton, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 0, Size = UDim2.new(0, 54, 0, 54)}):Play()
+        refs.ToggleButton.Text = "RS"
+        Spy.State.MainVisible = true
+    else
+        tweenService:Create(refs.Main, TweenInfo.new(0.34, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut), {Position = hiddenPos}):Play()
+        tweenService:Create(refs.ToggleButton, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 180, Size = UDim2.new(0, 58, 0, 58)}):Play()
+        refs.ToggleButton.Text = "+"
+        Spy.State.MainVisible = false
+    end
+end
+
+function Spy.UI.ToggleMainVisibility()
+    Spy.UI.AnimateMainVisibility(not Spy.State.MainVisible)
+end
+
+function Spy.UI.ToggleMinimized()
+    local refs = Spy.UI.Refs
+    if not refs.Main or not refs.LeftPanel or not refs.Inspector then return end
+    local tweenService = game:GetService("TweenService")
+    if Spy.State.Minimized then
+        refs.LeftPanel.Visible = true
+        refs.Inspector.Visible = true
+        tweenService:Create(refs.Main, TweenInfo.new(0.34, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = Spy.State.MainNormalSize}):Play()
+        if refs.MinimizeButton then refs.MinimizeButton.Text = "-" end
+        Spy.State.Minimized = false
+    else
+        Spy.State.MainNormalSize = refs.Main.Size
+        if refs.ExcludedPanel then refs.ExcludedPanel.Visible = false end
+        tweenService:Create(refs.Main, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut), {Size = UDim2.new(0, 900, 0, 48)}):Play()
+        task.delay(0.18, function()
+            if Spy.State.Minimized and Spy.State.Running then
+                refs.LeftPanel.Visible = false
+                refs.Inspector.Visible = false
+            end
+        end)
+        if refs.MinimizeButton then refs.MinimizeButton.Text = "+" end
+        Spy.State.Minimized = true
+    end
+end
+
+function Spy.UI.BindActions()
+    local refs = Spy.UI.Refs
+
+    Spy.UI.TrackConnection(refs.CopyCode.MouseButton1Click:Connect(function()
+        local selected = Spy.Store.GetSelected()
+        if not selected then Spy.UI.SetStatus("Select a remote first", true) return end
+        if type(setclipboard) ~= "function" then Spy.UI.SetStatus("Clipboard function is unavailable", true) return end
+        local ok, err = pcall(function() setclipboard(selected.Code) end)
+        Spy.UI.SetStatus(ok and "Code copied" or tostring(err), not ok)
+    end))
+
+    Spy.UI.TrackConnection(refs.CopyRemote.MouseButton1Click:Connect(function()
+        local selected = Spy.Store.GetSelected()
+        if not selected then Spy.UI.SetStatus("Select a remote first", true) return end
+        if type(setclipboard) ~= "function" then Spy.UI.SetStatus("Clipboard function is unavailable", true) return end
+        local ok, err = pcall(function() setclipboard(Spy.Serializer.RemotePath(selected.Remote)) end)
+        Spy.UI.SetStatus(ok and "Remote path copied" or tostring(err), not ok)
+    end))
+
+    Spy.UI.TrackConnection(refs.RunCode.MouseButton1Click:Connect(function()
+        local selected = Spy.Store.GetSelected()
+        if not selected then Spy.UI.SetStatus("Select a remote first", true) return end
+        local ok, result = Spy.Capture.Replay(selected)
+        if ok then
+            local count = result and result.n or 0
+            Spy.UI.SetStatus("Replay sent | " .. tostring(count) .. " return values", false)
+        else
+            Spy.UI.SetStatus("Replay failed: " .. tostring(result), true)
+        end
+    end))
+
+    Spy.UI.TrackConnection(refs.ExcludeRemote.MouseButton1Click:Connect(function()
+        local selected = Spy.Store.GetSelected()
+        if not selected then Spy.UI.SetStatus("Select a remote first", true) return end
+        local name = selected.Name
+        Spy.Store.Exclude(selected.Remote)
+        Spy.UI.SetStatus("Excluded " .. name, false)
+        Spy.UI.RenderSelected(nil)
+    end))
+
+    Spy.UI.TrackConnection(refs.ClearLogs.MouseButton1Click:Connect(function()
+        Spy.Store.Clear()
+        Spy.UI.RenderSelected(nil)
+        Spy.UI.SetStatus("Logs cleared", false)
+    end))
+
+    Spy.UI.TrackConnection(refs.PauseSpy.MouseButton1Click:Connect(function()
+        Spy.Store.SetPaused(not Spy.State.Paused)
+        refs.PauseSpy.Text = Spy.State.Paused and "Resume Spy" or "Pause Spy"
+        Spy.UI.SetStatus(Spy.State.Paused and "Capture paused" or "Capture resumed", false)
+    end))
+end
+
+function Spy.UI.Build()
+    local parent
+    if type(gethui) == "function" then
+        local ok, result = pcall(gethui)
+        if ok then parent = result end
+    end
+    if not parent then parent = game:GetService("CoreGui") end
+
+    local gui = Spy.UI.New("ScreenGui", {
+        Name = "MangaRemoteSpy",
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        IgnoreGuiInset = true
+    }, parent)
+    Spy.State.Instances[#Spy.State.Instances + 1] = gui
+
+    local main = Spy.UI.New("Frame", {
+        Name = "Main",
+        Position = UDim2.new(0.5, -450, 0.5, -260),
+        Size = UDim2.new(0, 900, 0, 520),
+        BackgroundColor3 = Spy.Config.Theme.Background,
+        BorderSizePixel = 0,
+        Active = true,
+        Draggable = true
+    }, gui)
+    Spy.UI.Round(main, 12)
+    Spy.UI.Stroke(main, Spy.Config.Theme.AccentSoft, 1.4, 0.15)
+    Spy.UI.Shadow(main, 12, 22, 0.78)
+
+    local titleBar = Spy.UI.New("Frame", {
+        Name = "TitleBar",
+        Size = UDim2.new(1, 0, 0, 48),
+        BackgroundColor3 = Spy.Config.Theme.PanelAlt,
+        BorderSizePixel = 0
+    }, main)
+    Spy.UI.Round(titleBar, 12)
+    Spy.UI.Gradient(titleBar, Spy.Config.Theme.PanelAlt, Spy.Config.Theme.Panel, 0)
+
+    Spy.UI.New("TextLabel", {
+        Name = "Title",
+        Position = UDim2.new(0, 16, 0, 0),
+        Size = UDim2.new(0, 270, 1, 0),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamBold,
+        Text = "MANGA  •  REMOTE SPY",
+        TextColor3 = Spy.Config.Theme.Text,
+        TextSize = 16,
+        TextXAlignment = Enum.TextXAlignment.Left
+    }, titleBar)
+
+    local excludedOpen = Spy.UI.MakeButton(titleBar, "ExcludedOpen", "Excluded Remotes", 138)
+    excludedOpen.Position = UDim2.new(1, -236, 0.5, -18)
+
+    local minimizeButton = Spy.UI.MakeButton(titleBar, "MinimizeButton", "-", 36)
+    minimizeButton.Position = UDim2.new(1, -90, 0.5, -18)
+
+    local destroyButton = Spy.UI.MakeButton(titleBar, "DestroyButton", "X", 36)
+    destroyButton.Position = UDim2.new(1, -46, 0.5, -18)
+
+    local toggleButton = Spy.UI.New("TextButton", {
+        Name = "ToggleSpyButton",
+        Position = UDim2.new(0, 18, 0, 18),
+        Size = UDim2.new(0, 54, 0, 54),
+        BackgroundColor3 = Spy.Config.Theme.Accent,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+        Active = true,
+        Font = Enum.Font.GothamBold,
+        Text = "RS",
+        TextColor3 = Color3.fromRGB(0, 0, 0),
+        TextSize = 18,
+        ZIndex = 40
+    }, gui)
+    Spy.UI.Round(toggleButton, 16)
+    Spy.UI.Shadow(toggleButton, 16, 18, 0.62)
+    Spy.UI.Stroke(toggleButton, Spy.Config.Theme.AccentBright, 1.2, 0.05)
+    Spy.UI.Gradient(toggleButton, Spy.Config.Theme.AccentBright, Spy.Config.Theme.AccentDark, 35)
+    Spy.UI.AnimateButton(toggleButton)
+
+    local left = Spy.UI.New("Frame", {
+        Name = "LeftPanel",
+        Position = UDim2.new(0, 12, 0, 60),
+        Size = UDim2.new(0, 280, 1, -72),
+        BackgroundColor3 = Spy.Config.Theme.Panel,
+        BorderSizePixel = 0
+    }, main)
+    Spy.UI.Round(left, 10)
+    Spy.UI.Stroke(left, Spy.Config.Theme.Border, 1, 0.3)
+    Spy.UI.Shadow(left, 10, 16, 0.84)
+
+    local search = Spy.UI.New("TextBox", {
+        Name = "SearchBox",
+        Position = UDim2.new(0, 10, 0, 10),
+        Size = UDim2.new(1, -20, 0, 36),
+        BackgroundColor3 = Spy.Config.Theme.PanelSoft,
+        BorderSizePixel = 0,
+        ClearTextOnFocus = false,
+        Font = Enum.Font.Gotham,
+        PlaceholderText = "Search name, path, class, method...",
+        PlaceholderColor3 = Spy.Config.Theme.SubText,
+        Text = "",
+        TextColor3 = Spy.Config.Theme.Text,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left
+    }, left)
+    Spy.UI.Round(search, 8)
+    Spy.UI.New("UIPadding", {PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)}, search)
+
+    local logList = Spy.UI.New("ScrollingFrame", {
+        Name = "RemoteLogList",
+        Position = UDim2.new(0, 8, 0, 54),
+        Size = UDim2.new(1, -16, 1, -62),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.None,
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = Spy.Config.Theme.AccentSoft
+    }, left)
+    local logLayout = Spy.UI.New("UIListLayout", {
+        Padding = UDim.new(0, 6),
+        SortOrder = Enum.SortOrder.LayoutOrder
+    }, logList)
+
+    local center = Spy.UI.New("Frame", {
+        Name = "Inspector",
+        Position = UDim2.new(0, 304, 0, 60),
+        Size = UDim2.new(1, -316, 1, -72),
+        BackgroundColor3 = Spy.Config.Theme.Panel,
+        BorderSizePixel = 0
+    }, main)
+    Spy.UI.Round(center, 10)
+    Spy.UI.Stroke(center, Spy.Config.Theme.Border, 1, 0.3)
+    Spy.UI.Shadow(center, 10, 16, 0.84)
+
+    local detailTitle = Spy.UI.New("TextLabel", {
+        Name = "DetailTitle",
+        Position = UDim2.new(0, 14, 0, 12),
+        Size = UDim2.new(1, -28, 0, 26),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamBold,
+        Text = "Select a remote",
+        TextColor3 = Color3.fromRGB(241, 243, 249),
+        TextSize = 18,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd
+    }, center)
+
+    local detailMeta = Spy.UI.New("TextLabel", {
+        Name = "DetailMeta",
+        Position = UDim2.new(0, 14, 0, 42),
+        Size = UDim2.new(1, -28, 0, 93),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.Gotham,
+        Text = "Captured calls appear on the left. Select one to inspect that selected call.",
+        TextColor3 = Spy.Config.Theme.SubText,
+        TextSize = 11,
+        TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top
+    }, center)
+
+    local codeFrame = Spy.UI.New("Frame", {
+        Name = "CodeFrame",
+        Position = UDim2.new(0, 14, 0, 140),
+        Size = UDim2.new(1, -28, 1, -244),
+        BackgroundColor3 = Spy.Config.Theme.Surface,
+        BorderSizePixel = 0
+    }, center)
+    Spy.UI.Round(codeFrame, 8)
+    Spy.UI.Stroke(codeFrame, Spy.Config.Theme.Border, 1, 0.35)
+
+    local codeScroll = Spy.UI.New("ScrollingFrame", {
+        Name = "CodeScroll",
+        Position = UDim2.new(0, 6, 0, 6),
+        Size = UDim2.new(1, -12, 1, -12),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = Spy.Config.Theme.AccentSoft
+    }, codeFrame)
+
+    local codeBox = Spy.UI.New("TextBox", {
+        Name = "CodeViewer",
+        Position = UDim2.new(0, 4, 0, 4),
+        Size = UDim2.new(1, -12, 1, -12),
+        BackgroundTransparency = 1,
+        ClearTextOnFocus = false,
+        Font = Enum.Font.Code,
+        MultiLine = true,
+        Text = "",
+        TextColor3 = Color3.fromRGB(230, 214, 255),
+        TextSize = 13,
+        TextEditable = false,
+        TextWrapped = false,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top
+    }, codeScroll)
+
+    local returnsBox = Spy.UI.New("TextLabel", {
+        Name = "ReturnsBox",
+        Position = UDim2.new(0, 14, 1, -98),
+        Size = UDim2.new(1, -28, 0, 32),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.Code,
+        Text = "",
+        TextColor3 = Spy.Config.Theme.SubText,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextTruncate = Enum.TextTruncate.AtEnd
+    }, center)
+
+    local actionRow = Spy.UI.New("Frame", {
+        Name = "Actions",
+        Position = UDim2.new(0, 14, 1, -60),
+        Size = UDim2.new(1, -28, 0, 34),
+        BackgroundTransparency = 1
+    }, center)
+    Spy.UI.New("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        Padding = UDim.new(0, 6),
+        SortOrder = Enum.SortOrder.LayoutOrder
+    }, actionRow)
+
+    local copyCode = Spy.UI.MakeButton(actionRow, "CopyCode", "Copy Code", 78)
+    local copyRemote = Spy.UI.MakeButton(actionRow, "CopyRemote", "Copy Remote", 86)
+    local runCode = Spy.UI.MakeButton(actionRow, "RunCode", "Run Code", 72)
+    local excludeRemote = Spy.UI.MakeButton(actionRow, "ExcludeRemote", "Exclude Remote", 96)
+    local clearLogs = Spy.UI.MakeButton(actionRow, "ClearLogs", "Clear Logs", 76)
+    local pauseSpy = Spy.UI.MakeButton(actionRow, "PauseSpy", "Pause Spy", 78)
+
+    local status = Spy.UI.New("TextLabel", {
+        Name = "StatusLabel",
+        Position = UDim2.new(0, 14, 1, -24),
+        Size = UDim2.new(1, -28, 0, 18),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.Gotham,
+        Text = "Listening for remotes...",
+        TextColor3 = Spy.Config.Theme.Success,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left
+    }, center)
+
+    local excludedPanel = Spy.UI.New("Frame", {
+        Name = "ExcludedPanel",
+        Position = UDim2.new(0.5, -230, 0.5, -190),
+        Size = UDim2.new(0, 460, 0, 380),
+        BackgroundColor3 = Spy.Config.Theme.PanelAlt,
+        BorderSizePixel = 0,
+        Visible = false,
+        ZIndex = 20
+    }, gui)
+    Spy.UI.Round(excludedPanel, 10)
+    Spy.UI.Stroke(excludedPanel, Spy.Config.Theme.AccentSoft, 1, 0.15)
+    Spy.UI.Shadow(excludedPanel, 10, 20, 0.8)
+
+    Spy.UI.New("TextLabel", {
+        Name = "ExcludedTitle",
+        Position = UDim2.new(0, 14, 0, 8),
+        Size = UDim2.new(1, -72, 0, 32),
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamBold,
+        Text = "Excluded Remotes",
+        TextColor3 = Spy.Config.Theme.Text,
+        TextSize = 16,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 21
+    }, excludedPanel)
+
+    local closeExcluded = Spy.UI.MakeButton(excludedPanel, "CloseExcluded", "Close", 52)
+    closeExcluded.Position = UDim2.new(1, -62, 0, 7)
+    closeExcluded.ZIndex = 21
+
+    local excludedList = Spy.UI.New("ScrollingFrame", {
+        Name = "ExcludedList",
+        Position = UDim2.new(0, 10, 0, 48),
+        Size = UDim2.new(1, -20, 1, -58),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = Spy.Config.Theme.AccentSoft,
+        ZIndex = 21
+    }, excludedPanel)
+    local excludedLayout = Spy.UI.New("UIListLayout", {
+        Padding = UDim.new(0, 6),
+        SortOrder = Enum.SortOrder.LayoutOrder
+    }, excludedList)
+
+    Spy.UI.Refs = {
+        Gui = gui,
+        Main = main,
+        LeftPanel = left,
+        Inspector = center,
+        SearchBox = search,
+        LogList = logList,
+        LogLayout = logLayout,
+        DetailTitle = detailTitle,
+        DetailMeta = detailMeta,
+        CodeScroll = codeScroll,
+        CodeBox = codeBox,
+        ReturnsBox = returnsBox,
+        CopyCode = copyCode,
+        CopyRemote = copyRemote,
+        RunCode = runCode,
+        ExcludeRemote = excludeRemote,
+        ClearLogs = clearLogs,
+        PauseSpy = pauseSpy,
+        StatusLabel = status,
+        ExcludedOpen = excludedOpen,
+        ExcludedPanel = excludedPanel,
+        CloseExcluded = closeExcluded,
+        ExcludedList = excludedList,
+        ExcludedLayout = excludedLayout,
+        ToggleButton = toggleButton,
+        MinimizeButton = minimizeButton,
+        DestroyButton = destroyButton
+    }
+
+    Spy.UI.BindFloatingDrag(toggleButton)
+
+    Spy.UI.TrackConnection(logLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        logList.CanvasSize = UDim2.new(0, 0, 0, logLayout.AbsoluteContentSize.Y + 8)
+    end))
+    Spy.UI.TrackConnection(excludedLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        excludedList.CanvasSize = UDim2.new(0, 0, 0, excludedLayout.AbsoluteContentSize.Y + 8)
+    end))
+    Spy.UI.TrackConnection(search:GetPropertyChangedSignal("Text"):Connect(function()
+        Spy.UI.RenderList()
+    end))
+    local runService = game:GetService("RunService")
+    Spy.UI.TrackConnection(runService.Heartbeat:Connect(function()
+        Spy.UI.FlushRefresh()
+    end))
+    Spy.UI.TrackConnection(excludedOpen.MouseButton1Click:Connect(function()
+        excludedPanel.Visible = true
+        Spy.UI.RefreshExcluded()
+    end))
+    Spy.UI.TrackConnection(closeExcluded.MouseButton1Click:Connect(function()
+        excludedPanel.Visible = false
+    end))
+    Spy.UI.TrackConnection(toggleButton.MouseButton1Click:Connect(function()
+        if os.clock() - Spy.State.LastToggleDragAt < 0.18 then return end
+        Spy.UI.ToggleMainVisibility()
+    end))
+    Spy.UI.TrackConnection(minimizeButton.MouseButton1Click:Connect(function()
+        Spy.UI.ToggleMinimized()
+    end))
+    Spy.UI.TrackConnection(destroyButton.MouseButton1Click:Connect(function()
+        Spy.Destroy()
+    end))
+
+    Spy.Store.OnChanged = function()
+        pcall(Spy.UI.RenderList)
+        pcall(Spy.UI.RefreshExcluded)
+    end
+
+    Spy.State.MainOpenPosition = main.Position
+    Spy.UI.BindActions()
+    Spy.UI.RenderList()
+    Spy.UI.RenderSelected(nil)
+end
+
+function Spy.Destroy()
+    Spy.State.Running = false
+    pcall(Spy.Capture.Restore)
+    for _, connection in ipairs(Spy.State.Connections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    for _, instance in ipairs(Spy.State.Instances) do
+        pcall(function() instance:Destroy() end)
+    end
+    Spy.State.Connections = {}
+    Spy.State.Instances = {}
+    if ENV.FTAP_REMOTE_SPY == Spy then
+        ENV.FTAP_REMOTE_SPY = nil
+    end
+end
+
+ENV.FTAP_REMOTE_SPY = Spy
+
+local okUI, uiError = pcall(Spy.UI.Build)
+if not okUI then
+    warn("Manga Remote Spy UI failed: " .. tostring(uiError))
+end
+
+local okCapture, captureError = pcall(Spy.Capture.Install)
+if not okCapture then
+    if Spy.UI and Spy.UI.SetStatus then
+        pcall(Spy.UI.SetStatus, "Capture install failed: " .. tostring(captureError), true)
+    else
+        warn("Manga Remote Spy capture failed: " .. tostring(captureError))
+    end
+elseif next(Spy.Capture.Errors) ~= nil then
+    local fragments = {}
+    for layer, err in pairs(Spy.Capture.Errors) do
+        fragments[#fragments + 1] = layer .. ": " .. err
+    end
+    if Spy.UI and Spy.UI.SetStatus then
+        pcall(Spy.UI.SetStatus, "Partial capture: " .. table.concat(fragments, " | "), true)
+    end
+end
