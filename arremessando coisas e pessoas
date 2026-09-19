@@ -6,7 +6,7 @@ local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
 
 .G_LocalPlayer = Players.LocalPlayer
-local ENV = getgenv and getgenv() or _G
+.G_ENV = getgenv and getgenv() or _G
 
 if ENV.MangaFeatureController and ENV.MangaFeatureController.Stop then
     pcall(ENV.MangaFeatureController.Stop)
