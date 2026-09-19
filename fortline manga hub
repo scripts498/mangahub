@@ -1,435 +1,708 @@
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+local function createController(deps)
+    local self = {
+        Mode = "Off", Selected = nil, Whitelist = {}, Delay = 0.1,
+        Pending = nil, Cursor = 0, NextSend = 0, NextEquip = 0,
+        ReadyAt = 0, ReadyTool = nil, ReadyCharacter = nil, ReleaseAt = nil,
+        Sent = 0, Errors = 0, ConsecutiveErrors = 0,
+        LastTarget = "Nenhum", LastError = "", Status = "Desligado", Dead = false,
+    }
+
+    function self:Release()
+        deps.release()
+        self.ReadyTool = nil
+        self.ReadyCharacter = nil
+        self.ReadyAt = 0
+        self.NextEquip = 0
+        self.ReleaseAt = nil
+    end
+
+    function self:CancelPending()
+        self.Pending = nil
+        if self.Mode == "Off" then self:Release() end
+    end
+
+    function self:SetMode(mode)
+        if self.Dead then return false end
+        if mode ~= "Off" and mode ~= "All" and mode ~= "Selected" then return false end
+        self.Mode = mode
+        self.Pending = nil
+        self.Cursor = 0
+        self.ConsecutiveErrors = 0
+        self.ReleaseAt = nil
+        if mode == "Off" then
+            self:Release()
+            self.Status = "Desligado"
+        else
+            self.Status = "Aguardando"
+        end
+        return true
+    end
+
+    function self:Once(now)
+        if self.Dead then return false, "Sistema encerrado." end
+        if not self.Selected then return false, "Selecione um jogador." end
+        if self.Pending then return false, "Já existe um ataque único aguardando." end
+        self.Pending = {Name = self.Selected, Expires = now + 5}
+        return true
+    end
+
+    function self:Fail(message, now)
+        self.Errors = self.Errors + 1
+        self.ConsecutiveErrors = self.ConsecutiveErrors + 1
+        self.LastError = tostring(message)
+        self.Status = "Falha local; aguardando nova tentativa"
+        self.NextSend = now + math.min(2, 0.25 * 2 ^ (self.ConsecutiveErrors - 1))
+        if self.ConsecutiveErrors >= 5 then
+            self.Mode = "Off"
+            self.Pending = nil
+            self:Release()
+            self.Status = "Parado após 5 falhas locais consecutivas"
+        end
+    end
+
+    function self:Step(now)
+        if self.Dead then return end
+        if self.Pending and now >= self.Pending.Expires then
+            self.Pending = nil
+            self.Status = "Ataque único expirou"
+            if self.Mode == "Off" then self:Release(); return end
+        end
+        if self.Mode == "Off" and not self.Pending then
+            if self.ReleaseAt and now >= self.ReleaseAt then self:Release() end
+            return
+        end
+        if now < self.NextSend then return end
+
+        local context = deps.context()
+        if not context then
+            if self.ReadyCharacter then self:Release() end
+            self.Status = "Aguardando seu personagem"
+            self.NextSend = now + 0.1
+            return
+        end
+        local remote = deps.remote()
+        if not remote then self.Status = "Aguardando WeaponHit"; self.NextSend = now + 0.1; return end
+
+        local targets = deps.targets(context)
+        local target
+        local chosenName = self.Pending and self.Pending.Name or (self.Mode == "Selected" and self.Selected)
+        if self.Pending or self.Mode == "Selected" then
+            if not chosenName then self.Status = "Selecione um jogador"; self.NextSend = now + 0.1; return end
+            for _, candidate in ipairs(targets) do
+                if candidate.Name == chosenName then target = candidate; break end
+            end
+        else
+            local first
+            for _, candidate in ipairs(targets) do
+                if self.Whitelist[candidate.Name] ~= true then
+                    first = first or candidate
+                    if candidate.Id > self.Cursor then target = candidate; break end
+                end
+            end
+            target = target or first
+        end
+        if not target then self.Status = "Aguardando alvo válido"; self.NextSend = now + 0.1; return end
+
+        local tool = deps.tool(context)
+        if not tool then
+            if self.ReadyTool then self:Release() end
+            self.Status = "Aguardando Sniper"
+            self.NextSend = now + 0.1
+            return
+        end
+        if self.ReadyCharacter ~= context.Character or self.ReadyTool ~= tool then
+            if self.ReadyCharacter then self:Release() end
+            self.ReadyCharacter = context.Character
+            self.ReadyTool = tool
+            self.ReadyAt = now
+        end
+        if not deps.equipped(tool, context) then
+            self.Status = "Equipando Sniper"
+            if now >= self.NextEquip then
+                self.NextEquip = now + 0.5
+                local ok, err = deps.equip(tool, context)
+                self.ReadyAt = now + 0.1
+                if not ok then self:Fail(err, now) end
+            end
+            return
+        end
+        if now < self.ReadyAt then self.Status = "Preparando Sniper"; return end
+
+        local delay = tonumber(self.Delay) or 0.1
+        if delay ~= delay then delay = 0.1 end
+        delay = math.max(0.05, math.min(2, delay))
+        self.NextSend = now + delay
+        local wasOnce = self.Pending ~= nil
+        if wasOnce then self.Pending = nil end
+        local ok, err = deps.send(tool, target, remote)
+        if ok then
+            self.Sent = self.Sent + 1
+            self.ConsecutiveErrors = 0
+            self.LastTarget = target.Name
+            self.Status = wasOnce and "Ataque único enviado" or "Ativo"
+            if not wasOnce and self.Mode == "All" then self.Cursor = target.Id end
+        else
+            self:Fail(err, now)
+        end
+        if wasOnce and self.Mode == "Off" then self.ReleaseAt = now + 0.15 end
+    end
+
+    function self:Destroy()
+        if self.Dead then return end
+        self.Dead = true
+        self.Mode = "Off"
+        self.Pending = nil
+        self:Release()
+    end
+
+    return self
+end
+
+local Environment = type(getgenv) == "function" and getgenv() or _G
+local SESSION_KEY = "MangaHub_Fortline_Controller_V2"
+local previous = Environment[SESSION_KEY]
+if type(previous) == "table" and type(previous.Destroy) == "function" then
+    pcall(function() previous:Destroy() end)
+end
+Environment.KillAllLoop = false
+Environment.KillSelectedLoop = false
 
 local Players = game:GetService("Players")
-local lp = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then error("Execute no cliente, depois de entrar no jogo.", 0) end
 
-local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local Runtime = {Dead = false, Connections = {}, Hitboxes = {}, Fluent = nil, Controller = nil}
+local State = {TeamCheck = false, HitboxEnabled = false, HitboxSize = 8, HitboxTransparency = 0.7}
+local Roster = {}
+local Borrowed = nil
+local ToolBefore = nil
+local CachedRemote = nil
+local NextRemoteCheck = 0
+local CameraConnection = nil
+local refreshPlayers
+local notify
+local renderStatus
 
-local windowSize
-if isMobile then
-    windowSize = UDim2.fromOffset(580, 460)
-else
-    windowSize = UDim2.fromOffset(580, 460)
+local function tracebackError(message)
+    return debug.traceback(tostring(message), 2)
 end
 
-local Window = Fluent:CreateWindow({
-    Title = "Manga Hub | Fortline",
-    SubTitle = "Português",
-    TabWidth = 160,
-    Size = windowSize,
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl,
-    MinimizeOnClose = false
-})
+local function connect(signal, callback)
+    local connection = signal:Connect(function(...)
+        if not Runtime.Dead then callback(...) end
+    end)
+    Runtime.Connections[#Runtime.Connections + 1] = connection
+    return connection
+end
 
-Window.Minimized = false
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.LeftControl then
-        Window.Minimized = not Window.Minimized
-    end
-end)
+local function releaseTool()
+    local managed, previousTool = Borrowed, ToolBefore
+    Borrowed, ToolBefore = nil, nil
+    if not managed then return end
+    local character = LocalPlayer.Character
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if not character or not backpack or managed.Parent ~= character then return end
+    pcall(function()
+        managed.Parent = backpack
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if previousTool and previousTool.Parent == backpack and humanoid and humanoid.Health > 0
+            and not character:FindFirstChildOfClass("Tool") then
+            humanoid:EquipTool(previousTool)
+        end
+    end)
+end
 
-Fluent:Notify({
-    Title = "Bem-vindo",
-    Content = "Bem-vindo ao MANGA HUB!!",
-    Duration = 15
-}) 
-
-getgenv().KillAllLoop = false
-getgenv().KillSelectedLoop = false
-getgenv().KillDelay = 0.05
-
-local Tabs = {
-    Kill = Window:AddTab({ Title = "Kill", Icon = "skull" }),
-    Settings = Window:AddTab({ Title = "Configurações", Icon = "settings" })
-}
-
-local Options = Fluent.Options
-
-local RepStorage = game:GetService("ReplicatedStorage")
-local WeaponsRemote = RepStorage:WaitForChild("WeaponsSystem").Network.WeaponHit
-local isEquipped = false
-local killTask = nil
-local equipMonitor = nil
-local selectedPlayerName = nil
-local whitelistedPlayers = {}
-
-local function GetPlayerList()
-    local options = {}
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= lp then
-            table.insert(options, plr.Name)
+local function restoreHitbox(part)
+    local snapshot = Runtime.Hitboxes[part]
+    if not snapshot then return end
+    Runtime.Hitboxes[part] = nil
+    if part.Parent then
+        for property, original in pairs(snapshot.Original) do
+            pcall(function()
+                if part[property] == snapshot.Applied[property] then part[property] = original end
+            end)
         end
     end
-    return options
 end
 
-local PlayerDropdown = Tabs.Kill:AddDropdown("PlayerDropdown", {
-    Title = "Selecionar Player",
-    Values = GetPlayerList(),
-    Multi = false,
-    Default = nil,
-})
+local function restoreAllHitboxes()
+    for part in pairs(Runtime.Hitboxes) do restoreHitbox(part) end
+end
 
-PlayerDropdown:OnChanged(function(Value)
-    selectedPlayerName = Value
-end)
-
-Tabs.Kill:AddButton({
-    Title = "Atualizar Lista",
-    Description = "Atualiza a lista de players",
-    Callback = function()
-        local newList = GetPlayerList()
-        PlayerDropdown:SetValues(newList)
-        Fluent:Notify({
-            Title = "Lista Atualizada",
-            Content = "Lista de players atualizada!",
-            Duration = 3
-        })
+function Runtime:Destroy()
+    if self.Dead then return end
+    self.Dead = true
+    for _, connection in ipairs(self.Connections) do connection:Disconnect() end
+    self.Connections = {}
+    if CameraConnection then CameraConnection:Disconnect(); CameraConnection = nil end
+    if self.Controller then self.Controller:Destroy() else releaseTool() end
+    restoreAllHitboxes()
+    if self.Fluent and not self.Fluent.Unloaded then
+        pcall(function() self.Fluent:Destroy() end)
+        if self.Fluent.GUI then pcall(function() self.Fluent.GUI:Destroy() end) end
     end
-})
+    if Environment[SESSION_KEY] == self then Environment[SESSION_KEY] = nil end
+end
 
-local WhitelistDropdown = Tabs.Kill:AddDropdown("WhitelistDropdown", {
-    Title = "Whitelist - Kill All",
-    Description = "Players protegidos do Kill All Loop",
-    Values = GetPlayerList(),
-    Multi = true,
-    Default = {},
-})
+Environment[SESSION_KEY] = Runtime
 
-WhitelistDropdown:OnChanged(function(Value)
-    whitelistedPlayers = Value
-    local count = 0
-    for _ in pairs(whitelistedPlayers) do
-        count = count + 1
-    end
-    if count > 0 then
-        local names = {}
-        for name, _ in pairs(whitelistedPlayers) do
-            table.insert(names, name)
+local function loadModule(url, label)
+    local body
+    local customRequest = Environment.request or Environment.http_request or request or http_request
+    if type(customRequest) ~= "function" and type(syn) == "table" then customRequest = syn.request end
+    if type(customRequest) == "function" then
+        local ok, response = pcall(customRequest, {Url = url, Method = "GET", Timeout = 15})
+        if Runtime.Dead then error("Inicialização cancelada.", 0) end
+        if ok and type(response) == "table" then
+            local status = tonumber(response.StatusCode or response.Status)
+            if status and status >= 200 and status < 300 and type(response.Body) == "string" then
+                body = response.Body
+            end
         end
-        Fluent:Notify({
-            Title = "Whitelist Atualizada",
-            Content = count .. " player(s) protegido(s): " .. table.concat(names, ", "),
-            Duration = 4
-        })
     end
-end)
-
-Tabs.Kill:AddButton({
-    Title = "Atualizar Whitelist",
-    Description = "Atualiza a lista de whitelist",
-    Callback = function()
-        local newList = GetPlayerList()
-        WhitelistDropdown:SetValues(newList)
-        Fluent:Notify({
-            Title = "Whitelist Atualizada",
-            Content = "Lista de whitelist atualizada!",
-            Duration = 3
-        })
+    if not body then
+        local ok, response = pcall(function() return game:HttpGet(url) end)
+        if not ok then error(label .. ": falha no download: " .. tostring(response), 0) end
+        body = response
     end
-})
-
-Tabs.Kill:AddButton({
-    Title = "Limpar Whitelist",
-    Description = "Remove todos da whitelist",
-    Callback = function()
-        whitelistedPlayers = {}
-        WhitelistDropdown:SetValue({})
-        Fluent:Notify({
-            Title = "Whitelist Limpa",
-            Content = "Todos removidos da whitelist!",
-            Duration = 3
-        })
-    end
-})
-
-local DelaySlider = Tabs.Kill:AddSlider("KillDelay", {
-    Title = "Delay (segundos)",
-    Description = "Intervalo entre ataques",
-    Default = 0,
-    Min = 0,
-    Max = 2,
-    Rounding = 2,
-    Callback = function(Value)
-        getgenv().KillDelay = Value
-    end
-})
-
-local function StopKillLoop()
-    isEquipped = false
-    if killTask then
-        task.cancel(killTask)
-        killTask = nil
-    end
-    if equipMonitor then
-        task.cancel(equipMonitor)
-        equipMonitor = nil
-    end
-    if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-        lp.Character.Humanoid:UnequipTools()
-    end
+    if Runtime.Dead then error("Inicialização cancelada.", 0) end
+    if type(body) ~= "string" or body == "" then error(label .. ": resposta vazia.", 0) end
+    if type(loadstring) ~= "function" then error("loadstring indisponível.", 0) end
+    local chunk, compileError = loadstring(body, "=" .. label)
+    if not chunk then error(label .. ": " .. tostring(compileError), 0) end
+    local module = chunk()
+    if type(module) ~= "table" then error(label .. ": retorno inválido.", 0) end
+    return module
 end
 
-local function StartKillLoop(tool, targetName)
-    if not tool or killTask then return end
-    isEquipped = true
-    if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-        lp.Character.Humanoid:EquipTool(tool)
-    end
-    equipMonitor = task.spawn(function()
-        while (getgenv().KillAllLoop or getgenv().KillSelectedLoop) and isEquipped do
-            task.wait(0.05)
-            if tool.Parent ~= lp.Character then
-                if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-                    lp.Character.Humanoid:EquipTool(tool)
+local function getContext()
+    local character = LocalPlayer.Character
+    if not character or not character.Parent then return nil end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or humanoid.Health <= 0 or not root or not root:IsA("BasePart") then return nil end
+    return {Character = character, Humanoid = humanoid, Root = root,
+        Backpack = LocalPlayer:FindFirstChildOfClass("Backpack")}
+end
+
+local function findSniper(context)
+    local tool = context.Character:FindFirstChild("Sniper")
+    if tool and tool:IsA("Tool") then return tool end
+    tool = context.Backpack and context.Backpack:FindFirstChild("Sniper")
+    if tool and tool:IsA("Tool") then return tool end
+    return nil
+end
+
+local function findRemote()
+    if CachedRemote and CachedRemote:IsDescendantOf(ReplicatedStorage) then return CachedRemote end
+    if os.clock() < NextRemoteCheck then return nil end
+    NextRemoteCheck = os.clock() + 1
+    local system = ReplicatedStorage:FindFirstChild("WeaponsSystem")
+    local network = system and system:FindFirstChild("Network")
+    local remote = network and network:FindFirstChild("WeaponHit")
+    CachedRemote = remote and remote:IsA("RemoteEvent") and remote or nil
+    return CachedRemote
+end
+
+local function getTarget(player)
+    if player == LocalPlayer or player.Parent ~= Players then return nil end
+    if State.TeamCheck and not LocalPlayer.Neutral and not player.Neutral
+        and LocalPlayer.Team ~= nil and player.Team == LocalPlayer.Team then return nil end
+    local character = player.Character
+    if not character or not character.Parent or character:FindFirstChildOfClass("ForceField") then return nil end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or humanoid.Health <= 0 or not root or not root:IsA("BasePart") then return nil end
+    return {Id = player.UserId, Name = player.Name, Player = player,
+        Character = character, Humanoid = humanoid, Root = root}
+end
+
+local Controller = createController({
+    context = getContext,
+    tool = findSniper,
+    remote = findRemote,
+    equipped = function(tool, context) return tool.Parent == context.Character end,
+    equip = function(tool, context)
+        return pcall(function()
+            if not Borrowed then
+                Borrowed = tool
+                ToolBefore = context.Character:FindFirstChildOfClass("Tool")
+            end
+            context.Humanoid:EquipTool(tool)
+        end)
+    end,
+    targets = function()
+        local targets = {}
+        for _, player in ipairs(Roster) do
+            local target = getTarget(player)
+            if target then targets[#targets + 1] = target end
+        end
+        return targets
+    end,
+    send = function(tool, target, remote)
+        return pcall(function()
+            if Runtime.Dead or tool.Parent ~= LocalPlayer.Character then error("Arma desequipada.") end
+            if target.Player.Character ~= target.Character or target.Humanoid.Health <= 0
+                or target.Root.Parent ~= target.Character then error("O alvo mudou de personagem.") end
+            remote:FireServer(tool, {
+                p = target.Root.Position, pid = 1, part = target.Root,
+                d = 17.5, maxDist = 17.5, h = target.Humanoid,
+                m = Enum.Material.Plastic, sid = 14, t = tick(), n = Vector3.new(0, 0, -1),
+            })
+        end)
+    end,
+    release = releaseTool,
+})
+Runtime.Controller = Controller
+
+local function updateHitboxes()
+    local active = {}
+    if State.HitboxEnabled then
+        local size = Vector3.new(State.HitboxSize, State.HitboxSize, State.HitboxSize)
+        local desired = {Size = size, Transparency = State.HitboxTransparency,
+            CanCollide = false, Color = Color3.fromRGB(168, 85, 247), Material = Enum.Material.Neon}
+        for _, player in ipairs(Roster) do
+            local target = getTarget(player)
+            if target and Controller.Whitelist[player.Name] ~= true then
+                local part = target.Root
+                active[part] = true
+                local snapshot = Runtime.Hitboxes[part]
+                if not snapshot then
+                    snapshot = {Original = {}, Applied = {}}
+                    for property in pairs(desired) do snapshot.Original[property] = part[property] end
+                    Runtime.Hitboxes[part] = snapshot
+                end
+                for property, value in pairs(desired) do
+                    if part[property] ~= value then part[property] = value end
+                    snapshot.Applied[property] = value
                 end
             end
         end
+    end
+    for part in pairs(Runtime.Hitboxes) do
+        if not active[part] then restoreHitbox(part) end
+    end
+end
+
+local function initialize()
+    local Fluent = loadModule("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua", "Fluent")
+    Runtime.Fluent = Fluent
+    if Runtime.Dead then Fluent:Destroy(); return end
+    local touch = UserInputService.TouchEnabled
+    local camera = Workspace.CurrentCamera
+    local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+    local width = math.max(470, math.min(660, viewport.X - 30))
+    local height = math.max(380, math.min(520, viewport.Y - 70))
+    local Window = Fluent:CreateWindow({
+        Title = "Manga Hub | Fortline", SubTitle = "2.0 • Português", TabWidth = 150,
+        Size = UDim2.fromOffset(width, height), Acrylic = false,
+        Theme = "Dark", MinimizeKey = Enum.KeyCode.LeftControl,
+    })
+    local Tabs = {
+        Kill = Window:AddTab({Title = "Kill", Icon = "crosshair"}),
+        Hitbox = Window:AddTab({Title = "Hitbox", Icon = "box"}),
+        Settings = Window:AddTab({Title = "Configurações", Icon = "settings"}),
+    }
+    local Options = Fluent.Options
+    local ModeToLabel = {Off = "Desligado", All = "Todos", Selected = "Selecionado"}
+    local LabelToMode = {Desligado = "Off", Todos = "All", Selecionado = "Selected"}
+    local syncing = false
+    local refreshQueued = false
+
+    notify = function(title, content)
+        if not Runtime.Dead and not Fluent.Unloaded then
+            Fluent:Notify({Title = title, Content = tostring(content), Duration = 4})
+        end
+    end
+
+    local statusParagraph = Tabs.Kill:AddParagraph({Title = "Estado", Content = "Desligado"})
+    local playerDropdown = Tabs.Kill:AddDropdown("PlayerDropdown", {
+        Title = "Selecionar jogador", Values = {}, Multi = false, AllowNull = true,
+    })
+    playerDropdown:OnChanged(function(value)
+        if not Runtime.Dead and not syncing then Controller.Selected = value end
     end)
-    killTask = task.spawn(function()
-        while (getgenv().KillAllLoop or getgenv().KillSelectedLoop) and isEquipped do
-            task.wait(getgenv().KillDelay)
-            if not lp or not lp.Character or not lp.Character:FindFirstChild("HumanoidRootPart") then continue end
-            local targets = {}
-            if getgenv().KillAllLoop then
-                for _, plr in pairs(Players:GetPlayers()) do
-                    if plr ~= lp and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") then
-                        if not whitelistedPlayers[plr.Name] then
-                            table.insert(targets, plr)
+    local modeDropdown = Tabs.Kill:AddDropdown("Mode", {
+        Title = "Modo do loop", Description = "Um modo por vez. Retoma após respawn.",
+        Values = {"Desligado", "Todos", "Selecionado"}, Default = "Desligado", Multi = false,
+    })
+    modeDropdown:OnChanged(function(value)
+        if Runtime.Dead or syncing then return end
+        Controller:SetMode(LabelToMode[value] or "Off")
+        if Controller.Mode == "Selected" and not Controller.Selected then
+            notify("Seleção pendente", "Selecione um jogador para iniciar.")
+        end
+    end)
+    Tabs.Kill:AddButton({Title = "Atacar selecionado uma vez", Description = "Envia uma tentativa com a Sniper.",
+        Callback = function()
+            local ok, reason = Controller:Once(os.clock())
+            notify(ok and "Ataque agendado" or "Aviso", ok and "Aguardando arma e alvo. Expira em 5 segundos." or reason)
+        end})
+    Tabs.Kill:AddSlider("KillDelay", {Title = "Intervalo entre tentativas", Description = "Segundos; vale também para o ataque único.",
+        Default = 0.1, Min = 0.05, Max = 2, Rounding = 2,
+        Callback = function(value)
+            local number = tonumber(value)
+            if number and number == number then Controller.Delay = math.clamp(number, 0.05, 2) end
+        end})
+    Tabs.Kill:AddToggle("TeamCheck", {Title = "Ignorar mesmo time", Default = false,
+        Callback = function(value) State.TeamCheck = value == true end})
+
+    local whitelistDropdown = Tabs.Kill:AddDropdown("WhitelistDropdown", {
+        Title = "Whitelist", Description = "Protege do modo Todos e do expansor de hitbox.",
+        Values = {}, Multi = true, Default = {}, AllowNull = true,
+    })
+    whitelistDropdown:OnChanged(function(value)
+        if Runtime.Dead or syncing then return end
+        local list = {}
+        if type(value) == "table" then
+            for name, enabled in pairs(value) do
+                if enabled == true then list[name] = true end
+            end
+        end
+        Controller.Whitelist = list
+    end)
+
+    refreshPlayers = function(excluded)
+        if Runtime.Dead then return end
+        local names, present, roster = {}, {}, {}
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player ~= excluded then
+                names[#names + 1] = player.Name
+                roster[#roster + 1] = player
+                present[player.Name] = true
+            end
+        end
+        table.sort(names, function(a, b) return a:lower() < b:lower() end)
+        table.sort(roster, function(a, b) return a.UserId < b.UserId end)
+        Roster = roster
+        local selected = present[Controller.Selected] and Controller.Selected or nil
+        local whitelist = {}
+        for name, enabled in pairs(Controller.Whitelist) do
+            if present[name] and enabled == true then whitelist[name] = true end
+        end
+        if Controller.Pending and not present[Controller.Pending.Name] then Controller:CancelPending() end
+        Controller.Selected = selected
+        Controller.Whitelist = whitelist
+        syncing = true
+        playerDropdown:SetValues(names)
+        playerDropdown:SetValue(selected)
+        whitelistDropdown:SetValues(names)
+        whitelistDropdown:SetValue(whitelist)
+        syncing = false
+    end
+
+    Tabs.Kill:AddButton({Title = "Atualizar jogadores", Description = "A lista também se atualiza automaticamente.",
+        Callback = function() refreshPlayers() end})
+    Tabs.Kill:AddButton({Title = "Limpar whitelist", Callback = function() whitelistDropdown:SetValue({}) end})
+
+    local function stopEverything()
+        if Runtime.Dead then return end
+        Controller:SetMode("Off")
+        State.HitboxEnabled = false
+        restoreAllHitboxes()
+        syncing = true
+        modeDropdown:SetValue("Desligado")
+        if Options.HitboxEnabled then Options.HitboxEnabled:SetValue(false) end
+        syncing = false
+        notify("Manga Hub", "Loop, ataque pendente e hitbox desligados.")
+    end
+
+    Tabs.Kill:AddButton({Title = "Parar tudo", Description = "Também cancela o ataque único pendente.", Callback = stopEverything})
+    Tabs.Hitbox:AddToggle("HitboxEnabled", {Title = "Expansor de hitbox", Default = false,
+        Callback = function(value)
+            if Runtime.Dead then return end
+            State.HitboxEnabled = value == true
+            if not State.HitboxEnabled then restoreAllHitboxes() end
+        end})
+    Tabs.Hitbox:AddSlider("HitboxSize", {Title = "Tamanho", Description = "Studs", Default = 8, Min = 2, Max = 20, Rounding = 0,
+        Callback = function(value)
+            local number = tonumber(value)
+            if number and number == number then State.HitboxSize = math.clamp(number, 2, 20) end
+        end})
+    Tabs.Hitbox:AddSlider("HitboxTransparency", {Title = "Transparência", Default = 0.7, Min = 0, Max = 1, Rounding = 2,
+        Callback = function(value)
+            local number = tonumber(value)
+            if number and number == number then State.HitboxTransparency = math.clamp(number, 0, 1) end
+        end})
+    Tabs.Hitbox:AddParagraph({Title = "Restauração", Content = "Ao desligar, restaura tamanho e aparência alterados. Ignora whitelist, mortos e proteção de spawn."})
+    Tabs.Settings:AddParagraph({Title = "Manga Hub 2.0", Content = "Ctrl: abrir ou minimizar. End: parar tudo.\nOs contadores mostram envios locais; o servidor decide o resultado.\nModo e hitbox iniciam desligados."})
+    Tabs.Settings:AddButton({Title = "Zerar contadores", Callback = function()
+        Controller.Sent, Controller.Errors, Controller.LastTarget, Controller.LastError = 0, 0, "Nenhum", ""
+    end})
+    Tabs.Settings:AddButton({Title = "Encerrar Manga Hub", Description = "Desconecta eventos e restaura alterações.",
+        Callback = function() Runtime:Destroy() end})
+
+    local scale = Instance.new("UIScale")
+    scale.Parent = Window.Root
+    local function fitWindow(center)
+        local current = Workspace.CurrentCamera
+        if not current or Runtime.Dead then return end
+        local size = current.ViewportSize
+        if size.X < 1 or size.Y < 1 then return end
+        local base = Window.Root.Size
+        scale.Scale = math.min(1, (size.X - 20) / math.max(base.X.Offset, 1), (size.Y - 65) / math.max(base.Y.Offset, 1))
+        if center then
+            Window.Root.Position = UDim2.fromOffset(math.max(0, (size.X - base.X.Offset * scale.Scale) / 2),
+                math.max(0, (size.Y - base.Y.Offset * scale.Scale) / 2 - 20))
+        end
+    end
+    local function watchCamera()
+        if CameraConnection then CameraConnection:Disconnect() end
+        local current = Workspace.CurrentCamera
+        if current then CameraConnection = current:GetPropertyChangedSignal("ViewportSize"):Connect(function() fitWindow(true) end) end
+        fitWindow(true)
+    end
+    connect(Workspace:GetPropertyChangedSignal("CurrentCamera"), watchCamera)
+    connect(Window.Root:GetPropertyChangedSignal("Size"), function() fitWindow(false) end)
+    watchCamera()
+
+    if touch then
+        local function touchButton(text, offset, callback)
+            local button = Instance.new("TextButton")
+            button.Name = "MangaHubTouchButton"
+            button.Text = text
+            button.Size = UDim2.fromOffset(78, 40)
+            button.Position = UDim2.fromOffset(offset, 8)
+            button.BackgroundColor3 = Color3.fromRGB(101, 48, 160)
+            button.TextColor3 = Color3.new(1, 1, 1)
+            button.Font = Enum.Font.GothamBold
+            button.TextSize = 13
+            button.ZIndex = 100
+            button.Parent = Fluent.GUI
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 9)
+            corner.Parent = button
+            connect(button.Activated, callback)
+        end
+        touchButton("MANGA", 10, function() Window:Minimize() end)
+        touchButton("PARAR", 96, stopEverything)
+    end
+    connect(UserInputService.InputBegan, function(input, processed)
+        if not processed and not UserInputService:GetFocusedTextBox() and input.KeyCode == Enum.KeyCode.End then stopEverything() end
+    end)
+    connect(Players.PlayerAdded, function()
+        if refreshQueued then return end
+        refreshQueued = true
+        task.defer(function()
+            refreshQueued = false
+            if not Runtime.Dead then refreshPlayers() end
+        end)
+    end)
+    connect(Players.PlayerRemoving, function(player) refreshPlayers(player) end)
+    connect(LocalPlayer.CharacterRemoving, function()
+        Controller:Release()
+        Controller.Status = "Aguardando respawn"
+    end)
+    connect(Window.Root.Destroying, function() Runtime:Destroy() end)
+    refreshPlayers()
+
+    local lastContent = ""
+    renderStatus = function()
+        local protected = 0
+        for _, enabled in pairs(Controller.Whitelist) do if enabled == true then protected = protected + 1 end end
+        local content = string.format("%s\nModo: %s | Jogadores: %d | Protegidos: %d\nEnvios: %d | Falhas locais: %d\nÚltimo alvo: %s",
+            Controller.Status, ModeToLabel[Controller.Mode], #Roster, protected, Controller.Sent, Controller.Errors, Controller.LastTarget)
+        if content ~= lastContent then statusParagraph:SetDesc(content); lastContent = content end
+        local expected = ModeToLabel[Controller.Mode]
+        if modeDropdown.Value ~= expected then
+            syncing = true; modeDropdown:SetValue(expected); syncing = false
+        end
+    end
+
+    local nextVisual = 0
+    local nextStatus = 0
+    connect(RunService.Heartbeat, function()
+        if Fluent.Unloaded then Runtime:Destroy(); return end
+        local now = os.clock()
+        local ok, err = xpcall(function() Controller:Step(now) end, tracebackError)
+        if not ok then
+            Controller:SetMode("Off")
+            Controller.LastError = tostring(err)
+            Controller.Status = "Parado por erro interno"
+            warn("[Manga Hub] " .. tostring(err))
+            notify("Erro interno", "Sistema pausado. Consulte o console para ver o detalhe.")
+        end
+        if now >= nextVisual then
+            nextVisual = now + 0.25
+            local visualOk, visualError = pcall(updateHitboxes)
+            if not visualOk then
+                State.HitboxEnabled = false
+                restoreAllHitboxes()
+                Options.HitboxEnabled:SetValue(false)
+                warn("[Manga Hub: Hitbox] " .. tostring(visualError))
+                notify("Hitbox pausado", "Uma alteração falhou; as partes foram restauradas.")
+            end
+        end
+        if now >= nextStatus then
+            nextStatus = now + 0.5
+            renderStatus()
+        end
+    end)
+
+    Window:SelectTab(1)
+    renderStatus()
+    notify("Manga Hub", "Painel carregado. Selecione um modo para começar.")
+
+    local hasFiles = type(readfile) == "function" and type(writefile) == "function"
+        and type(isfile) == "function" and type(isfolder) == "function"
+        and type(makefolder) == "function" and type(listfiles) == "function"
+    if hasFiles then
+        task.spawn(function()
+            local ok, err = xpcall(function()
+                local InterfaceManager = loadModule("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua", "InterfaceManager")
+                if Runtime.Dead then return end
+                InterfaceManager:SetLibrary(Fluent)
+                InterfaceManager:SetFolder("MangaHubFluent")
+                InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+            end, tracebackError)
+            if not ok and not Runtime.Dead then
+                warn("[Manga Hub: Interface] " .. tostring(err))
+                notify("Interface", "Não foi possível carregar as preferências de tema.")
+            end
+        end)
+        task.spawn(function()
+            local ok, err = xpcall(function()
+                local SaveManager = loadModule("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua", "SaveManager")
+                if Runtime.Dead then return end
+                local transient = {Mode = true, HitboxEnabled = true, KillAll = true, KillSelected = true, KillOnce = true}
+                for _, parser in pairs(SaveManager.Parser) do
+                    if type(parser.Load) == "function" then
+                        local originalLoad = parser.Load
+                        parser.Load = function(index, data)
+                            if Runtime.Dead or transient[index] then return end
+                            if index == "WhitelistDropdown" and type(data.value) == "table" then
+                                local clean = {}
+                                for name, enabled in pairs(data.value) do if enabled == true then clean[name] = true end end
+                                data.value = clean
+                            end
+                            originalLoad(index, data)
                         end
                     end
                 end
-            elseif getgenv().KillSelectedLoop and selectedPlayerName then
-                local plr = Players:FindFirstChild(selectedPlayerName)
-                if plr and plr ~= lp and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") then
-                    table.insert(targets, plr)
-                end
+                SaveManager:SetLibrary(Fluent)
+                SaveManager:IgnoreThemeSettings()
+                SaveManager:SetIgnoreIndexes({"Mode", "HitboxEnabled", "KillAll", "KillSelected", "KillOnce"})
+                SaveManager:SetFolder("MangaHubFluent/Fortline")
+                SaveManager:BuildConfigSection(Tabs.Settings)
+                SaveManager:LoadAutoloadConfig()
+            end, tracebackError)
+            if not ok and not Runtime.Dead then
+                warn("[Manga Hub: Config] " .. tostring(err))
+                notify("Configurações", "Não foi possível carregar o gerenciador de configurações.")
             end
-            if #targets > 0 then
-                local target = targets[math.random(1, #targets)]
-                local hrp = target.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    local args = {
-                        [1] = tool,
-                        [2] = {
-                            ["p"] = hrp.Position,
-                            ["pid"] = 1,
-                            ["part"] = hrp,
-                            ["d"] = 17.5,
-                            ["maxDist"] = 17.5,
-                            ["h"] = target.Character.Humanoid,
-                            ["m"] = Enum.Material.Plastic,
-                            ["sid"] = 14,
-                            ["t"] = tick(),
-                            ["n"] = Vector3.new(0, 0, -1)
-                        }
-                    }
-                    pcall(function() WeaponsRemote:FireServer(unpack(args)) end)
-                end
-            end
-        end
-        killTask = nil
-    end)
+        end)
+    else
+        Tabs.Settings:AddParagraph({Title = "Configurações da sessão", Content = "Este ambiente não oferece todas as funções de arquivos. As opções funcionam durante esta sessão."})
+    end
 end
 
-local KillAllToggle = Tabs.Kill:AddToggle("KillAll", {
-    Title = "Kill All Loop",
-    Description = "Elimina todos os jogadores",
-    Default = false
-})
-
-KillAllToggle:OnChanged(function()
-    local Value = Options.KillAll.Value
-    getgenv().KillAllLoop = Value
-    if Value then
-        local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
-        if tool then
-            StartKillLoop(tool, nil)
-            Fluent:Notify({
-                Title = "Kill All Ativado",
-                Content = "Eliminando todos os jogadores...",
-                Duration = 3
-            })
-        else
-            Fluent:Notify({
-                Title = "Erro",
-                Content = "Sniper não encontrado!",
-                Duration = 3
-            })
-        end
-    else
-        StopKillLoop()
-        Fluent:Notify({
-            Title = "Kill All Desativado",
-            Content = "Loop desativado",
-            Duration = 3
-        })
-    end
-end)
-
-local KillSelectedToggle = Tabs.Kill:AddToggle("KillSelected", {
-    Title = "Loop Kill Player Selecionado",
-    Description = "Elimina o jogador selecionado",
-    Default = false
-})
-
-KillSelectedToggle:OnChanged(function()
-    local Value = Options.KillSelected.Value
-    getgenv().KillSelectedLoop = Value
-    if Value and selectedPlayerName then
-        local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
-        if tool then
-            StartKillLoop(tool, selectedPlayerName)
-            Fluent:Notify({
-                Title = "Kill Selecionado Ativado",
-                Content = "Eliminando " .. selectedPlayerName,
-                Duration = 3
-            })
-        else
-            Fluent:Notify({
-                Title = "Erro",
-                Content = "Sniper não encontrado!",
-                Duration = 3
-            })
-        end
-    else
-        StopKillLoop()
-        if Value and not selectedPlayerName then
-            Fluent:Notify({
-                Title = "Aviso",
-                Content = "Nenhum jogador selecionado!",
-                Duration = 3
-            })
-        else
-            Fluent:Notify({
-                Title = "Kill Selecionado Desativado",
-                Content = "Loop desativado",
-                Duration = 3
-            })
-        end
-    end
-end)
-
-local KillOnceToggle = Tabs.Kill:AddToggle("KillOnce", {
-    Title = "Matar Jogador (1x)",
-    Description = "Elimina o jogador selecionado uma vez",
-    Default = false
-})
-
-KillOnceToggle:OnChanged(function()
-    local Value = Options.KillOnce.Value
-    
-    if Value then
-        if not selectedPlayerName then
-            Options.KillOnce:SetValue(false)
-            Fluent:Notify({
-                Title = "Aviso",
-                Content = "Nenhum jogador selecionado!",
-                Duration = 3
-            })
-            return
-        end
-        
-        local tool = (lp.Character and lp.Character:FindFirstChild("Sniper")) or (lp.Backpack and lp.Backpack:FindFirstChild("Sniper"))
-        
-        if not tool then
-            Options.KillOnce:SetValue(false)
-            Fluent:Notify({
-                Title = "Erro",
-                Content = "Sniper não encontrado!",
-                Duration = 3
-            })
-            return
-        end
-        
-        if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-            lp.Character.Humanoid:EquipTool(tool)
-        end
-        
-        task.wait(0.1)
-        
-        local target = Players:FindFirstChild(selectedPlayerName)
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and target.Character:FindFirstChild("Humanoid") then
-            local hrp = target.Character:FindFirstChild("HumanoidRootPart")
-            
-            local args = {
-                [1] = tool,
-                [2] = {
-                    ["p"] = hrp.Position,
-                    ["pid"] = 1,
-                    ["part"] = hrp,
-                    ["d"] = 17.5,
-                    ["maxDist"] = 17.5,
-                    ["h"] = target.Character.Humanoid,
-                    ["m"] = Enum.Material.Plastic,
-                    ["sid"] = 14,
-                    ["t"] = tick(),
-                    ["n"] = Vector3.new(0, 0, -1)
-                }
-            }
-            
-            pcall(function() WeaponsRemote:FireServer(unpack(args)) end)
-            
-            Fluent:Notify({
-                Title = "Ataque Executado",
-                Content = "Atacou " .. selectedPlayerName .. " uma vez!",
-                Duration = 3
-            })
-        else
-            Fluent:Notify({
-                Title = "Erro",
-                Content = "Jogador não encontrado ou inválido!",
-                Duration = 3
-            })
-        end
-        
-        task.wait(0.1)
-        if lp.Character and lp.Character:FindFirstChild("Humanoid") then
-            lp.Character.Humanoid:UnequipTools()
-        end
-        
-        Options.KillOnce:SetValue(false)
-    end
-end)
-
-Tabs.Kill:AddButton({
-    Title = "Hitbox Expander",
-    Description = "Aumenta o hitbox dos players",
-    Callback = function()
-        pcall(function()
-            loadstring(game:HttpGet("https://pastebin.com/raw/XxWj2B1j"))()
-        end)
-    end
-})
-
-Tabs.Settings:AddParagraph({
-    Title = "Sobre o Manga Hub",
-    Content = "Script criado para Fortline\nVersão com Fluent Library\n\nUse com responsabilidade!"
-})
-
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({})
-InterfaceManager:SetFolder("MangaHubFluent")
-SaveManager:SetFolder("MangaHubFluent/Fortline")
-
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
-
-Window:SelectTab(1)
-
-Fluent:Notify({
-    Title = "Manga Hub",
-    Content = "Script carregado com sucesso!",
-    Duration = 8
-})
-
-SaveManager:LoadAutoloadConfig()
+local success, failure = xpcall(initialize, tracebackError)
+if not success then
+    local alreadyStopped = Runtime.Dead
+    Runtime:Destroy()
+    if not alreadyStopped then error("Manga Hub: " .. tostring(failure), 0) end
+end
