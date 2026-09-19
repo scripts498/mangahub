@@ -1,12 +1,12 @@
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
-local ContextActionService = game:GetService("ContextActionService")
+.G_Players = game:GetService("Players")
+.G_ReplicatedStorage = game:GetService("ReplicatedStorage")
+.G_RunService = game:GetService("RunService")
+.G_Workspace = game:GetService("Workspace")
+.G_UserInputService = game:GetService("UserInputService")
+.G_ContextActionService = game:GetService("ContextActionService")
 
-.G_LocalPlayer = Players.LocalPlayer
-.G_ENV = getgenv and getgenv() or _G
+local LocalPlayer = Players.LocalPlayer
+local ENV = getgenv and getgenv() or _G
 
 if ENV.MangaFeatureController and ENV.MangaFeatureController.Stop then
     pcall(ENV.MangaFeatureController.Stop)
