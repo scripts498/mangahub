@@ -4980,52 +4980,188 @@ function State.V14.startCrazyLine()
 end
 
 function State.V14.stopLagServer()
-    Config.LagServer = false
-    State.V14.cancelWorker("LagServer")
+	Config.LagServer = false
+
+	local workerCount = 100
+
+	for workerId = 1, workerCount do
+		State.V14.cancelWorker("LagServer_" .. workerId)
+	end
+
+	if State.V14.LagServerActiveTargets then
+		for _, activeTargets in pairs(State.V14.LagServerActiveTargets) do
+			for part in pairs(activeTargets) do
+				if part and part.Parent then
+					pcall(function()
+						DestroyGrabLine:FireServer(part)
+					end)
+				end
+			end
+
+			table.clear(activeTargets)
+		end
+
+		table.clear(State.V14.LagServerActiveTargets)
+	end
+
+	State.V14.LagServerActiveTargets = nil
 end
 
 function State.V14.startLagServer()
-    State.V14.stopLagServer()
-    Config.LagServer = true
-    local token = State.V14.newWorkerToken("LagServer")
-    task.spawn(function()
-        while State.V14.workerTokenAlive("LagServer", token) and Config.LagServer do
-            local cycleStart = os.clock()
-            local calls = 0
-            local targets = {}
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    local character = player.Character
-                    local target = character and (character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso") or character:FindFirstChild("HumanoidRootPart"))
-                    if target then
-                        table.insert(targets, target)
-                    end
-                end
-            end
+	State.V14.stopLagServer()
 
-            local index = 1
-            while #targets > 0 and calls < Config.LagIntensity and State.V14.workerTokenAlive("LagServer", token) and Config.LagServer do
-                local target = targets[index]
-                pcall(function()
-                    CreateGrabLine:FireServer(target, CFrame.new())
-                end)
-                calls = calls + 1
-                index = index + 1
-                if index > #targets then
-                    index = 1
-                end
-                task.wait()
-            end
+	Config.LagServer = true
 
-            local elapsed = os.clock() - cycleStart
-            if elapsed < 1 then
-                task.wait(1 - elapsed)
-            end
-        end
-        if State.FeatureWorkerTokens.LagServer == token then
-            Config.LagServer = false
-        end
-    end)
+	local WORKER_COUNT = 100
+	local RANDOM_OFFSET = 1.5
+
+	State.V14.LagServerActiveTargets = {}
+
+	local function getTargetPart(player)
+		if player == LocalPlayer then
+			return nil
+		end
+
+		local character = player.Character
+
+		if not character then
+			return nil
+		end
+
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+		if not humanoid or humanoid.Health <= 0 then
+			return nil
+		end
+
+		return character:FindFirstChild("HumanoidRootPart")
+			or character:FindFirstChild("UpperTorso")
+			or character:FindFirstChild("Torso")
+			or character:FindFirstChild("Head")
+	end
+
+	local function randomOffset()
+		return CFrame.new(
+			math.random(-100, 100) / 100 * RANDOM_OFFSET,
+			math.random(-100, 100) / 100 * RANDOM_OFFSET,
+			math.random(-100, 100) / 100 * RANDOM_OFFSET
+		)
+	end
+
+	local function collectTargets()
+		local targets = {}
+
+		for _, player in ipairs(Players:GetPlayers()) do
+			local part = getTargetPart(player)
+
+			if part then
+				targets[#targets + 1] = part
+			end
+		end
+
+		return targets
+	end
+
+	for workerId = 1, WORKER_COUNT do
+		local workerName = "LagServer_" .. workerId
+		local token = State.V14.newWorkerToken(workerName)
+
+		local ActiveTargets = {}
+		State.V14.LagServerActiveTargets[workerId] = ActiveTargets
+
+		local function alive()
+			return Config.LagServer
+				and State.V14.workerTokenAlive(workerName, token)
+		end
+
+		local function createLine(part)
+			if not alive() then
+				return false
+			end
+
+			if not part or not part.Parent then
+				return false
+			end
+
+			local success = pcall(function()
+				CreateGrabLine:FireServer(part, randomOffset())
+			end)
+
+			if success then
+				ActiveTargets[part] = true
+			end
+
+			return success
+		end
+
+		local function destroyLine(part)
+			if not part then
+				return
+			end
+
+			if part.Parent then
+				pcall(function()
+					DestroyGrabLine:FireServer(part)
+				end)
+			end
+
+			ActiveTargets[part] = nil
+		end
+
+		local function clearAll()
+			local targets = {}
+
+			for part in pairs(ActiveTargets) do
+				targets[#targets + 1] = part
+			end
+
+			for _, part in ipairs(targets) do
+				destroyLine(part)
+			end
+		end
+
+		task.spawn(function()
+			while alive() do
+				local targets = collectTargets()
+
+				if #targets > 0 then
+					local cycleTargets = {}
+
+					for _, part in ipairs(targets) do
+						if not alive() then
+							break
+						end
+
+						if part and part.Parent then
+							if createLine(part) then
+								cycleTargets[#cycleTargets + 1] = part
+							end
+						end
+
+						task.wait(Config.LagTargetDelay or 0.04)
+					end
+
+					local lifetime = Config.LagLineLifetime or 2
+
+					task.delay(lifetime, function()
+						for _, part in ipairs(cycleTargets) do
+							if ActiveTargets[part] then
+								destroyLine(part)
+							end
+						end
+					end)
+				end
+
+				task.wait(Config.LagCycleDelay or 0.35)
+			end
+
+			clearAll()
+
+			if State.V14.LagServerActiveTargets then
+				State.V14.LagServerActiveTargets[workerId] = nil
+			end
+		end)
+	end
 end
 
 local function mouseDetector(
@@ -5554,14 +5690,38 @@ State.V14.CustomLineStressSection:CreateToggle({
 })
 
 State.V14.CustomLineStressSection:CreateSlider({
-    Text = "Lag Intensity",
-    Min = 1,
-    Max = 400,
-    Default = Config.LagIntensity,
-    Decimals = 0,
-    Flag = "LagIntensity",
+    Text = "tempo de vida da linha",
+    Min = 0.001,
+    Max = 10,
+    Default = Config.CrazyLineLifetime or 2,
+    Decimals = 2,
+    Flag = "CrazyLineLifetime",
     Callback = function(value)
-        Config.LagIntensity = math.floor(value + 0.5)
+        Config.CrazyLineLifetime = value
+    end
+})
+
+State.V14.CustomLineStressSection:CreateSlider({
+    Text = "Delay do novo ciclo",
+    Min = 0.001,
+    Max = 5,
+    Default = Config.CrazyLineCycleDelay or 0.35,
+    Decimals = 2,
+    Flag = "CrazyLineCycleDelay",
+    Callback = function(value)
+        Config.CrazyLineCycleDelay = value
+    end
+})
+
+State.V14.CustomLineStressSection:CreateSlider({
+    Text = "delay de escolher novo jogador",
+    Min = 0.001,
+    Max = 1,
+    Default = Config.CrazyLineTargetDelay or 0.04,
+    Decimals = 2,
+    Flag = "CrazyLineTargetDelay",
+    Callback = function(value)
+        Config.CrazyLineTargetDelay = value
     end
 })
 
