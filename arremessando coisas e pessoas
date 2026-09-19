@@ -4982,7 +4982,7 @@ end
 function State.V14.stopLagServer()
 	Config.LagServer = false
 
-	local workerCount = 1000
+	local workerCount = 100000
 
 	for workerId = 1, workerCount do
 		State.V14.cancelWorker("LagServer_" .. workerId)
@@ -5012,7 +5012,7 @@ function State.V14.startLagServer()
 
 	Config.LagServer = true
 
-	local WORKER_COUNT = 1000
+	local WORKER_COUNT = 100000
 	local RANDOM_OFFSET = 1.5
 
 	State.V14.LagServerActiveTargets = {}
