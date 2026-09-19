@@ -70,7 +70,7 @@ pcall(function()
 end)
 
 local Config = {
-    ThrowEnabled = true,
+    ThrowEnabled = false,
     ThrowForce = 400,
     ThrowMin = 50,
     ThrowMax = 15000,
@@ -5454,6 +5454,20 @@ State.V14.CustomLineExtendSection:CreateSlider({
             applyLineReach()
         end
         updateLineStatus()
+    end
+})
+
+State.V14.CustomLineLaunchSection:CreateToggle({
+    Text = "Launch",
+    Default = Config.ThrowEnabled,
+    Flag = "ThrowEnabled",
+    Callback = function(value)
+        Config.ThrowEnabled = value
+
+        if not value then
+            State.MobileThrowIntentUntil = 0
+            State.Throwing = false
+        end
     end
 })
 
