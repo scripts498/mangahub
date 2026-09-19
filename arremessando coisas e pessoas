@@ -84,28 +84,40 @@ local Config = {
     AutoAttacker = false,
     CounterMode = "Repulsion",
 
-    GrabTail = 0.30,
+    GrabTail = 0.07,
+    GrabReleaseTail = 0.00,
 
-    OwnershipQuietTail = 0.12,
+    OwnershipQuietTail = 0.06,
 
-    StruggleInterval = 0.040,
+    StruggleInterval = 0.018,
     StruggleBurstCount = 6,
-    StruggleBurstDelay = 0.010,
-    StruggleBurstCooldown = 0.16,
-    OwnershipPulseInterval = 0.030,
-    StopVelocityInterval = 0.055,
+    StruggleBurstDelay = 0.008,
+    StruggleBurstCooldown = 0.08,
+    OwnershipPulseInterval = 0.035,
+    StopVelocityInterval = 0.080,
 
     RagdollResetInterval = 0.080,
 
-    MaxHorizontal = 70,
-    MaxVertical = 110,
-    MaxAngular = 24,
+    MaxHorizontal = 85,
+    MaxVertical = 105,
+    MaxAngular = 20,
     MaxVelocityDelta = 75,
-    MaxSnapDistance = 11,
+    MaxSnapDistance = 5,
 
-    WalkExtra = 20,
-    SafeUpVelocity = 68,
-    SafeDownVelocity = -90,
+    WalkExtra = 16,
+    SafeUpVelocity = 58,
+    SafeDownVelocity = -70,
+
+    DefenseHardLock = false,
+    DefenseLockTail = 0.03,
+    DefenseBreakInterval = 0.012,
+    DefenseReclaimInterval = 0.40,
+    DefenseMaxAssemblies = 1,
+    DefenseDriftTolerance = 0.08,
+    DefenseMoveStepMultiplier = 1.35,
+    DefenseLateralTolerance = 0.08,
+    DefenseFrameSnapDistance = 14,
+    OwnershipIdleReclaimInterval = 0.18,
 
     BlobLockHoldTime = 2,
     BlobLockJumpInterval = 0.25,
@@ -227,6 +239,17 @@ local State = {
 
     LastSafeVelocity = Vector3.zero,
     LastSafeCFrame = nil,
+    DefenseAnchorVelocity = Vector3.zero,
+    DefenseAnchorCFrame = nil,
+    DefensePrevCFrame = nil,
+    DefenseLockUntil = 0,
+    DefenseWasActive = false,
+    DefenseNeedsStopVelocity = false,
+    DefenseNeedsRagdollReset = false,
+    LastDefenseBreak = 0,
+    LastDefenseReclaim = 0,
+    DefenseOwnershipClaimed = false,
+    DefenseGuardPosition = nil,
 
     InternalFlingDisabled = false,
 
@@ -2611,7 +2634,37 @@ local function markerHostile(marker)
     return true
 end
 
+local function armDefenseWindow(duration)
+    local now = os.clock()
+    local root = State.Root
+
+    if not State.DefenseWasActive
+        or now >= State.DefenseLockUntil
+    then
+        State.DefenseAnchorCFrame =
+            State.LastSafeCFrame
+            or (root and root.Parent and root.CFrame)
+            or nil
+
+        State.DefenseAnchorVelocity =
+            State.LastSafeVelocity
+            or Vector3.zero
+    end
+
+    State.DefenseWasActive = true
+    State.DefenseLockUntil =
+        math.max(
+            State.DefenseLockUntil,
+            now + (duration or Config.DefenseLockTail)
+        )
+end
+
 local function activateGrab()
+    armDefenseWindow(
+        Config.GrabTail
+            + Config.DefenseLockTail
+    )
+
     State.GrabUntil =
         math.max(
             State.GrabUntil,
@@ -2655,11 +2708,6 @@ local function ownershipActive()
         <= Config.OwnershipQuietTail
 end
 
-local function defenseActive()
-    return grabActive()
-        or ownershipActive()
-end
-
 local function isHeld()
     local held =
         State.IsHeld
@@ -2671,6 +2719,11 @@ local function isHeld()
             "BoolValue"
         )
         and held.Value == true
+end
+
+local function defenseActive()
+    return grabActive()
+        or isHeld()
 end
 
 local function fireStruggle()
@@ -2757,8 +2810,8 @@ local function struggleBurst()
                 break
             end
 
-            if not defenseActive()
-                and not isHeld()
+            if not isHeld()
+                and not grabActive()
             then
                 break
             end
@@ -2776,6 +2829,7 @@ end
 
 local function restoreHumanoid()
     local humanoid = State.Humanoid
+    local root = State.Root
 
     if not humanoid
         or humanoid.Health <= 0
@@ -2789,6 +2843,15 @@ local function restoreHumanoid()
             true
         )
     end)
+
+    if root
+        and root.Parent
+        and root.Anchored
+    then
+        pcall(function()
+            root.Anchored = false
+        end)
+    end
 
     if humanoid.Sit
         and humanoid.SeatPart == nil
@@ -2807,11 +2870,20 @@ local function restoreHumanoid()
     if humanoidState == Enum.HumanoidStateType.Physics
         or humanoidState == Enum.HumanoidStateType.Ragdoll
         or humanoidState == Enum.HumanoidStateType.FallingDown
+        or humanoidState == Enum.HumanoidStateType.GettingUp
     then
         pcall(function()
-            humanoid:ChangeState(
-                Enum.HumanoidStateType.GettingUp
-            )
+            if humanoid.FloorMaterial
+                ~= Enum.Material.Air
+            then
+                humanoid:ChangeState(
+                    Enum.HumanoidStateType.Running
+                )
+            else
+                humanoid:ChangeState(
+                    Enum.HumanoidStateType.Freefall
+                )
+            end
         end)
     end
 end
@@ -2898,19 +2970,397 @@ end
 local function recordSafePhysics()
     local root = State.Root
 
-    if not root or not root.Parent then
+    if not root
+        or not root.Parent
+        or defenseActive()
+        or isHeld()
+    then
         return
     end
 
-    State.LastSafeVelocity = root.AssemblyLinearVelocity
-    State.LastSafeCFrame = root.CFrame
+    State.LastSafeVelocity =
+        root.AssemblyLinearVelocity
+
+    State.LastSafeCFrame =
+        root.CFrame
+
+    State.DefenseAnchorVelocity =
+        State.LastSafeVelocity
+
+    State.DefenseAnchorCFrame =
+        State.LastSafeCFrame
+
+    State.DefenseWasActive =
+        false
+
+    State.DefensePrevCFrame =
+        root.CFrame
+
+    State.DefenseNeedsStopVelocity =
+        false
+
+    State.DefenseNeedsRagdollReset =
+        false
 end
 
-local function sanitizeDefensePhysics()
-    if not defenseActive()
-        and not isHeld()
+local function releaseDefense()
+    local root = State.Root
+    local humanoid = State.Humanoid
+
+    State.GrabUntil = 0
+    State.DefenseLockUntil = 0
+    State.DefenseWasActive = false
+    State.DefenseNeedsStopVelocity = false
+    State.DefenseNeedsRagdollReset = false
+    State.LastDefenseBreak = 0
+    State.LastDefenseReclaim = 0
+    State.DefenseOwnershipClaimed = false
+    State.DefenseGuardPosition = nil
+    State.OwnershipLastSeen = -math.huge
+
+    if root and root.Parent and root.Anchored then
+        pcall(function()
+            root.Anchored = false
+        end)
+    end
+
+    if humanoid
+        and humanoid.Parent
+        and humanoid.Health > 0
     then
-        recordSafePhysics()
+        pcall(function()
+            humanoid:SetStateEnabled(
+                Enum.HumanoidStateType.Jumping,
+                true
+            )
+
+            humanoid.PlatformStand = false
+            humanoid.AutoRotate = true
+
+            if humanoid.Sit
+                and humanoid.SeatPart == nil
+            then
+                humanoid.Sit = false
+            end
+
+            local state = humanoid:GetState()
+
+            if state == Enum.HumanoidStateType.Physics
+                or state == Enum.HumanoidStateType.Ragdoll
+                or state == Enum.HumanoidStateType.FallingDown
+                or state == Enum.HumanoidStateType.GettingUp
+            then
+                if humanoid.FloorMaterial ~= Enum.Material.Air then
+                    humanoid:ChangeState(
+                        Enum.HumanoidStateType.Running
+                    )
+                else
+                    humanoid:ChangeState(
+                        Enum.HumanoidStateType.Freefall
+                    )
+                end
+            end
+        end)
+    end
+
+    if root and root.Parent then
+        State.LastSafeVelocity =
+            root.AssemblyLinearVelocity
+
+        State.LastSafeCFrame =
+            root.CFrame
+
+        State.DefenseAnchorVelocity =
+            root.AssemblyLinearVelocity
+
+        State.DefenseAnchorCFrame =
+            root.CFrame
+
+        State.DefensePrevCFrame =
+            root.CFrame
+    end
+end
+
+local function localCharacterPart(part)
+    return part
+        and part:IsA("BasePart")
+        and State.Character
+        and part:IsDescendantOf(
+            State.Character
+        )
+end
+
+local function disableLocalGrabConstraints()
+    if not Config.AntiGrab then
+        return false
+    end
+
+    local character = State.Character
+
+    if not character
+        or not character.Parent
+    then
+        return false
+    end
+
+    local grabParts =
+        Workspace:
+            FindFirstChild(
+                "GrabParts"
+            )
+
+    if not grabParts then
+        return false
+    end
+
+    local broke = false
+
+    for _, object in ipairs(
+        grabParts:GetDescendants()
+    ) do
+        if object:IsA(
+            "WeldConstraint"
+        ) then
+            local part0 =
+                object.Part0
+
+            local part1 =
+                object.Part1
+
+            local target
+
+            if localCharacterPart(
+                part0
+            ) then
+                target = part0
+            elseif localCharacterPart(
+                part1
+            ) then
+                target = part1
+            end
+
+            if target then
+                broke = true
+
+                pcall(function()
+                    object.Enabled = false
+                end)
+            end
+        elseif object:IsA(
+            "Weld"
+        ) then
+            local part0 =
+                object.Part0
+
+            local part1 =
+                object.Part1
+
+            if localCharacterPart(part0)
+                or localCharacterPart(part1)
+            then
+                broke = true
+
+                pcall(function()
+                    object.Enabled = false
+                end)
+            end
+        end
+    end
+
+    return broke
+end
+
+local function breakIncomingGrab(force)
+    if not Config.AntiGrab
+        and not Config.AntiOwnershipSpam
+    then
+        return false
+    end
+
+    local broke =
+        disableLocalGrabConstraints()
+
+    local now = os.clock()
+
+    if not force
+        and now - State.LastDefenseBreak
+            < Config.DefenseBreakInterval
+    then
+        return broke
+    end
+
+    State.LastDefenseBreak = now
+
+    local root = State.Root
+    local head = State.Head
+
+    if root and root.Parent then
+        pcall(function()
+            DestroyGrabLine:
+                FireServer(root)
+        end)
+    end
+
+    if head and head.Parent then
+        pcall(function()
+            DestroyGrabLine:
+                FireServer(head)
+        end)
+    end
+
+    local grabParts =
+        Workspace:
+            FindFirstChild(
+                "GrabParts"
+            )
+
+    if grabParts then
+        for _, object in ipairs(
+            grabParts:GetDescendants()
+        ) do
+            if object:IsA(
+                "WeldConstraint"
+            ) then
+                local part0 =
+                    object.Part0
+
+                local part1 =
+                    object.Part1
+
+                local target
+
+                if localCharacterPart(
+                    part0
+                ) then
+                    target = part0
+                elseif localCharacterPart(
+                    part1
+                ) then
+                    target = part1
+                end
+
+                if target then
+                    broke = true
+
+                    pcall(function()
+                        object.Enabled = false
+                    end)
+
+                    pcall(function()
+                        DestroyGrabLine:
+                            FireServer(
+                                target
+                            )
+                    end)
+                end
+            end
+        end
+    end
+
+    return broke
+end
+
+local function reclaimLocalOwnership(force)
+    if not Config.AntiOwnershipSpam
+        and not Config.AntiGrab
+    then
+        return false
+    end
+
+    if State.DefenseOwnershipClaimed then
+        return false
+    end
+
+    if not isHeld()
+        and not grabActive()
+    then
+        return false
+    end
+
+    local now = os.clock()
+
+    if not force
+        and now - State.LastDefenseReclaim
+            < Config.DefenseReclaimInterval
+    then
+        return false
+    end
+
+    State.LastDefenseReclaim = now
+
+    local root = State.Root
+
+    if not root
+        or not root.Parent
+    then
+        return false
+    end
+
+    local assembly =
+        root.AssemblyRootPart
+        or root
+
+    local ok = pcall(function()
+        SetNetworkOwner:
+            FireServer(
+                assembly,
+                assembly.CFrame
+            )
+    end)
+
+    if ok then
+        State.DefenseOwnershipClaimed = true
+    end
+
+    return ok
+end
+
+local function zeroCharacterAssemblies()
+    local character =
+        State.Character
+
+    if not character
+        or not character.Parent
+    then
+        return
+    end
+
+    local seen = {}
+
+    for _, object in ipairs(
+        character:GetDescendants()
+    ) do
+        if object:IsA(
+            "BasePart"
+        ) then
+            local assembly =
+                object.AssemblyRootPart
+                or object
+
+            if assembly
+                and assembly.Parent
+                and not seen[assembly]
+            then
+                seen[assembly] = true
+
+                pcall(function()
+                    assembly.AssemblyAngularVelocity =
+                        Vector3.zero
+
+                    assembly.AssemblyLinearVelocity =
+                        Vector3.zero
+                end)
+            end
+        end
+    end
+end
+
+
+local function guardGrabDisplacement(dt)
+    if not isHeld()
+        and not grabActive()
+    then
+        State.DefenseGuardPosition = nil
         return false
     end
 
@@ -2925,50 +3375,248 @@ local function sanitizeDefensePhysics()
         return false
     end
 
-    local velocity = root.AssemblyLinearVelocity
-    local angular = root.AssemblyAngularVelocity
-    local horizontal = Vector3.new(velocity.X, 0, velocity.Z)
-    local delta = (velocity - State.LastSafeVelocity).Magnitude
-    local stateNow = humanoid:GetState()
-    local badState = stateNow == Enum.HumanoidStateType.Physics
-        or stateNow == Enum.HumanoidStateType.Ragdoll
-        or stateNow == Enum.HumanoidStateType.FallingDown
-    local snapped = false
+    disableLocalGrabConstraints()
 
-    if State.LastSafeCFrame then
-        snapped = (root.Position - State.LastSafeCFrame.Position).Magnitude
-            > Config.MaxSnapDistance
+    local velocity =
+        root.AssemblyLinearVelocity
+
+    local movement =
+        humanoid.MoveDirection
+
+    local horizontalMovement =
+        Vector3.new(
+            movement.X,
+            0,
+            movement.Z
+        )
+
+    local targetHorizontal =
+        Vector3.zero
+
+    if horizontalMovement.Magnitude
+        > 0.01
+    then
+        local walkSpeed =
+            math.max(
+                humanoid.WalkSpeed,
+                0
+            )
+
+        targetHorizontal =
+            horizontalMovement.Unit
+            * walkSpeed
     end
 
-    local linearSuspicious = horizontal.Magnitude > Config.MaxHorizontal
-        or math.abs(velocity.Y) > Config.MaxVertical
-        or delta > Config.MaxVelocityDelta
-    local angularSuspicious = angular.Magnitude > Config.MaxAngular
+    local currentHorizontal =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
+        )
 
-    if angularSuspicious then
-        root.AssemblyAngularVelocity = Vector3.zero
+    local error =
+        (
+            currentHorizontal
+            - targetHorizontal
+        ).Magnitude
+
+    local shouldCorrect =
+        isHeld()
+        or ownershipMarkerActive()
+        or error > 2.5
+
+    if shouldCorrect then
+        pcall(function()
+            root.AssemblyLinearVelocity =
+                Vector3.new(
+                    targetHorizontal.X,
+                    velocity.Y,
+                    targetHorizontal.Z
+                )
+
+            if root.AssemblyAngularVelocity.Magnitude
+                > 1.5
+            then
+                root.AssemblyAngularVelocity =
+                    Vector3.zero
+            end
+        end)
     end
 
-    if linearSuspicious then
-        root.AssemblyLinearVelocity = getSafeDefenseVelocity()
+    return shouldCorrect
+end
+
+local function sanitizeDefensePhysics()
+    if not defenseActive()
+        and not isHeld()
+    then
+        State.DefenseNeedsStopVelocity = false
+        State.DefenseNeedsRagdollReset = false
+        recordSafePhysics()
+        return false
     end
 
-    if snapped and State.LastSafeCFrame then
-        local safePosition = State.LastSafeCFrame.Position
-        local rotation = root.CFrame - root.Position
-        root.CFrame = CFrame.new(safePosition) * rotation
+    local root = State.Root
+    local humanoid = State.Humanoid
+
+    if not root
+        or not root.Parent
+        or not humanoid
+        or humanoid.Health <= 0
+    then
+        State.DefenseNeedsStopVelocity = false
+        State.DefenseNeedsRagdollReset = false
+        return false
     end
 
-    if badState then
+    disableLocalGrabConstraints()
+
+    local velocity =
+        root.AssemblyLinearVelocity
+
+    local angular =
+        root.AssemblyAngularVelocity
+
+    local horizontal =
+        Vector3.new(
+            velocity.X,
+            0,
+            velocity.Z
+        )
+
+    local stateNow =
+        humanoid:GetState()
+
+    local badState =
+        stateNow
+            == Enum.HumanoidStateType.Physics
+        or stateNow
+            == Enum.HumanoidStateType.Ragdoll
+        or stateNow
+            == Enum.HumanoidStateType.FallingDown
+
+    local movement =
+        humanoid.MoveDirection
+
+    local horizontalMovement =
+        Vector3.new(
+            movement.X,
+            0,
+            movement.Z
+        )
+
+    local targetHorizontal =
+        Vector3.zero
+
+    if horizontalMovement.Magnitude
+        > 0.01
+    then
+        targetHorizontal =
+            horizontalMovement.Unit
+            * math.max(
+                humanoid.WalkSpeed,
+                0
+            )
+    end
+
+    local horizontalError =
+        (
+            horizontal
+            - targetHorizontal
+        ).Magnitude
+
+    local severeLinear =
+        horizontal.Magnitude
+            > Config.MaxHorizontal
+        or math.abs(velocity.Y)
+            > Config.MaxVertical
+
+    local angularSuspicious =
+        angular.Magnitude
+            > Config.MaxAngular
+
+    local movementHijacked =
+        (
+            isHeld()
+            or ownershipMarkerActive()
+        )
+        and horizontalError > 2.5
+
+    if movementHijacked then
+        pcall(function()
+            root.AssemblyLinearVelocity =
+                Vector3.new(
+                    targetHorizontal.X,
+                    velocity.Y,
+                    targetHorizontal.Z
+                )
+        end)
+    elseif severeLinear then
+        local safeY =
+            math.clamp(
+                velocity.Y,
+                Config.SafeDownVelocity,
+                Config.SafeUpVelocity
+            )
+
+        pcall(function()
+            root.AssemblyLinearVelocity =
+                Vector3.new(
+                    targetHorizontal.X,
+                    safeY,
+                    targetHorizontal.Z
+                )
+        end)
+    end
+
+    if angularSuspicious
+        or (
+            isHeld()
+            and angular.Magnitude > 1.5
+        )
+    then
+        pcall(function()
+            root.AssemblyAngularVelocity =
+                Vector3.zero
+        end)
+    end
+
+    if badState
+        or humanoid.PlatformStand
+        or (
+            humanoid.Sit
+            and humanoid.SeatPart == nil
+        )
+    then
         restoreHumanoid()
     end
 
-    if linearSuspicious or angularSuspicious or snapped or badState then
-        return true
-    end
+    State.DefensePrevCFrame =
+        root.CFrame
 
-    recordSafePhysics()
-    return false
+    State.DefenseAnchorVelocity =
+        root.AssemblyLinearVelocity
+
+    State.DefenseNeedsStopVelocity =
+        false
+
+    State.DefenseNeedsRagdollReset =
+        badState
+        or humanoid.PlatformStand
+        or (
+            humanoid.Sit
+            and humanoid.SeatPart == nil
+        )
+
+    return movementHijacked
+        or severeLinear
+        or angularSuspicious
+        or badState
+        or humanoid.PlatformStand
+        or (
+            humanoid.Sit
+            and humanoid.SeatPart == nil
+        )
 end
 
 function State.V14.getExtinguishPart()
@@ -3184,20 +3832,36 @@ local function ownershipPulse()
     local now = os.clock()
     State.OwnershipLastSeen = now
 
-    if now - State.LastOwnershipPulse < Config.OwnershipPulseInterval then
+    local heldNow = isHeld()
+
+    if heldNow then
+        activateGrab()
+    end
+
+    if now - State.LastOwnershipPulse
+        < Config.OwnershipPulseInterval
+    then
+        if heldNow then
+            sanitizeDefensePhysics()
+        end
         return
     end
 
     State.LastOwnershipPulse = now
 
-    restoreHumanoid()
+    if not heldNow then
+        return
+    end
 
-    local attacked = sanitizeDefensePhysics()
-
+    breakIncomingGrab(false)
     fireStruggleLimited(false)
 
-    if attacked then
-        fireStopVelocityLimited(false)
+    local attacked =
+        sanitizeDefensePhysics()
+
+    if attacked
+        and State.DefenseNeedsRagdollReset
+    then
         fireRagdollReset()
     end
 
@@ -3209,19 +3873,40 @@ local function grabPulse()
         return
     end
 
+    local firstPulse =
+        not State.DefenseWasActive
+        or not State.DefenseOwnershipClaimed
+
     activateGrab()
-    restoreHumanoid()
 
-    local attacked = sanitizeDefensePhysics()
+    if firstPulse then
+        reclaimLocalOwnership(true)
+    end
 
+    breakIncomingGrab(true)
     fireStruggleLimited(true)
 
-    if attacked then
-        fireStopVelocityLimited(true)
+    local attacked =
+        sanitizeDefensePhysics()
+
+    if attacked
+        and State.DefenseNeedsRagdollReset
+    then
         fireRagdollReset()
     end
 
     struggleBurst()
+
+    task.defer(function()
+        if not State.Running
+            or not isHeld()
+        then
+            return
+        end
+
+        breakIncomingGrab(true)
+        fireStruggleLimited(true)
+    end)
 end
 
 local function registerHeadPartOwner(
@@ -3482,14 +4167,29 @@ local function setupCharacter(
     State.LastRagdoll = 0
     State.LastOwnershipPulse = 0
     State.LastBurst = 0
+    State.LastDefenseBreak = 0
+    State.LastDefenseReclaim = 0
+    State.DefenseOwnershipClaimed = false
+    State.DefenseGuardPosition = nil
+    State.DefenseLockUntil = 0
+    State.DefenseWasActive = false
+    State.DefenseNeedsStopVelocity = false
+    State.DefenseNeedsRagdollReset = false
+    State.DefensePrevCFrame = nil
     State.InternalFlingDisabled = false
 
     if State.Root then
         State.LastSafeVelocity = State.Root.AssemblyLinearVelocity
         State.LastSafeCFrame = State.Root.CFrame
+        State.DefenseAnchorVelocity = State.LastSafeVelocity
+        State.DefenseAnchorCFrame = State.LastSafeCFrame
+        State.DefensePrevCFrame = State.Root.CFrame
     else
         State.LastSafeVelocity = Vector3.zero
         State.LastSafeCFrame = nil
+        State.DefenseAnchorVelocity = Vector3.zero
+        State.DefenseAnchorCFrame = nil
+        State.DefensePrevCFrame = nil
     end
 
     scanHeadOwner()
@@ -3529,7 +4229,7 @@ local function setupCharacter(
                 if State.IsHeld.Value then
                     grabPulse()
                 else
-                    activateGrab()
+                    releaseDefense()
                 end
             end
         )
@@ -3589,8 +4289,9 @@ local function setupCharacter(
                     local attacked = sanitizeDefensePhysics()
                     fireStruggleLimited(false)
 
-                    if attacked then
-                        fireStopVelocityLimited(false)
+                    if attacked
+                        and State.DefenseNeedsRagdollReset
+                    then
                         fireRagdollReset()
                     end
                 end
@@ -3660,9 +4361,120 @@ connect(
 )
 
 connect(
+    Workspace.DescendantAdded,
+
+    function(object)
+        if not State.Running
+            or not Config.AntiGrab
+            or not State.Character
+        then
+            return
+        end
+
+        if not object:IsA(
+            "WeldConstraint"
+        ) then
+            return
+        end
+
+        local grabParts =
+            Workspace:
+                FindFirstChild(
+                    "GrabParts"
+                )
+
+        if not grabParts
+            or not object:IsDescendantOf(
+                grabParts
+            )
+        then
+            return
+        end
+
+        local part0 = object.Part0
+        local part1 = object.Part1
+
+        local target
+
+        if localCharacterPart(part0) then
+            target = part0
+        elseif localCharacterPart(part1) then
+            target = part1
+        end
+
+        if target then
+            pcall(function()
+                object.Enabled = false
+            end)
+
+            pcall(function()
+                DestroyGrabLine:
+                    FireServer(
+                        target
+                    )
+            end)
+
+            activateGrab()
+
+            if not State.DefenseOwnershipClaimed then
+                reclaimLocalOwnership(true)
+            end
+
+            fireStruggleLimited(false)
+        end
+
+        task.defer(function()
+            if not object.Parent
+                or not State.Running
+                or not Config.AntiGrab
+            then
+                return
+            end
+
+            local deferredPart0 =
+                object.Part0
+
+            local deferredPart1 =
+                object.Part1
+
+            local deferredTarget
+
+            if localCharacterPart(
+                deferredPart0
+            ) then
+                deferredTarget =
+                    deferredPart0
+            elseif localCharacterPart(
+                deferredPart1
+            ) then
+                deferredTarget =
+                    deferredPart1
+            end
+
+            if deferredTarget then
+                pcall(function()
+                    object.Enabled =
+                        false
+                end)
+
+                pcall(function()
+                    DestroyGrabLine:
+                        FireServer(
+                            deferredTarget
+                        )
+                end)
+
+                activateGrab()
+                fireStruggleLimited(false)
+            end
+        end)
+    end
+)
+
+connect(
     RunService.PreSimulation,
 
-    function()
+    function(dt)
         if not State.Running then
             return
         end
@@ -3688,14 +4500,29 @@ connect(
         end
 
         if defenseActive() or isHeld() then
+            local hostileNow =
+                isHeld()
+                or ownershipMarkerActive()
+
+            if hostileNow then
+                breakIncomingGrab(false)
+            end
+
+            guardGrabDisplacement(dt)
+
             local attacked = sanitizeDefensePhysics()
 
-            if attacked then
-                fireStopVelocityLimited(false)
+            if attacked
+                and State.DefenseNeedsRagdollReset
+            then
                 fireRagdollReset()
             end
         else
-            recordSafePhysics()
+            if State.DefenseWasActive then
+                releaseDefense()
+            else
+                recordSafePhysics()
+            end
         end
     end
 )
@@ -3725,17 +4552,31 @@ connect(
         end
 
         if defenseActive() or isHeld() then
-            restoreHumanoid()
-            fireStruggleLimited(false)
+            local hostileNow =
+                isHeld()
+                or ownershipMarkerActive()
+
+            if hostileNow then
+                breakIncomingGrab(false)
+
+                if isHeld() then
+                    fireStruggleLimited(false)
+                end
+            end
 
             local attacked = sanitizeDefensePhysics()
 
-            if attacked then
-                fireStopVelocityLimited(false)
+            if attacked
+                and State.DefenseNeedsRagdollReset
+            then
                 fireRagdollReset()
             end
         else
-            recordSafePhysics()
+            if State.DefenseWasActive then
+                releaseDefense()
+            else
+                recordSafePhysics()
+            end
         end
     end
 )
@@ -3751,20 +4592,38 @@ connect(
         if defenseActive() or isHeld() then
             sanitizeDefensePhysics()
         else
-            recordSafePhysics()
+            if State.DefenseWasActive then
+                releaseDefense()
+            else
+                recordSafePhysics()
+            end
         end
     end
 )
 
 task.spawn(function()
     while State.Running do
-        task.wait(0.05)
+        task.wait(0.025)
 
         if Config.AntiOwnershipSpam then
             local marker = scanHeadOwner()
+            local hostileMarker =
+                marker
+                and markerHostile(marker)
 
-            if marker and markerHostile(marker) then
-                ownershipPulse()
+            if isHeld() then
+                if hostileMarker then
+                    ownershipPulse()
+                else
+                    breakIncomingGrab(false)
+                    fireStruggleLimited(false)
+                end
+            elseif hostileMarker then
+                if State.DefenseWasActive then
+                    releaseDefense()
+                end
+            elseif State.DefenseWasActive then
+                releaseDefense()
             end
         end
     end
@@ -4806,6 +5665,12 @@ State.V14.InvulnerabilitySection:CreateToggle({
         Config.AntiGrab = value
 
         if value then
+            State.LastStruggle = -math.huge
+            State.LastBurst = -math.huge
+            State.LastDefenseBreak = -math.huge
+            State.LastDefenseReclaim = -math.huge
+            State.IsHeld = findIsHeld()
+
             disableInternalFlingHandler()
 
             if State.Root and State.Root.Parent then
@@ -4816,7 +5681,7 @@ State.V14.InvulnerabilitySection:CreateToggle({
                 grabPulse()
             end
         else
-            State.GrabUntil = 0
+            releaseDefense()
         end
     end
 })
@@ -4837,7 +5702,12 @@ State.V14.InvulnerabilitySection:CreateToggle({
         else
             State.OwnershipLastSeen = -math.huge
             State.LastOwnershipPulse = 0
-            recordSafePhysics()
+
+            if not isHeld() then
+                releaseDefense()
+            else
+                recordSafePhysics()
+            end
         end
     end
 })
