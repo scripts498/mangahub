@@ -16,11 +16,6 @@ local BASE_URL =
 
 --// ============================================================
 --// JOGOS SUPORTADOS
---//
---// Para adicionar outro:
---//
---// register(ID_DO_JOGO, "nome do arquivo")
---//
 --// ============================================================
 
 local Scripts = {}
@@ -44,7 +39,7 @@ register(4948814458, "fortline%20manga%20hub")
 
 register(6325043396, "flex%20you%20fps")
 
-register(2668101271, "arremessando%20coisas%20e%20pessoas")
+register(2668101271, "FTAP.lua")
 
 
 --// ============================================================
