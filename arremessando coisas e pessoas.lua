@@ -1,14 +1,14 @@
 local ENV = getgenv and getgenv() or _G
-MH = {}
+local MH = {}
 
-Players = game:GetService("Players")
-ReplicatedStorage = game:GetService("ReplicatedStorage")
-RunService = game:GetService("RunService")
-Workspace = game:GetService("Workspace")
-UserInputService = game:GetService("UserInputService")
-ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 
-LocalPlayer = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer
 
 if ENV.MangaFeatureController and ENV.MangaFeatureController.Stop then
     pcall(ENV.MangaFeatureController.Stop)
@@ -71,7 +71,7 @@ pcall(function()
     ContextActionService:UnbindAction("MangaHub_MouseDetector")
 end)
 
-Config = {
+local Config = {
     ThrowEnabled = false,
     ThrowForce = 400,
     ThrowMin = 50,
