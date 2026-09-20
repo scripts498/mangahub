@@ -654,7 +654,7 @@ StopAllVelocity =
                 "StopAllVelocity"
             )
 
-MangaUI
+MangaUI = nil
 
 do
     local ok, result =
@@ -8743,7 +8743,7 @@ State.V14.trackFeatureConnection("FeatureLocalRespawn", LocalPlayer.CharacterAdd
     end)
 end))
 
-OldNamecall
+OldNamecall = nil
 
 OldNamecall =
     hookmetamethod(
@@ -8790,7 +8790,7 @@ OldNamecall =
         end)
     )
 
-LaunchOldNamecall
+LaunchOldNamecall = nil
 
 LaunchOldNamecall =
     hookmetamethod(
