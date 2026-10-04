@@ -1,4 +1,3 @@
-
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -88,17 +87,12 @@ ProgressCorner.Parent = ProgressBar
 task.spawn(function()
 
     for i = 1, 100 do
-
         task.wait(0.03)
-
         TweenService:Create(
             ProgressBar,
             TweenInfo.new(0.05),
-            {
-                Size = UDim2.fromOffset((i / 100) * 480, 12)
-            }
+            { Size = UDim2.fromOffset((i / 100) * 480, 12) }
         ):Play()
-
         if i == 30 then
             StatusText.Text = "Conectando ao jogo..."
         elseif i == 60 then
@@ -106,53 +100,30 @@ task.spawn(function()
         elseif i == 85 then
             StatusText.Text = "Quase pronto..."
         end
-
     end
 
     StatusText.Text = "Pronto!"
-
     task.wait(0.5)
 
-    TweenService:Create(
-        GlassContainer,
-        TweenInfo.new(0.5),
-        {
-            Size = UDim2.fromOffset(0, 0)
-        }
-    ):Play()
-
-    TweenService:Create(
-        LoadingFrame,
-        TweenInfo.new(0.5),
-        {
-            BackgroundTransparency = 1
-        }
-    ):Play()
+    TweenService:Create(GlassContainer, TweenInfo.new(0.5), { Size = UDim2.fromOffset(0, 0) }):Play()
+    TweenService:Create(LoadingFrame, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
 
     task.wait(0.6)
-
     LoadingGui:Destroy()
-
     task.wait(0.5)
 
     -- =====================================================
     -- CARREGAR FLUENT
     -- =====================================================
 
-    local success, Fluent = pcall(function()
-
+    local ok, Fluent = pcall(function()
         return loadstring(
-            game:HttpGet(
-                "https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
-            )
+            game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua")
         )()
-
     end)
 
-    if not success or not Fluent then
-
+    if not ok or not Fluent then
         warn("Erro ao carregar Fluent:", tostring(Fluent))
-
         return
     end
 
@@ -160,36 +131,22 @@ task.spawn(function()
     -- CONFIGURAÇÃO
     -- =====================================================
 
-    local isMobile =
-        UserInputService.TouchEnabled
-        and not UserInputService.KeyboardEnabled
-
-    local windowSize = isMobile
-        and UDim2.fromOffset(400, 300)
-        or UDim2.fromOffset(580, 460)
-
-    local tabWidth = isMobile and 120 or 160
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local windowSize = isMobile and UDim2.fromOffset(400, 300) or UDim2.fromOffset(580, 460)
+    local tabWidth   = isMobile and 120 or 160
 
     -- =====================================================
     -- WINDOW
     -- =====================================================
 
     local Window = Fluent:CreateWindow({
-
-        Title = "manga hub/V5.0/Brasil",
-
-        SubTitle = "BBB Brasil",
-
-        TabWidth = tabWidth,
-
-        Size = windowSize,
-
-        Acrylic = true,
-
-        Theme = "Dark",
-
-        MinimizeKey = Enum.KeyCode.LeftControl
-
+        Title       = "manga hub/V5.0/Brasil",
+        SubTitle    = "BBB Brasil",
+        TabWidth    = tabWidth,
+        Size        = windowSize,
+        Acrylic     = true,
+        Theme       = "Dark",
+        MinimizeKey = Enum.KeyCode.LeftControl,
     })
 
     getgenv().MangaHubWindow = Window
@@ -199,1057 +156,599 @@ task.spawn(function()
     -- =====================================================
 
     local Tabs = {
-
-        Main = Window:AddTab({
-            Title = "Votação",
-            Icon = "check-square"
-        }),
-
-        Player = Window:AddTab({
-            Title = "Player",
-            Icon = "user"
-        }),
-
-        Teleport = Window:AddTab({
-            Title = "Teleport",
-            Icon = "map-pin"
-        }),
-
-        Evento = Window:AddTab({
-            Title = "Evento",
-            Icon = "star"
-        })
-
+        Main     = Window:AddTab({ Title = "Votação",  Icon = "check-square" }),
+        Player   = Window:AddTab({ Title = "Player",   Icon = "user"         }),
+        Teleport = Window:AddTab({ Title = "Teleport", Icon = "map-pin"      }),
+        Evento   = Window:AddTab({ Title = "Evento",   Icon = "star"         }),
     }
 
     local Options = Fluent.Options
 
     -- =====================================================
-    -- NET / VOTAÇÃO
+    -- NET — requerido do módulo correto
     -- =====================================================
 
-    local Packages = ReplicatedStorage:WaitForChild(
-        "Packages",
-        10
-    )
-
-    local NetFolder
-
-    if Packages then
-        NetFolder = Packages:WaitForChild(
-            "Net",
-            10
-        )
-    end
-
-    local VoteRemote
-
-    if NetFolder then
-        VoteRemote = NetFolder:WaitForChild(
-            "GetOption",
-            10
-        )
-    end
+    local Packages = ReplicatedStorage:WaitForChild("Packages", 10)
+    local Net      = Packages and require(Packages:WaitForChild("Net", 10))
 
     -- =====================================================
-    -- SISTEMA DE VOTAÇÃO
+    -- MAPA DE JOGADORES
     -- =====================================================
 
-    local selectedPlayer = nil
-    local votingEnabled = false
-
-    local playerMap = {}
-
-    -- =====================================================
-    -- LISTA DE PLAYERS
-    -- =====================================================
+    local playerMap  = {}   -- label -> Player object
+    local selectedPlayer  = nil   -- Player object selecionado para votação
+    local selectedTpPlayer = nil  -- Player object selecionado para teleporte
 
     local function getPlayerList()
-
         local list = {}
-
         playerMap = {}
-
         for _, player in ipairs(Players:GetPlayers()) do
-
             if player ~= LocalPlayer then
-
                 local label = string.format(
                     "%s (@%s)",
                     player.DisplayName,
                     player.Name
                 )
-
                 table.insert(list, label)
-
                 playerMap[label] = player
+            end
+        end
+        table.sort(list)
+        return list
+    end
 
+    -- =====================================================
+    -- ESTADO DA VOTAÇÃO
+    -- =====================================================
+
+    local votingEnabled  = false
+    local voteLoopActive = false
+    local currentChosenId = nil
+
+    -- =====================================================
+    -- LOOP DE SPAM — dispara por 9.8s assim que
+    -- detecta a janela de votação aberta pelo servidor
+    -- =====================================================
+
+    local function spawnVoteLoop(chosenId)
+        if voteLoopActive then
+            -- janela já ativa: acrescenta fires extras neste GetOption
+            for _ = 1, 5 do
+                pcall(function()
+                    Net:RemoteEvent("GetOption"):FireServer({ chosenId })
+                end)
+            end
+            return
+        end
+
+        voteLoopActive  = true
+        currentChosenId = chosenId
+
+        task.spawn(function()
+            local remote  = Net:RemoteEvent("GetOption")
+            local endTime = tick() + 9.8
+            local count   = 0
+
+            while tick() < endTime and votingEnabled do
+                -- rafaga de 5 fires por heartbeat
+                for _ = 1, 5 do
+                    pcall(function()
+                        remote:FireServer({ currentChosenId })
+                    end)
+                    count += 1
+                end
+                task.wait()
             end
 
-        end
+            voteLoopActive  = false
+            currentChosenId = nil
 
-        table.sort(list)
-
-        return list
-
-    end
-
-    -- =====================================================
-    -- VOTO
-    -- =====================================================
-
-    local function votePlayer(player)
-
-        if not player then
-            return false
-        end
-
-        if not VoteRemote then
-            return false
-        end
-
-        local success = pcall(function()
-
-            VoteRemote:FireServer({
-                player.Name
+            Fluent:Notify({
+                Title   = "✅ Rodada encerrada",
+                Content = string.format("~%d votos para %s", count, selectedPlayer and selectedPlayer.DisplayName or "?"),
+                Duration = 4,
             })
-
         end)
-
-        return success
-
     end
 
     -- =====================================================
-    -- SEÇÃO JOGADOR
+    -- LISTENER GetOption — servidor abre a janela,
+    -- a gente identifica o alvo e ativa o spam
     -- =====================================================
 
-    local PlayerSection =
-        Tabs.Main:AddSection("Jogador")
+    if Net then
+        Net:Connect("GetOption", function(options, optionsNum, title)
+            if not selectedPlayer then return end
+
+            local chosenId = nil
+
+            for _, option in ipairs(options) do
+                local displayName = tostring(option[2] or "")
+                local identifier  = tostring(option[1] or "")
+
+                if displayName == selectedPlayer.DisplayName
+                or identifier  == selectedPlayer.Name
+                or identifier  == tostring(selectedPlayer.UserId)
+                then
+                    chosenId = option[1]
+                    break
+                end
+            end
+
+            if not chosenId then
+                if votingEnabled and not voteLoopActive then
+                    Fluent:Notify({
+                        Title   = "⚠️ Fora do paredão",
+                        Content = selectedPlayer.DisplayName .. " não está nesta rodada.",
+                        Duration = 5,
+                    })
+                end
+                return
+            end
+
+            if votingEnabled then
+                if not voteLoopActive then
+                    Fluent:Notify({
+                        Title   = "🔥 Votando",
+                        Content = "Disparando votos em: " .. selectedPlayer.DisplayName,
+                        Duration = 3,
+                    })
+                end
+                spawnVoteLoop(chosenId)
+            end
+        end)
+    end
 
     -- =====================================================
-    -- DROPDOWN
+    -- TAB VOTAÇÃO — SEÇÃO JOGADOR
     -- =====================================================
 
-    local Dropdown =
-        PlayerSection:AddDropdown(
-            "PlayerDropdown",
-            {
+    local PlayerSection = Tabs.Main:AddSection("Jogador")
 
-                Title = "Selecionar Jogador",
-
-                Description =
-                    "Escolha o jogador da votação.",
-
-                Values = getPlayerList(),
-
-                Multi = false,
-
-                Default = nil
-
-            }
-        )
+    local Dropdown = PlayerSection:AddDropdown("PlayerDropdown", {
+        Title       = "Selecionar Jogador",
+        Description = "Escolha o jogador do paredão.",
+        Values      = getPlayerList(),
+        Multi       = false,
+        Default     = nil,
+    })
 
     Dropdown:OnChanged(function(value)
-
         selectedPlayer = playerMap[value]
-
+        -- reset loop se trocou de alvo no meio da votação
+        if voteLoopActive then
+            voteLoopActive  = false
+            currentChosenId = nil
+        end
     end)
-
-    -- =====================================================
-    -- ATUALIZAR LISTA
-    -- =====================================================
 
     PlayerSection:AddButton({
-
-        Title = "Atualizar Lista",
-
-        Description =
-            "Atualiza os jogadores disponíveis.",
-
-        Callback = function()
-
+        Title       = "Atualizar Lista",
+        Description = "Recarrega os jogadores na sala.",
+        Callback    = function()
             local newList = getPlayerList()
-
             Dropdown:SetValues(newList)
-
             if selectedPlayer then
-
-                local exists = false
-
-                for _, player in ipairs(
-                    Players:GetPlayers()
-                ) do
-
-                    if player == selectedPlayer then
-
-                        exists = true
-
-                        break
-
-                    end
-
+                local still = false
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p == selectedPlayer then still = true; break end
                 end
-
-                if not exists then
-                    selectedPlayer = nil
-                end
-
+                if not still then selectedPlayer = nil end
             end
-
             Fluent:Notify({
-
-                Title = "Lista Atualizada",
-
-                Content =
-                    "Jogadores recarregados com sucesso!",
-
-                Duration = 3
-
+                Title   = "Lista Atualizada",
+                Content = "Jogadores recarregados!",
+                Duration = 3,
             })
-
-        end
-
+        end,
     })
 
     -- =====================================================
-    -- SEÇÃO VOTAÇÃO
+    -- TAB VOTAÇÃO — SEÇÃO VOTAÇÃO
     -- =====================================================
 
-    local VoteSection =
-        Tabs.Main:AddSection("Votação")
-
-    -- =====================================================
-    -- BOTÃO VOTO INDIVIDUAL
-    -- =====================================================
+    local VoteSection = Tabs.Main:AddSection("Votação")
 
     VoteSection:AddButton({
-
-        Title = "Votar no Jogador",
-
-        Description =
-            "Envia um voto para o jogador selecionado.",
-
-        Callback = function()
-
+        Title       = "Votar Agora",
+        Description = "Envia um voto único manual.",
+        Callback    = function()
             if not selectedPlayer then
-
-                Fluent:Notify({
-
-                    Title = "Erro",
-
-                    Content =
-                        "Selecione um jogador primeiro.",
-
-                    Duration = 4
-
-                })
-
+                Fluent:Notify({ Title = "Erro", Content = "Selecione um jogador primeiro.", Duration = 4 })
                 return
             end
-
-            local success =
-                votePlayer(selectedPlayer)
-
-            if success then
-
-                Fluent:Notify({
-
-                    Title = "Voto Enviado",
-
-                    Content =
-                        "Voto enviado para "
-                        .. selectedPlayer.DisplayName,
-
-                    Duration = 3
-
-                })
-
-            else
-
-                Fluent:Notify({
-
-                    Title = "Erro",
-
-                    Content =
-                        "Não foi possível enviar o voto.",
-
-                    Duration = 4
-
-                })
-
+            if not Net then
+                Fluent:Notify({ Title = "Erro", Content = "Net não encontrado.", Duration = 4 })
+                return
             end
-
-        end
-
+            -- usa currentChosenId se disponível (identificador real do jogo),
+            -- senão tenta player.Name como fallback
+            local id = currentChosenId or selectedPlayer.Name
+            local ok = pcall(function()
+                Net:RemoteEvent("GetOption"):FireServer({ id })
+            end)
+            if ok then
+                Fluent:Notify({
+                    Title   = "Voto Enviado",
+                    Content = "Voto manual para " .. selectedPlayer.DisplayName,
+                    Duration = 3,
+                })
+            else
+                Fluent:Notify({ Title = "Erro", Content = "Não foi possível votar.", Duration = 4 })
+            end
+        end,
     })
 
-    -- =====================================================
-    -- TOGGLE
-    -- =====================================================
-
-    local VoteToggle =
-        VoteSection:AddToggle(
-            "VoteToggle",
-            {
-
-                Title =
-                    "Votar nesta pessoa",
-
-                Description =
-                    "Ativa/desativa a votação automática.",
-
-                Default = false
-
-            }
-        )
+    local VoteToggle = VoteSection:AddToggle("VoteToggle", {
+        Title       = "Votar nesta pessoa",
+        Description = "Spam automático durante a janela de votação.",
+        Default     = false,
+    })
 
     VoteToggle:OnChanged(function(value)
-
-        votingEnabled = value == true
+        votingEnabled = (value == true)
 
         if votingEnabled then
-
             if not selectedPlayer then
-
                 votingEnabled = false
-
                 VoteToggle:SetValue(false)
-
-                Fluent:Notify({
-
-                    Title = "Erro",
-
-                    Content =
-                        "Selecione um jogador primeiro.",
-
-                    Duration = 4
-
-                })
-
+                Fluent:Notify({ Title = "Erro", Content = "Selecione um jogador primeiro.", Duration = 4 })
                 return
             end
-
             Fluent:Notify({
-
-                Title =
-                    "Votação Ativada",
-
-                Content =
-                    "Jogador: "
-                    .. selectedPlayer.DisplayName,
-
-                Duration = 3
-
+                Title   = "Ativado",
+                Content = "Aguardando paredão para: " .. selectedPlayer.DisplayName,
+                Duration = 3,
             })
-
         else
-
+            voteLoopActive  = false
+            currentChosenId = nil
             Fluent:Notify({
-
-                Title =
-                    "Votação Desativada",
-
-                Content =
-                    "A votação automática foi desligada.",
-
-                Duration = 3
-
+                Title   = "Desativado",
+                Content = "Votação automática desligada.",
+                Duration = 3,
             })
-
         end
-
     end)
 
-    -- =====================================================
-    -- STATUS
-    -- =====================================================
-
     VoteSection:AddParagraph({
-
-        Title = "Status",
-
-        Content =
-            "Selecione um jogador e ative "
-            .. "\"Votar nesta pessoa\"."
-
+        Title   = "Como usar",
+        Content = "1. Selecione o jogador do paredão\n"
+               .. "2. Ative \"Votar nesta pessoa\" antes da janela abrir\n"
+               .. "3. Quando o paredão iniciar, o script dispara automaticamente",
     })
 
     -- =====================================================
-    -- ATUALIZAR AUTOMATICAMENTE
+    -- AUTO-ATUALIZAR LISTA
     -- =====================================================
 
+    local function refreshAllLists()
+        local newList = getPlayerList()
+        Dropdown:SetValues(newList)
+        pcall(function() TpDropdown:SetValues(newList) end)
+    end
+
     Players.PlayerAdded:Connect(function()
-
         task.wait(0.5)
-
-        Dropdown:SetValues(
-            getPlayerList()
-        )
-
+        refreshAllLists()
     end)
 
     Players.PlayerRemoving:Connect(function(player)
-
         if selectedPlayer == player then
-
-            selectedPlayer = nil
-
-            votingEnabled = false
-
-            pcall(function()
-                VoteToggle:SetValue(false)
-            end)
-
+            selectedPlayer  = nil
+            votingEnabled   = false
+            voteLoopActive  = false
+            currentChosenId = nil
+            pcall(function() VoteToggle:SetValue(false) end)
         end
-
+        if selectedTpPlayer == player then
+            selectedTpPlayer = nil
+        end
         task.wait(0.2)
-
-        Dropdown:SetValues(
-            getPlayerList()
-        )
-
+        refreshAllLists()
     end)
 
     -- =====================================================
-    -- PLAYER TAB
+    -- TAB PLAYER
     -- =====================================================
 
     local velocidadeValue = 16
-    local speedEnabled = false
+    local speedEnabled    = false
 
-    Tabs.Player:AddInput(
-        "Velocidade",
-        {
+    Tabs.Player:AddInput("Velocidade", {
+        Title    = "Velocidade",
+        Default  = "16",
+        Numeric  = true,
+        Callback = function(value)
+            velocidadeValue = tonumber(value) or 16
+        end,
+    })
 
-            Title = "Velocidade",
-
-            Default = "16",
-
-            Numeric = true,
-
-            Callback = function(Value)
-
-                velocidadeValue =
-                    tonumber(Value) or 16
-
+    Tabs.Player:AddToggle("PegarVelocidade", {
+        Title    = "Pegar Velocidade",
+        Default  = false,
+        Callback = function(value)
+            speedEnabled = value
+            if speedEnabled then
+                Fluent:Notify({
+                    Title   = "Velocidade Ativada",
+                    Content = "Velocidade: " .. velocidadeValue,
+                    Duration = 3,
+                })
+            else
+                local hum = LocalPlayer.Character
+                    and LocalPlayer.Character:FindFirstChild("Humanoid")
+                if hum then hum.WalkSpeed = 16 end
+                Fluent:Notify({
+                    Title   = "Velocidade Desativada",
+                    Content = "Velocidade normal restaurada.",
+                    Duration = 3,
+                })
             end
-
-        }
-    )
-
-    Tabs.Player:AddToggle(
-        "PegarVelocidade",
-        {
-
-            Title = "Pegar Velocidade",
-
-            Default = false,
-
-            Callback = function(Value)
-
-                speedEnabled = Value
-
-                if speedEnabled then
-
-                    Fluent:Notify({
-
-                        Title =
-                            "Velocidade Ativada",
-
-                        Content =
-                            "Velocidade: "
-                            .. velocidadeValue,
-
-                        Duration = 3
-
-                    })
-
-                else
-
-                    local hum =
-                        LocalPlayer.Character
-                        and LocalPlayer.Character:
-                            FindFirstChild("Humanoid")
-
-                    if hum then
-                        hum.WalkSpeed = 16
-                    end
-
-                    Fluent:Notify({
-
-                        Title =
-                            "Velocidade Desativada",
-
-                        Content =
-                            "Velocidade normal restaurada",
-
-                        Duration = 3
-
-                    })
-
-                end
-
-            end
-
-        }
-    )
+        end,
+    })
 
     task.spawn(function()
-
         while true do
-
             task.wait()
-
             if speedEnabled then
-
-                local char =
-                    LocalPlayer.Character
-
-                local hum =
-                    char
-                    and char:FindFirstChild(
-                        "Humanoid"
-                    )
-
-                if hum then
-                    hum.WalkSpeed =
-                        velocidadeValue
-                end
-
+                local char = LocalPlayer.Character
+                local hum  = char and char:FindFirstChild("Humanoid")
+                if hum then hum.WalkSpeed = velocidadeValue end
             end
-
         end
-
     end)
 
     -- =====================================================
-    -- TELEPORT TAB
+    -- TAB TELEPORT
     -- =====================================================
 
-    local selectedTpPlayer = nil
+    local TpDropdown = Tabs.Teleport:AddDropdown("TpPlayerDropdown", {
+        Title   = "Players",
+        Values  = getPlayerList(),
+        Multi   = false,
+        Default = nil,
+    })
 
-    local TpDropdown =
-        Tabs.Teleport:AddDropdown(
-            "TpPlayerDropdown",
-            {
-
-                Title = "Players",
-
-                Values = getPlayerList(),
-
-                Multi = false,
-
-                Default = nil
-
-            }
-        )
-
-    TpDropdown:OnChanged(function(Value)
-
-        selectedTpPlayer = Value
-
+    TpDropdown:OnChanged(function(value)
+        selectedTpPlayer = playerMap[value]
     end)
 
     Tabs.Teleport:AddButton({
-
-        Title = "Atualizar Lista",
-
+        Title    = "Atualizar Lista",
         Callback = function()
-
-            TpDropdown:SetValues(
-                getPlayerList()
-            )
-
+            TpDropdown:SetValues(getPlayerList())
             Fluent:Notify({
-
-                Title = "Lista Atualizada",
-
-                Content =
-                    "Lista atualizada com sucesso",
-
-                Duration = 3
-
+                Title   = "Lista Atualizada",
+                Content = "Lista atualizada com sucesso.",
+                Duration = 3,
             })
-
-        end
-
+        end,
     })
 
     Tabs.Teleport:AddButton({
-
-        Title = "TP para esse player",
-
+        Title    = "TP para esse player",
         Callback = function()
-
-            if not selectedTpPlayer
-                or selectedTpPlayer == "" then
-
-                Fluent:Notify({
-
-                    Title = "Erro",
-
-                    Content =
-                        "Selecione um jogador primeiro!",
-
-                    Duration = 4
-
-                })
-
+            if not selectedTpPlayer then
+                Fluent:Notify({ Title = "Erro", Content = "Selecione um jogador primeiro!", Duration = 4 })
                 return
-
             end
-
-            local target =
-                Players:FindFirstChild(
-                    selectedTpPlayer
-                )
-
-            local myChar =
-                LocalPlayer.Character
-
-            local myRoot =
-                myChar
-                and myChar:FindFirstChild(
-                    "HumanoidRootPart"
-                )
-
-            if target
-                and target.Character
-                and target.Character:
-                    FindFirstChild("HumanoidRootPart")
-                and myRoot then
-
-                myRoot.CFrame =
-                    target.Character
-                        .HumanoidRootPart.CFrame
-
+            local myChar = LocalPlayer.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            local tpChar = selectedTpPlayer.Character
+            local tpRoot = tpChar and tpChar:FindFirstChild("HumanoidRootPart")
+            if myRoot and tpRoot then
+                myRoot.CFrame = tpRoot.CFrame
                 Fluent:Notify({
-
-                    Title = "Teleportado",
-
-                    Content =
-                        "Você foi até "
-                        .. selectedTpPlayer,
-
-                    Duration = 3
-
+                    Title   = "Teleportado",
+                    Content = "Você foi até " .. selectedTpPlayer.DisplayName,
+                    Duration = 3,
                 })
-
             else
-
-                Fluent:Notify({
-
-                    Title = "Erro",
-
-                    Content =
-                        "Jogador inválido ou sem personagem",
-
-                    Duration = 4
-
-                })
-
+                Fluent:Notify({ Title = "Erro", Content = "Jogador inválido ou sem personagem.", Duration = 4 })
             end
-
-        end
-
+        end,
     })
 
     -- =====================================================
-    -- EVENTO TAB
+    -- TAB EVENTO — COZINHA
     -- =====================================================
 
     local autoJogoEnabled = false
 
     local function baterNaFruta()
-
         pcall(function()
-
-            local minigame =
-                Workspace:FindFirstChild(
-                    "MinigameCrazykitchen"
-                )
-
-            if not minigame then
-                return
-            end
-
-            local remote =
-                minigame:FindFirstChild("🍎2")
-
-            if remote
-                and remote:IsA("RemoteEvent") then
-
+            local minigame = Workspace:FindFirstChild("MinigameCrazykitchen")
+            if not minigame then return end
+            local remote = minigame:FindFirstChild("🍎2")
+            if remote and remote:IsA("RemoteEvent") then
                 remote:FireServer()
-
             end
-
         end)
-
     end
 
-    Tabs.Evento:AddToggle(
-        "AutoJogoToggle",
-        {
-
-            Title =
-                "Auto Jogo da cozinha",
-
-            Default = false,
-
-            Callback = function(Value)
-
-                autoJogoEnabled = Value
-
-                if autoJogoEnabled then
-
-                    Fluent:Notify({
-
-                        Title =
-                            "Auto Jogo Ativado",
-
-                        Content =
-                            "Fire automático ativado!",
-
-                        Duration = 3
-
-                    })
-
-                else
-
-                    Fluent:Notify({
-
-                        Title =
-                            "Auto Jogo Desativado",
-
-                        Content =
-                            "Auto jogo desligado.",
-
-                        Duration = 3
-
-                    })
-
-                end
-
+    Tabs.Evento:AddToggle("AutoJogoToggle", {
+        Title    = "Auto Jogo da cozinha",
+        Default  = false,
+        Callback = function(value)
+            autoJogoEnabled = value
+            if autoJogoEnabled then
+                Fluent:Notify({ Title = "Auto Jogo Ativado",    Content = "Fire automático ativado!", Duration = 3 })
+            else
+                Fluent:Notify({ Title = "Auto Jogo Desativado", Content = "Auto jogo desligado.",      Duration = 3 })
             end
-
-        }
-    )
+        end,
+    })
 
     task.spawn(function()
-
         while true do
-
             task.wait(0.06)
-
-            if autoJogoEnabled then
-                baterNaFruta()
-            end
-
+            if autoJogoEnabled then baterNaFruta() end
         end
-
     end)
 
     -- =====================================================
-    -- AUTO LAVA
+    -- TAB EVENTO — LAVA
     -- =====================================================
 
     local autoLavaEnabled = false
-
-    local bodyPosition = nil
-    local frozenPosition = nil
+    local bodyPosition    = nil
+    local frozenPosition  = nil
 
     local function congelarPlayer()
-
         pcall(function()
-
-            if not LocalPlayer.Character then
-                return
-            end
-
-            local hrp =
-                LocalPlayer.Character:
-                    FindFirstChild(
-                        "HumanoidRootPart"
-                    )
-
-            if not hrp then
-                return
-            end
-
-            frozenPosition =
-                hrp.CFrame.Position
-
+            if not LocalPlayer.Character then return end
+            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            frozenPosition = hrp.CFrame.Position
             if not bodyPosition then
-
-                bodyPosition =
-                    Instance.new(
-                        "BodyPosition"
-                    )
-
-                bodyPosition.MaxForce =
-                    Vector3.new(
-                        math.huge,
-                        math.huge,
-                        math.huge
-                    )
-
-                bodyPosition.D = 1000
-
-                bodyPosition.P = 10000
-
-                bodyPosition.Parent = hrp
-
+                bodyPosition = Instance.new("BodyPosition")
+                bodyPosition.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                bodyPosition.D        = 1000
+                bodyPosition.P        = 10000
+                bodyPosition.Parent   = hrp
             end
-
-            bodyPosition.Position =
-                frozenPosition
-
+            bodyPosition.Position = frozenPosition
         end)
-
     end
 
     local function descongelarPlayer()
-
         pcall(function()
-
             if bodyPosition then
-
                 bodyPosition:Destroy()
-
-                bodyPosition = nil
-
+                bodyPosition   = nil
             end
-
             frozenPosition = nil
-
         end)
-
     end
 
-    local function verificarEDestruirBolaDeFogo()
-
+    local function destruirBolaDeFogo()
         pcall(function()
-
-            local lavaModel =
-                Workspace:FindFirstChild(
-                    "Lava"
-                )
-
-            if not lavaModel then
-                return
-            end
-
-            for _, obj in pairs(
-                lavaModel:GetDescendants()
-            ) do
-
-                if obj:IsA("BasePart")
-                    and obj.Name == "BolaDeFogo" then
-
+            local lavaModel = Workspace:FindFirstChild("Lava")
+            if not lavaModel then return end
+            for _, obj in pairs(lavaModel:GetDescendants()) do
+                if obj:IsA("BasePart") and obj.Name == "BolaDeFogo" then
                     obj:Destroy()
-
                 end
-
             end
-
         end)
-
     end
 
-    Tabs.Evento:AddToggle(
-        "AutoLavaToggle",
-        {
-
-            Title =
-                "Auto Jogo de Lava",
-
-            Default = false,
-
-            Callback = function(Value)
-
-                autoLavaEnabled = Value
-
-                if autoLavaEnabled then
-
-                    Fluent:Notify({
-
-                        Title =
-                            "Auto Lava Ativado",
-
-                        Content =
-                            "Você está protegido!",
-
-                        Duration = 3
-
-                    })
-
-                    congelarPlayer()
-
-                else
-
-                    descongelarPlayer()
-
-                    Fluent:Notify({
-
-                        Title =
-                            "Auto Lava Desativado",
-
-                        Content =
-                            "Você pode se mover novamente!",
-
-                        Duration = 3
-
-                    })
-
-                end
-
+    Tabs.Evento:AddToggle("AutoLavaToggle", {
+        Title    = "Auto Jogo de Lava",
+        Default  = false,
+        Callback = function(value)
+            autoLavaEnabled = value
+            if autoLavaEnabled then
+                Fluent:Notify({ Title = "Auto Lava Ativado",    Content = "Você está protegido!",         Duration = 3 })
+                congelarPlayer()
+            else
+                descongelarPlayer()
+                Fluent:Notify({ Title = "Auto Lava Desativado", Content = "Você pode se mover novamente!", Duration = 3 })
             end
-
-        }
-    )
+        end,
+    })
 
     task.spawn(function()
-
         while true do
-
             task.wait()
-
             if autoLavaEnabled then
-
-                verificarEDestruirBolaDeFogo()
-
-                if frozenPosition
-                    and LocalPlayer.Character then
-
-                    local hrp =
-                        LocalPlayer.Character:
-                            FindFirstChild(
-                                "HumanoidRootPart"
-                            )
-
-                    if hrp
-                        and bodyPosition then
-
-                        bodyPosition.Position =
-                            frozenPosition
-
+                destruirBolaDeFogo()
+                if frozenPosition and LocalPlayer.Character then
+                    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and bodyPosition then
+                        bodyPosition.Position = frozenPosition
                     end
-
                 end
-
             end
-
         end
-
     end)
 
     Tabs.Evento:AddParagraph({
-
-        Title =
-            "Informações Auto Lava",
-
-        Content =
-            "Esta função:\n"
-            .. "- Te congela no lugar\n"
-            .. "- Deleta automaticamente BolaDeFogo\n"
-            .. "- Você fica flutuando se o chão sumir"
-
+        Title   = "Informações Auto Lava",
+        Content = "- Te congela no lugar\n"
+               .. "- Deleta automaticamente BolaDeFogo\n"
+               .. "- Você fica flutuando se o chão sumir",
     })
 
     -- =====================================================
-    -- BOTÃO MINIMIZAR
+    -- BOTÃO MINIMIZAR COM DRAG
     -- =====================================================
 
     local MinGui = Instance.new("ScreenGui")
+    MinGui.Name             = "MangaHubMinimizeButton"
+    MinGui.ResetOnSpawn     = false
+    MinGui.ZIndexBehavior   = Enum.ZIndexBehavior.Sibling
+    MinGui.Parent           = CoreGui
 
-    MinGui.Name =
-        "MangaHubMinimizeButton"
+    local MinButton = Instance.new("TextButton")
+    MinButton.Size              = isMobile and UDim2.fromOffset(40, 40) or UDim2.fromOffset(50, 50)
+    MinButton.Position          = UDim2.new(0, 60, 0, 60)
+    MinButton.BackgroundColor3  = Color3.fromRGB(255, 140, 0)
+    MinButton.Text              = "🥭"
+    MinButton.TextScaled        = true
+    MinButton.TextColor3        = Color3.fromRGB(255, 255, 255)
+    MinButton.BorderSizePixel   = 0
+    MinButton.AnchorPoint       = Vector2.new(0.5, 0.5)
+    MinButton.Parent            = MinGui
 
-    MinGui.ResetOnSpawn = false
+    local UICornerBtn = Instance.new("UICorner")
+    UICornerBtn.CornerRadius = UDim.new(1, 0)
+    UICornerBtn.Parent       = MinButton
 
-    MinGui.ZIndexBehavior =
-        Enum.ZIndexBehavior.Sibling
-
-    MinGui.Parent = CoreGui
-
-    local MinButton =
-        Instance.new("TextButton")
-
-    MinButton.Size = isMobile
-        and UDim2.fromOffset(40, 40)
-        or UDim2.fromOffset(50, 50)
-
-    MinButton.Position =
-        UDim2.new(0, 60, 0, 60)
-
-    MinButton.BackgroundColor3 =
-        Color3.fromRGB(255, 140, 0)
-
-    MinButton.Text = "🥭"
-
-    MinButton.TextScaled = true
-
-    MinButton.TextColor3 =
-        Color3.fromRGB(255, 255, 255)
-
-    MinButton.BorderSizePixel = 0
-
-    MinButton.AnchorPoint =
-        Vector2.new(0.5, 0.5)
-
-    MinButton.Parent = MinGui
-
-    local UICornerBtn =
-        Instance.new("UICorner")
-
-    UICornerBtn.CornerRadius =
-        UDim.new(1, 0)
-
-    UICornerBtn.Parent =
-        MinButton
+    -- drag
+    local mbDragging, mbDragInput, mbDragStart, mbStartPos
+    MinButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            mbDragging  = true
+            mbDragStart = input.Position
+            mbStartPos  = MinButton.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    mbDragging = false
+                end
+            end)
+        end
+    end)
+    MinButton.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+            mbDragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == mbDragInput and mbDragging then
+            local delta = input.Position - mbDragStart
+            MinButton.Position = UDim2.new(
+                mbStartPos.X.Scale, mbStartPos.X.Offset + delta.X,
+                mbStartPos.Y.Scale, mbStartPos.Y.Offset + delta.Y
+            )
+        end
+    end)
 
     local minimized = false
-
     MinButton.MouseButton1Click:Connect(function()
-
-        if not Window then
-            return
-        end
-
+        if not Window then return end
         if minimized then
-
             Window:Show()
-
             minimized = false
-
         else
-
             Window:Minimize()
-
             minimized = true
-
         end
-
     end)
 
     -- =====================================================
-    -- ABRIR VOTAÇÃO
+    -- ABRIR
     -- =====================================================
 
     Window:SelectTab(1)
 
     Fluent:Notify({
-
-        Title =
-            "Manga Hub",
-
-        Content =
-            "Interface carregada com sucesso!",
-
-        Duration = 5
-
+        Title   = "Manga Hub",
+        Content = "Interface carregada com sucesso!",
+        Duration = 5,
     })
 
 end)
-
