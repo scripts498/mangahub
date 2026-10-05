@@ -3,6 +3,7 @@ local TweenService      = game:GetService("TweenService")
 local UserInputService  = game:GetService("UserInputService")
 local Players           = game:GetService("Players")
 local CoreGui           = game:GetService("CoreGui")
+local Workspace         = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -124,7 +125,6 @@ task.spawn(function()
     local voteLoopActive  = false
     local currentChosenId = nil
 
-    -- Ref para o ChooseGui do jogo (usado para detectar paredão já aberto)
     local function getChooseGui()
         local ok, gui = pcall(function()
             return LocalPlayer.PlayerGui:WaitForChild("HUD",3).Choosing.ChooseGui
@@ -133,13 +133,45 @@ task.spawn(function()
     end
 
     -- =========================================================
+    -- MATCH ROBUSTO DE JOGADOR
+    -- =========================================================
+    local function matchOption(option, plr)
+        local id   = tostring(option[1] or "")
+        local dn   = tostring(option[2] or "")
+        local name = plr.Name
+        local disp = plr.DisplayName
+        local uid  = tostring(plr.UserId)
+
+        if id == uid then return true end
+        if id == name then return true end
+        if dn == disp then return true end
+        if dn == name then return true end
+        if dn:lower() == disp:lower() then return true end
+        if dn:lower() == name:lower() then return true end
+        return false
+    end
+
+    local function logOptions(options, context)
+        local parts = {}
+        for _, opt in ipairs(options) do
+            table.insert(parts, string.format("[%s | %s]", tostring(opt[1]), tostring(opt[2])))
+        end
+        warn(string.format("[MH:%s] opções recebidas: %s", context, table.concat(parts, ", ")))
+    end
+
+    -- =========================================================
     -- DISPARO DE VOTOS
     -- =========================================================
-    local function spawnVoteLoop(Net, chosenId)
+    local function spawnVoteLoop(Net, chosenId, optionsNum)
+        optionsNum = optionsNum or 1
+        local payload = {}
+        for i = 1, optionsNum do
+            payload[i] = chosenId
+        end
+
         if voteLoopActive then
-            -- paredão já rodando: enfia mais 5 votos pontuais
-            for _=1,5 do
-                pcall(function() Net:RemoteEvent("GetOption"):FireServer({chosenId}) end)
+            for _ = 1, 5 do
+                pcall(function() Net:RemoteEvent("GetOption"):FireServer(payload) end)
             end
             return
         end
@@ -153,8 +185,8 @@ task.spawn(function()
             local count   = 0
 
             while tick() < endTime and votingEnabled do
-                for _=1,5 do
-                    pcall(function() remote:FireServer({currentChosenId}) end)
+                for _ = 1, 5 do
+                    pcall(function() remote:FireServer(payload) end)
                     count += 1
                 end
                 task.wait()
@@ -174,7 +206,6 @@ task.spawn(function()
 
     -- =========================================================
     -- Verifica se o paredão já está aberto agora
-    -- Olha o ChooseGui e tenta casar os nomes expostos com selectedPlayer
     -- =========================================================
     local function checkIfVoteAlreadyOpen(Net)
         if not selectedPlayer or not votingEnabled then return end
@@ -182,23 +213,27 @@ task.spawn(function()
         local cg = getChooseGui()
         if not cg then return end
 
-        -- o paredão aberto tem botões no ScrollingFrame cujo Name é o ID e Text é o DisplayName
         local sf = cg:FindFirstChild("ScrollingFrame")
         if not sf then return end
 
-        local chosenId = nil
+        local options = {}
         for _, btn in pairs(sf:GetChildren()) do
-            if btn:IsA("TextButton") then
+            if btn:IsA("TextButton") or btn:IsA("ImageButton") or btn:IsA("Frame") then
                 local dn = btn:FindFirstChild("UserName")
+                local av = btn:FindFirstChild("Avatar")
+                local id = btn.Name
                 local dnText = dn and dn.Text or ""
-                -- Name do botão é o ID (pode ser userId ou nome), Text é o DisplayName
-                if dnText == selectedPlayer.DisplayName
-                or btn.Name == selectedPlayer.Name
-                or btn.Name == tostring(selectedPlayer.UserId)
-                then
-                    chosenId = btn.Name
-                    break
-                end
+                table.insert(options, {id, dnText, av and av.Image or ""})
+            end
+        end
+
+        if #options == 0 then return end
+
+        local chosenId = nil
+        for _, opt in ipairs(options) do
+            if matchOption(opt, selectedPlayer) then
+                chosenId = opt[1]
+                break
             end
         end
 
@@ -208,8 +243,9 @@ task.spawn(function()
                 Content = "Votando em: " .. selectedPlayer.DisplayName,
                 Duration = 3,
             })
-            spawnVoteLoop(Net, chosenId)
+            spawnVoteLoop(Net, chosenId, 1)
         else
+            logOptions(options, "manual-fail")
             Fluent:Notify({
                 Title   = "⚠️ Paredão aberto",
                 Content = selectedPlayer.DisplayName .. " não está nessa rodada.",
@@ -242,7 +278,6 @@ task.spawn(function()
         end,
     })
 
-    -- BOTÃO MANUAL: força disparo imediato verificando o ChooseGui atual
     VoteSection:AddButton({
         Title="Votar Agora (manual)",
         Description="Tenta votar imediatamente se o paredão estiver aberto.",
@@ -274,7 +309,6 @@ task.spawn(function()
                 Fluent:Notify({Title="Erro",Content="Selecione um jogador primeiro.",Duration=4})
                 return
             end
-            -- Verifica paredão já aberto AGORA
             local Net = getgenv()._MH_Net
             if Net then
                 checkIfVoteAlreadyOpen(Net)
@@ -362,7 +396,7 @@ task.spawn(function()
         while true do task.wait(0.06)
             if autoJogoEnabled then
                 pcall(function()
-                    local m=game.Workspace:FindFirstChild("MinigameCrazykitchen")
+                    local m=Workspace:FindFirstChild("MinigameCrazykitchen")
                     local r=m and m:FindFirstChild("🍎2")
                     if r and r:IsA("RemoteEvent") then r:FireServer() end
                 end)
@@ -396,7 +430,7 @@ task.spawn(function()
         while true do task.wait()
             if autoLavaEnabled then
                 pcall(function()
-                    local lava=game.Workspace:FindFirstChild("Lava")
+                    local lava=Workspace:FindFirstChild("Lava")
                     if lava then
                         for _,o in pairs(lava:GetDescendants()) do
                             if o:IsA("BasePart") and o.Name=="BolaDeFogo" then o:Destroy() end
@@ -473,7 +507,7 @@ task.spawn(function()
     Fluent:Notify({Title="Manga Hub",Content="Interface carregada!",Duration=5})
 
     -- =========================================================
-    -- NET — carregado por último, exposto globalmente pra o toggle acessar
+    -- NET — carregado por último
     -- =========================================================
     task.spawn(function()
         local netOk, Net = pcall(function()
@@ -484,27 +518,22 @@ task.spawn(function()
             warn("[MH] Net não disponível"); return
         end
 
-        -- Expõe globalmente pra o toggle/botão manual acessar sem esperar
         getgenv()._MH_Net = Net
 
-        -- Listener pra paredões futuros
         Net:Connect("GetOption", function(options, optionsNum, title)
             if not selectedPlayer or not votingEnabled then return end
 
             local chosenId = nil
             for _, option in ipairs(options) do
-                local dn = tostring(option[2] or "")
-                local id = tostring(option[1] or "")
-                if dn==selectedPlayer.DisplayName
-                or id==selectedPlayer.Name
-                or id==tostring(selectedPlayer.UserId)
-                then
-                    chosenId=option[1]; break
+                if matchOption(option, selectedPlayer) then
+                    chosenId = option[1]
+                    break
                 end
             end
 
             if not chosenId then
                 if not voteLoopActive then
+                    logOptions(options, "auto-fail")
                     Fluent:Notify({Title="⚠️ Fora do paredão",
                         Content=selectedPlayer.DisplayName.." não está nessa rodada.",Duration=5})
                 end
@@ -515,7 +544,7 @@ task.spawn(function()
                 Fluent:Notify({Title="🔥 Votando",
                     Content="Disparando votos em: "..selectedPlayer.DisplayName,Duration=3})
             end
-            spawnVoteLoop(Net, chosenId)
+            spawnVoteLoop(Net, chosenId, optionsNum)
         end)
     end)
 
